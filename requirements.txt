@@ -1,0 +1,7 @@
+# Python 3.10 - 3.12 (đã kiểm thử với Python 3.11.7 trên Windows 10)
+numpy>=1.26,<3          # đã kiểm thử 2.4.6
+pillow>=10.0            # đã kiểm thử 13.0.0
+streamlit>=1.45         # đã kiểm thử 1.66.1 (cần st.navigation, width="stretch")
+matplotlib>=3.8         # đã kiểm thử 3.11.2
+pandas>=2.1             # đã kiểm thử 3.1.0
+pytest>=8.0             # đã kiểm thử 9.2.0

@@ -1,0 +1,405 @@
+{
+  "environment": {
+    "python": "3.11.7",
+    "os": "Windows-10-10.0.19045-SP0",
+    "processor": "Intel64 Family 6 Model 165 Stepping 2, GenuineIntel",
+    "numpy": "2.4.6"
+  },
+  "samples": [
+    {
+      "id": "circle_black_on_white",
+      "title": "Hình tròn đen trên nền trắng",
+      "size": "256x256",
+      "channels": 1,
+      "k_requested": 2,
+      "k_effective": 2,
+      "feature": "gray",
+      "kmeans_iter": 1,
+      "kmeans_converged": true,
+      "kmeans_sse": 0.0,
+      "kmeans_fg_clusters": [
+        0
+      ],
+      "kmeans_time_ms": 3.297800023574382,
+      "otsu_threshold": 127,
+      "otsu_valid": true,
+      "otsu_invert": true,
+      "otsu_eta": 1.0,
+      "otsu_time_ms": 0.37799999699927866,
+      "warnings": [
+        "Có 255 ngưỡng cùng đạt cực đại (từ 0 đến 254); chọn floor(trung bình) = 127."
+      ],
+      "kmeans_iou": 1.0,
+      "kmeans_dice": 1.0,
+      "otsu_iou": 1.0,
+      "otsu_dice": 1.0
+    },
+    {
+      "id": "bright_rect_on_dark",
+      "title": "Hình chữ nhật sáng trên nền tối",
+      "size": "256x192",
+      "channels": 1,
+      "k_requested": 2,
+      "k_effective": 2,
+      "feature": "gray",
+      "kmeans_iter": 1,
+      "kmeans_converged": true,
+      "kmeans_sse": 0.0,
+      "kmeans_fg_clusters": [
+        1
+      ],
+      "kmeans_time_ms": 3.578400006517768,
+      "otsu_threshold": 124,
+      "otsu_valid": true,
+      "otsu_invert": false,
+      "otsu_eta": 1.0,
+      "otsu_time_ms": 0.3099000023212284,
+      "warnings": [
+        "Có 190 ngưỡng cùng đạt cực đại (từ 30 đến 219); chọn floor(trung bình) = 124."
+      ],
+      "kmeans_iou": 1.0,
+      "kmeans_dice": 1.0,
+      "otsu_iou": 1.0,
+      "otsu_dice": 1.0
+    },
+    {
+      "id": "multi_shapes_color",
+      "title": "Nhiều hình màu khác nhau (RGB)",
+      "size": "320x240",
+      "channels": 3,
+      "k_requested": 5,
+      "k_effective": 5,
+      "feature": "rgb",
+      "kmeans_iter": 1,
+      "kmeans_converged": true,
+      "kmeans_sse": 0.0,
+      "kmeans_fg_clusters": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "kmeans_time_ms": 7.637000002432615,
+      "otsu_threshold": 148,
+      "otsu_valid": true,
+      "otsu_invert": true,
+      "otsu_eta": 0.9579227204941616,
+      "otsu_time_ms": 0.4284000024199486,
+      "warnings": [
+        "Có 76 ngưỡng cùng đạt cực đại (từ 111 đến 186); chọn floor(trung bình) = 148."
+      ],
+      "kmeans_iou": 1.0,
+      "kmeans_dice": 1.0,
+      "otsu_iou": 0.796398891966759,
+      "otsu_dice": 0.8866615265998458
+    },
+    {
+      "id": "gray_levels_objects",
+      "title": "Ảnh xám nhiều mức sáng",
+      "size": "300x200",
+      "channels": 1,
+      "k_requested": 4,
+      "k_effective": 4,
+      "feature": "gray",
+      "kmeans_iter": 1,
+      "kmeans_converged": true,
+      "kmeans_sse": 0.0,
+      "kmeans_fg_clusters": [
+        1,
+        2,
+        3
+      ],
+      "kmeans_time_ms": 4.28630001260899,
+      "otsu_threshold": 119,
+      "otsu_valid": true,
+      "otsu_invert": false,
+      "otsu_eta": 0.8629078199201363,
+      "otsu_time_ms": 0.377499993192032,
+      "warnings": [
+        "Có 60 ngưỡng cùng đạt cực đại (từ 90 đến 149); chọn floor(trung bình) = 119."
+      ],
+      "kmeans_iou": 1.0,
+      "kmeans_dice": 1.0,
+      "otsu_iou": 0.6666666666666666,
+      "otsu_dice": 0.8
+    },
+    {
+      "id": "noisy_circle",
+      "title": "Hình tròn có nhiễu Gauss + muối tiêu",
+      "size": "256x256",
+      "channels": 1,
+      "k_requested": 2,
+      "k_effective": 2,
+      "feature": "gray",
+      "kmeans_iter": 3,
+      "kmeans_converged": true,
+      "kmeans_sse": 43123968.6267569,
+      "kmeans_fg_clusters": [
+        0
+      ],
+      "kmeans_time_ms": 4.95900001260452,
+      "otsu_threshold": 126,
+      "otsu_valid": true,
+      "otsu_invert": true,
+      "otsu_eta": 0.9221033685737735,
+      "otsu_time_ms": 0.2985999744851142,
+      "warnings": [],
+      "kmeans_iou": 0.8397130992827482,
+      "kmeans_dice": 0.9128739688923544,
+      "otsu_iou": 0.8397130992827482,
+      "otsu_dice": 0.9128739688923544
+    },
+    {
+      "id": "low_contrast",
+      "title": "Ảnh độ tương phản thấp",
+      "size": "256x256",
+      "channels": 1,
+      "k_requested": 2,
+      "k_effective": 2,
+      "feature": "gray",
+      "kmeans_iter": 6,
+      "kmeans_converged": true,
+      "kmeans_sse": 1034421.4815091761,
+      "kmeans_fg_clusters": [
+        1
+      ],
+      "kmeans_time_ms": 4.350100003648549,
+      "otsu_threshold": 139,
+      "otsu_valid": true,
+      "otsu_invert": false,
+      "otsu_eta": 0.7783560004984239,
+      "otsu_time_ms": 0.29609998455271125,
+      "warnings": [],
+      "kmeans_iou": 0.9532476802284083,
+      "kmeans_dice": 0.9760643157317742,
+      "otsu_iou": 0.9532476802284083,
+      "otsu_dice": 0.9760643157317742
+    },
+    {
+      "id": "uniform_gray",
+      "title": "Ảnh chỉ có một màu (ngoại lệ)",
+      "size": "128x128",
+      "channels": 1,
+      "k_requested": 2,
+      "k_effective": 1,
+      "feature": "gray",
+      "kmeans_iter": 1,
+      "kmeans_converged": true,
+      "kmeans_sse": 0.0,
+      "kmeans_fg_clusters": [],
+      "kmeans_time_ms": 0.7265999738592654,
+      "otsu_threshold": 128,
+      "otsu_valid": false,
+      "otsu_invert": false,
+      "otsu_eta": 0.0,
+      "otsu_time_ms": 0.1281999866478145,
+      "warnings": [
+        "Dữ liệu chỉ có 1 giá trị phân biệt nên K được giảm từ 2 xuống 1.",
+        "Ảnh chỉ có một mức xám (128); không thể tách hai lớp. Ngưỡng được đặt bằng 128, toàn bộ ảnh thuộc lớp nền (giá trị 0)."
+      ]
+    },
+    {
+      "id": "rgb_regions",
+      "title": "Cảnh RGB nhiều vùng màu (tổng hợp)",
+      "size": "360x240",
+      "channels": 3,
+      "k_requested": 6,
+      "k_effective": 6,
+      "feature": "rgb",
+      "kmeans_iter": 8,
+      "kmeans_converged": true,
+      "kmeans_sse": 6507221.530239783,
+      "kmeans_fg_clusters": [
+        0,
+        1,
+        3,
+        4,
+        5
+      ],
+      "kmeans_time_ms": 47.18309998861514,
+      "otsu_threshold": 139,
+      "otsu_valid": true,
+      "otsu_invert": true,
+      "otsu_eta": 0.9014565434372107,
+      "otsu_time_ms": 0.36189999082125723,
+      "warnings": [
+        "Có 32 ngưỡng cùng đạt cực đại (từ 124 đến 155); chọn floor(trung bình) = 139."
+      ]
+    },
+    {
+      "id": "tiny_10x10",
+      "title": "Ảnh nhỏ 10x10 (minh hoạ từng bước)",
+      "size": "10x10",
+      "channels": 1,
+      "k_requested": 2,
+      "k_effective": 2,
+      "feature": "gray",
+      "kmeans_iter": 2,
+      "kmeans_converged": true,
+      "kmeans_sse": 4947.984375000102,
+      "kmeans_fg_clusters": [
+        1
+      ],
+      "kmeans_time_ms": 0.5027000152040273,
+      "otsu_threshold": 125,
+      "otsu_valid": true,
+      "otsu_invert": false,
+      "otsu_eta": 0.9882129271984685,
+      "otsu_time_ms": 0.10560001828707755,
+      "warnings": [
+        "Có 108 ngưỡng cùng đạt cực đại (từ 72 đến 179); chọn floor(trung bình) = 125."
+      ],
+      "kmeans_iou": 1.0,
+      "kmeans_dice": 1.0,
+      "otsu_iou": 1.0,
+      "otsu_dice": 1.0
+    },
+    {
+      "id": "csv_rectangle_32x32",
+      "title": "Ma trận CSV 32x32",
+      "size": "32x32",
+      "channels": 1,
+      "k_requested": 2,
+      "k_effective": 2,
+      "feature": "gray",
+      "kmeans_iter": 2,
+      "kmeans_converged": true,
+      "kmeans_sse": 81084.17159090962,
+      "kmeans_fg_clusters": [
+        1
+      ],
+      "kmeans_time_ms": 0.4853999998886138,
+      "otsu_threshold": 119,
+      "otsu_valid": true,
+      "otsu_invert": false,
+      "otsu_eta": 0.9859103662644402,
+      "otsu_time_ms": 0.11630001245066524,
+      "warnings": [
+        "Có 130 ngưỡng cùng đạt cực đại (từ 55 đến 184); chọn floor(trung bình) = 119."
+      ],
+      "kmeans_iou": 1.0,
+      "kmeans_dice": 1.0,
+      "otsu_iou": 1.0,
+      "otsu_dice": 1.0
+    },
+    {
+      "id": "textbook_otsu_5x6",
+      "title": "Ma trận ví dụ giáo trình mục 3.1.6",
+      "size": "6x5",
+      "channels": 1,
+      "k_requested": 2,
+      "k_effective": 2,
+      "feature": "gray",
+      "kmeans_iter": 2,
+      "kmeans_converged": true,
+      "kmeans_sse": 13.75,
+      "kmeans_fg_clusters": [
+        1
+      ],
+      "kmeans_time_ms": 0.40779999108053744,
+      "otsu_threshold": 1,
+      "otsu_valid": true,
+      "otsu_invert": false,
+      "otsu_eta": 0.7857142857142857,
+      "otsu_time_ms": 0.08090000483207405,
+      "warnings": []
+    }
+  ],
+  "k_sweep_rgb_regions": [
+    {
+      "k": 2,
+      "sse": 235777058.50753045,
+      "iter": 3,
+      "time_ms": 21.638000005623326
+    },
+    {
+      "k": 3,
+      "sse": 133726637.39356422,
+      "iter": 4,
+      "time_ms": 24.842799990437925
+    },
+    {
+      "k": 4,
+      "sse": 103020593.1059767,
+      "iter": 2,
+      "time_ms": 22.214199998416007
+    },
+    {
+      "k": 5,
+      "sse": 11011447.26407456,
+      "iter": 2,
+      "time_ms": 25.701699982164428
+    },
+    {
+      "k": 6,
+      "sse": 6507221.530239783,
+      "iter": 8,
+      "time_ms": 46.82879999745637
+    },
+    {
+      "k": 7,
+      "sse": 3797604.9581384594,
+      "iter": 8,
+      "time_ms": 50.573899992741644
+    },
+    {
+      "k": 8,
+      "sse": 2878251.226216291,
+      "iter": 19,
+      "time_ms": 101.36159998364747
+    }
+  ],
+  "seed_sweep_rgb_regions_k6_random": [
+    {
+      "seed": 0,
+      "sse": 6507251.555264485,
+      "iter": 10
+    },
+    {
+      "seed": 1,
+      "sse": 70408242.36848313,
+      "iter": 20
+    },
+    {
+      "seed": 2,
+      "sse": 6507221.530239783,
+      "iter": 8
+    },
+    {
+      "seed": 3,
+      "sse": 6507251.555264485,
+      "iter": 7
+    },
+    {
+      "seed": 4,
+      "sse": 10995158.845217163,
+      "iter": 34
+    }
+  ],
+  "scaling": [
+    {
+      "side": 128,
+      "pixels": 16384,
+      "kmeans_20iter_ms": 39.33920001145452,
+      "otsu_ms": 0.13460000627674162
+    },
+    {
+      "side": 256,
+      "pixels": 65536,
+      "kmeans_20iter_ms": 261.2956000084523,
+      "otsu_ms": 0.27710001450031996
+    },
+    {
+      "side": 512,
+      "pixels": 262144,
+      "kmeans_20iter_ms": 1047.1598000149243,
+      "otsu_ms": 1.8331999890506268
+    },
+    {
+      "side": 1024,
+      "pixels": 1048576,
+      "kmeans_20iter_ms": 4001.190700015286,
+      "otsu_ms": 5.8862000005319715
+    }
+  ]
+}

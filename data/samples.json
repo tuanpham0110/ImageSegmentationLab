@@ -1,0 +1,145 @@
+[
+  {
+    "id": "circle_black_on_white",
+    "title": "Hình tròn đen trên nền trắng",
+    "kind": "image",
+    "file": "sample_images/circle_black_on_white.png",
+    "ground_truth": "ground_truth/circle_black_on_white_gt.png",
+    "purpose": "Trường hợp lý tưởng: 2 mức xám tách biệt.",
+    "expected": "Otsu và K-means (K=2) tách đúng hoàn toàn hình tròn (IoU = 1 khi đối tượng là lớp tối).",
+    "suggested": {
+      "k": 2,
+      "feature": "gray"
+    }
+  },
+  {
+    "id": "bright_rect_on_dark",
+    "title": "Hình chữ nhật sáng trên nền tối",
+    "kind": "image",
+    "file": "sample_images/bright_rect_on_dark.png",
+    "ground_truth": "ground_truth/bright_rect_on_dark_gt.png",
+    "purpose": "Đối tượng sáng trên nền tối — kiểm tra quy ước foreground của Otsu.",
+    "expected": "Ngưỡng nằm giữa 30 và 220; đối tượng là lớp sáng (> t).",
+    "suggested": {
+      "k": 2,
+      "feature": "gray"
+    }
+  },
+  {
+    "id": "multi_shapes_color",
+    "title": "Nhiều hình màu khác nhau (RGB)",
+    "kind": "image",
+    "file": "sample_images/multi_shapes_color.png",
+    "ground_truth": "ground_truth/multi_shapes_color_gt.png",
+    "purpose": "Nhiều đối tượng màu khác nhau trên nền sáng.",
+    "expected": "K-means RGB với K=5 tách mỗi màu thành một cụm; Otsu trên ảnh xám chỉ có 2 lớp nên có thể gộp sai hình vàng vào nền.",
+    "suggested": {
+      "k": 5,
+      "feature": "rgb"
+    }
+  },
+  {
+    "id": "gray_levels_objects",
+    "title": "Ảnh xám nhiều mức sáng",
+    "kind": "image",
+    "file": "sample_images/gray_levels_objects.png",
+    "ground_truth": "ground_truth/gray_levels_objects_gt.png",
+    "purpose": "Ba đối tượng có mức xám 90/150/215 trên nền 35.",
+    "expected": "K-means K=4 tách 4 mức; Otsu chỉ chia 2 lớp nên có thể xếp đối tượng tối nhất vào nền.",
+    "suggested": {
+      "k": 4,
+      "feature": "gray"
+    }
+  },
+  {
+    "id": "noisy_circle",
+    "title": "Hình tròn có nhiễu Gauss + muối tiêu",
+    "kind": "image",
+    "file": "sample_images/noisy_circle.png",
+    "ground_truth": "ground_truth/noisy_circle_gt.png",
+    "purpose": "Đánh giá độ bền với nhiễu (thuật toán chỉ dùng giá trị pixel, không dùng lân cận).",
+    "expected": "Hình dạng tổng thể đúng nhưng mask có nhiều điểm lốm đốm; IoU < 1.",
+    "suggested": {
+      "k": 2,
+      "feature": "gray"
+    }
+  },
+  {
+    "id": "low_contrast",
+    "title": "Ảnh độ tương phản thấp",
+    "kind": "image",
+    "file": "sample_images/low_contrast.png",
+    "ground_truth": "ground_truth/low_contrast_gt.png",
+    "purpose": "Đối tượng 150 trên nền 130, nhiễu sigma = 4.",
+    "expected": "Hai đỉnh histogram gần nhau; kết quả vẫn tách được nhưng nhạy với nhiễu.",
+    "suggested": {
+      "k": 2,
+      "feature": "gray"
+    }
+  },
+  {
+    "id": "uniform_gray",
+    "title": "Ảnh chỉ có một màu (ngoại lệ)",
+    "kind": "image",
+    "file": "sample_images/uniform_gray.png",
+    "ground_truth": null,
+    "purpose": "Kiểm tra xử lý ngoại lệ: không có gì để tách.",
+    "expected": "Otsu báo không hợp lệ (một mức xám); K-means giảm K về 1 và cảnh báo.",
+    "suggested": {
+      "k": 2,
+      "feature": "gray"
+    }
+  },
+  {
+    "id": "rgb_regions",
+    "title": "Cảnh RGB nhiều vùng màu (tổng hợp)",
+    "kind": "image",
+    "file": "sample_images/rgb_regions.png",
+    "ground_truth": null,
+    "purpose": "Ảnh màu nhiều vùng: bầu trời gradient, mặt trời, núi, cỏ, hồ.",
+    "expected": "K-means RGB với K=5–6 tách được các vùng màu; không có ground truth nên không tính IoU.",
+    "suggested": {
+      "k": 6,
+      "feature": "rgb"
+    }
+  },
+  {
+    "id": "tiny_10x10",
+    "title": "Ảnh nhỏ 10x10 (minh hoạ từng bước)",
+    "kind": "image",
+    "file": "sample_images/tiny_10x10.png",
+    "ground_truth": "ground_truth/tiny_10x10_gt.png",
+    "purpose": "Đủ nhỏ để xem tâm cụm ở từng vòng lặp và histogram từng mức.",
+    "expected": "K-means K=2 hội tụ sau vài vòng; Otsu tách đúng vùng sáng.",
+    "suggested": {
+      "k": 2,
+      "feature": "gray"
+    }
+  },
+  {
+    "id": "csv_rectangle_32x32",
+    "title": "Ma trận CSV 32x32",
+    "kind": "csv",
+    "file": "sample_csv/csv_rectangle_32x32.csv",
+    "ground_truth": "ground_truth/csv_rectangle_32x32_gt.png",
+    "purpose": "Kiểm tra đầu vào CSV: hình chữ nhật 200 trên nền 40, nhiễu đều ±15.",
+    "expected": "Cả hai thuật toán tách đúng hình chữ nhật (IoU = 1).",
+    "suggested": {
+      "k": 2,
+      "feature": "gray"
+    }
+  },
+  {
+    "id": "textbook_otsu_5x6",
+    "title": "Ma trận ví dụ giáo trình mục 3.1.6",
+    "kind": "csv",
+    "file": "sample_csv/textbook_otsu_5x6.csv",
+    "ground_truth": null,
+    "purpose": "Đối chiếu với ví dụ tính tay trong giáo trình (trang 32).",
+    "expected": "Ngưỡng Otsu = 1, trùng với θ = 1 của giáo trình.",
+    "suggested": {
+      "k": 2,
+      "feature": "gray"
+    }
+  }
+]
