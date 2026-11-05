@@ -7,6 +7,7 @@ import io
 import json
 import re
 from dataclasses import dataclass, field
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 import numpy as np
@@ -123,6 +124,17 @@ def load_image_bytes(data: bytes, name: str = "image") -> LoadedImage:
     )
 
 
+def _csv_rows(lines: list[str], delimiter: str | None):
+    """Chuyển lỗi cú pháp/ô quá dài của csv.reader thành lỗi đầu vào có kiểm soát."""
+    if delimiter is None:
+        yield from (line.split() for line in lines)
+        return
+    try:
+        yield from csv.reader(lines, delimiter=delimiter, strict=True)
+    except csv.Error as exc:
+        raise InputError(f"CSV không hợp lệ (cú pháp dấu nháy hoặc ô dữ liệu quá dài): {exc}.") from exc
+
+
 def parse_csv_matrix(text: str) -> np.ndarray:
     """Đọc ma trận mức xám từ văn bản CSV.
 
@@ -148,7 +160,7 @@ def parse_csv_matrix(text: str) -> np.ndarray:
     rows: list[list[int]] = []
     n_cols = None
     number = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)$")
-    reader = csv.reader(lines, delimiter=delim) if delim else (ln.split() for ln in lines)
+    reader = _csv_rows(lines, delim)
     for r_idx, raw_row in enumerate(reader, start=1):
         cells = [c.strip() for c in raw_row]
         if delim and cells and cells[-1] == "":  # cho phép dấu phân cách thừa cuối dòng
@@ -163,11 +175,15 @@ def parse_csv_matrix(text: str) -> np.ndarray:
                 raise InputError(f"Ô trống tại dòng {r_idx}, cột {c_idx}.")
             if not number.match(cell):
                 raise InputError(f"Giá trị không phải số tại dòng {r_idx}, cột {c_idx}: '{cell[:20]}'.")
-            value = float(cell)
-            if value != int(value):
-                raise InputError(f"Giá trị không phải số nguyên tại dòng {r_idx}, cột {c_idx}: {cell}.")
+            shown = cell if len(cell) <= 40 else cell[:37] + "..."
+            try:
+                value = Decimal(cell)
+            except InvalidOperation as exc:
+                raise InputError(f"Giá trị không phải số tại dòng {r_idx}, cột {c_idx}: '{shown}'.") from exc
             if not 0 <= value <= 255:
-                raise InputError(f"Giá trị {cell} tại dòng {r_idx}, cột {c_idx} nằm ngoài khoảng [0, 255].")
+                raise InputError(f"Giá trị {shown} tại dòng {r_idx}, cột {c_idx} nằm ngoài khoảng [0, 255].")
+            if value != value.to_integral_value():
+                raise InputError(f"Giá trị không phải số nguyên tại dòng {r_idx}, cột {c_idx}: {shown}.")
             row.append(int(value))
         rows.append(row)
         if len(rows) * n_cols > MAX_CSV_CELLS:

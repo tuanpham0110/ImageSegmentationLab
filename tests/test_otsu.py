@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from src.algorithms.otsu import apply_threshold, compute_histogram, otsu_from_histogram, otsu_threshold
+from src.algorithms.otsu import apply_threshold, compute_histogram, otsu_from_histogram, otsu_threshold, segment_image_otsu
 
 
 def brute_force_otsu(gray):
@@ -96,7 +96,23 @@ def test_random_images_match_brute_force(seed):
     res = otsu_threshold(img)
     best, ts = brute_force_otsu(img)
     assert res.max_variance == pytest.approx(best, rel=1e-9)
-    assert res.threshold in range(min(ts), max(ts) + 1)
+    assert res.threshold in ts
+    assert res.between_class_variance[res.threshold] == pytest.approx(best, rel=1e-9)
+
+
+def test_disconnected_maxima_return_an_actual_optimum():
+    # Hai đoạn cực đại 0..126 và 128..254; trung bình 127 KHÔNG là cực đại.
+    hist = np.zeros(256, dtype=np.int64)
+    hist[[0, 127, 128, 255]] = [1, 127, 127, 1]
+    img = np.repeat(np.arange(256, dtype=np.uint8), hist).reshape(16, 16)
+    res = otsu_threshold(img)
+    best, ts = brute_force_otsu(img)
+    assert res.threshold == 126  # hai phía cách đều midpoint 127: chọn phía nhỏ hơn
+    assert res.threshold in ts and res.threshold in res.tied_thresholds
+    assert res.max_variance == pytest.approx(63.75)
+    assert res.between_class_variance[res.threshold] == pytest.approx(best)
+    assert res.max_variance == pytest.approx(res.weight0 * res.weight1 * (res.mean0 - res.mean1) ** 2)
+    assert res.separability == pytest.approx(best / res.total_variance)
 
 
 def test_bimodal_random_image():
@@ -144,3 +160,38 @@ def test_polarity_suggestion_from_border():
     bright_border[3:7, 3:7] = 0
     assert suggest_dark_foreground(bright_border)  # nền (viền) sáng -> đối tượng là lớp tối
     assert not suggest_dark_foreground(255 - bright_border)
+
+
+@pytest.mark.parametrize("value", [np.nan, np.inf, -1.0, 0.5, float(2**53)])
+def test_invalid_histogram_counts_are_rejected(value):
+    hist = np.ones(256)
+    hist[10] = value
+    with pytest.raises(ValueError):
+        otsu_from_histogram(hist)
+
+
+@pytest.mark.parametrize("threshold", [1.5, np.nan, np.inf, True, "128", None])
+def test_invalid_threshold_types_are_rejected(threshold):
+    with pytest.raises(ValueError):
+        apply_threshold(np.zeros((2, 2), np.uint8), threshold)
+
+
+@pytest.mark.parametrize("array", [np.empty((0, 3)), np.array([[np.nan]]), np.array([[np.inf]]),
+                                   np.array([[-1]]), np.array([[256]]), np.array([[1.5]]),
+                                   np.array([["1"]]), np.zeros((2, 2, 3), np.uint8)])
+def test_invalid_gray_arrays_are_rejected_by_both_operations(array):
+    with pytest.raises(ValueError):
+        otsu_threshold(array)
+    with pytest.raises(ValueError):
+        apply_threshold(array, 128)
+
+
+@pytest.mark.parametrize("manual", [None, 100])
+def test_image_endpoint_returns_the_actual_binary_without_mutating_input(manual):
+    gray = np.array([[10, 80, 110, 200]], dtype=np.uint8)
+    before = gray.copy()
+    result, binary = segment_image_otsu(gray, manual)
+    threshold = result.threshold if manual is None else manual
+    np.testing.assert_array_equal(binary, np.where(gray > threshold, 255, 0).astype(np.uint8))
+    np.testing.assert_array_equal(gray, before)
+    assert result.elapsed_seconds > 0

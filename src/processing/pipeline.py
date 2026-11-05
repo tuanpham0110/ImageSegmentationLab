@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from src.algorithms.kmeans import ImageKMeansResult, segment_image_kmeans
-from src.algorithms.otsu import OtsuResult, apply_threshold, otsu_threshold
+from src.algorithms.otsu import OtsuResult, segment_image_otsu
 from src.processing.postprocessing import (
     colorize_labels,
     cutout_on_color,
@@ -24,6 +24,9 @@ from src.processing.postprocessing import (
 from src.processing.preprocessing import ResizeInfo, limit_size, resize_to, to_grayscale
 from src.utils.image_io import LoadedImage, matrix_to_csv_bytes, table_to_csv_bytes, to_json_bytes, to_png_bytes
 from src.utils.metrics import compare_masks, foreground_ratio
+
+TIMING_SCOPE = ("Từ ảnh đã tiền xử lý đến kết quả trực tiếp của thuật toán (nhãn/ảnh tâm hoặc ảnh nhị phân); "
+                "không gồm đọc tệp, resize/chuyển xám, chọn foreground, ảnh tách nền, biểu đồ và xuất tệp.")
 
 
 @dataclass
@@ -151,6 +154,7 @@ def kmeans_stats(prepared: PreparedInput, params: KMeansParams, result: ImageKMe
         "tam_cum": core.centers.tolist(),
         "so_pixel_moi_cum": core.counts.tolist(),
         "thoi_gian_giay": core.elapsed_seconds,
+        "pham_vi_thoi_gian": TIMING_SCOPE,
         "cum_doi_tuong": fg,
         "canh_bao": core.warnings,
     }
@@ -212,12 +216,18 @@ def run_otsu(prepared: PreparedInput, polarity: str = "bright", manual_threshold
     """
     if polarity not in POLARITIES:
         raise ValueError(f"polarity phải là một trong {POLARITIES}.")
-    res = otsu_threshold(prepared.gray)
+    res, binary = segment_image_otsu(prepared.gray, manual_threshold)
     t = res.threshold if manual_threshold is None else int(manual_threshold)
-    binary = apply_threshold(prepared.gray, t)
     invert = polarity == "dark" or (polarity == "auto" and suggest_dark_foreground(binary))
     mask = invert_mask(binary) if invert else binary
     warnings = list(res.warnings) if manual_threshold is None else []
+    if manual_threshold is None and not res.valid:
+        # Không suy diễn đối tượng từ một ảnh chỉ có một mức xám. Lựa chọn
+        # sáng/tối vẫn được lưu, nhưng chỉ áp dụng khi có hai lớp hợp lệ.
+        invert = False
+        mask = np.zeros_like(binary)
+        warnings.append("Otsu không chia được hai lớp: mask tự động được để trống (toàn nền), "
+                        "không áp dụng lựa chọn lớp sáng/tối. Có thể dùng ngưỡng thủ công để đối chiếu.")
     return OtsuOutputs(
         result=res,
         threshold_used=t,
@@ -247,7 +257,8 @@ def otsu_stats(prepared: PreparedInput, out: OtsuOutputs) -> dict:
         "nguong_su_dung": out.threshold_used,
         "otsu_hop_le": r.valid,
         "quy_uoc": "pixel > nguong -> 255 (lớp C1)",
-        "doi_tuong_la_lop": "tối (<= ngưỡng)" if out.invert else "sáng (> ngưỡng)",
+        "doi_tuong_la_lop": ("không xác định (mask tự động rỗng)" if out.mode == "otsu" and not r.valid
+                            else "tối (<= ngưỡng)" if out.invert else "sáng (> ngưỡng)"),
         "lua_chon_cuc_tinh": out.polarity,
         "phuong_sai_giua_lop_max": r.max_variance,
         "phuong_sai_toan_phan": r.total_variance,
@@ -257,7 +268,8 @@ def otsu_stats(prepared: PreparedInput, out: OtsuOutputs) -> dict:
         "nguong_dong_hang": r.tied_thresholds,
         "ty_le_foreground": out.foreground_ratio,
         "thoi_gian_giay": r.elapsed_seconds,
-        "canh_bao": r.warnings,
+        "pham_vi_thoi_gian": TIMING_SCOPE,
+        "canh_bao": out.warnings,
     }
 
 

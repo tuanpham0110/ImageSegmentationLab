@@ -1,7 +1,7 @@
 """Quản lý ảnh đầu vào dùng chung giữa các trang và bộ nhớ đệm kết quả.
 
 Mỗi lần chạy thuật toán, kết quả được lưu trong st.session_state kèm "chữ ký" của đầu vào
-(hash nội dung tệp + giới hạn kích thước + cách chuyển xám). Khi đầu vào đổi, chữ ký đổi
+(hash nội dung tệp + tên tệp + giới hạn kích thước + cách chuyển xám). Khi đầu vào đổi, chữ ký đổi
 và kết quả cũ không được hiển thị/tải xuống nữa.
 """
 
@@ -25,6 +25,7 @@ MANIFEST_PATH = DATA_DIR / "samples.json"
 
 MAX_SIDE_OPTIONS = [128, 256, 400, 600, 800, 1024, 1600, 2048]
 DEFAULT_MAX_SIDE = 800
+RESULT_KEYS = ("km_result", "otsu_result", "cmp_result")
 
 
 @dataclass
@@ -47,14 +48,18 @@ def sample_by_id(sid: str) -> dict | None:
     return next((s for s in load_manifest() if s["id"] == sid), None)
 
 
-@st.cache_data(show_spinner=False, max_entries=16)
 def _load(data: bytes, name: str) -> LoadedImage:
+    # Ảnh gốc chỉ được giữ trong InputContext hiện tại của phiên, không đưa
+    # nhiều ảnh giải mã (tới 120 MB/ảnh RGB) vào cache dùng chung.
     return load_any(data, name)
 
 
-@st.cache_data(show_spinner=False, max_entries=16)
-def _prepare(data: bytes, name: str, max_side: int, gray_method: str) -> PreparedInput:
-    return prepare_input(_load(data, name), max_side, gray_method)
+@st.cache_data(show_spinner=False, max_entries=4, ttl=300)
+def _prepare(data: bytes, name: str, max_side: int, gray_method: str,
+             _loaded: LoadedImage | None = None) -> PreparedInput:
+    # _loaded không tham gia hash: bytes + tên tệp đã định danh đầy đủ đầu vào.
+    # Truyền ảnh vừa đọc để cache miss không phải giải mã thêm một lần.
+    return prepare_input(_load(data, name) if _loaded is None else _loaded, max_side, gray_method)
 
 
 @st.cache_data(show_spinner=False, max_entries=32)
@@ -69,10 +74,14 @@ def thumbnail(path: str, size: int = 220) -> np.ndarray:
 def build_context(data: bytes, name: str, max_side: int, gray_method: str, sample: dict | None,
                   gt_bytes: bytes | None = None) -> InputContext:
     """Đọc + chuẩn bị đầu vào. Ném InputError nếu dữ liệu không hợp lệ."""
-    loaded = _load(data, name)
-    prepared = _prepare(data, name, max_side, gray_method)
     digest = hashlib.sha1(data).hexdigest()[:16]
-    signature = f"{digest}|{max_side}|{gray_method}"
+    current = get_context()
+    if current is not None and current.signature.split("|", 1)[0] == digest and current.loaded.source_name == name:
+        loaded = current.loaded
+    else:
+        loaded = _load(data, name)
+    prepared = _prepare(data, name, max_side, gray_method, _loaded=loaded)
+    signature = f"{digest}|{max_side}|{gray_method}|{name}"
     gt = None
     if gt_bytes is not None:
         gt = fit_ground_truth(load_mask_bytes(gt_bytes, "gt.png"), prepared)
@@ -80,6 +89,12 @@ def build_context(data: bytes, name: str, max_side: int, gray_method: str, sampl
 
 
 def set_context(ctx: InputContext | None, error: str | None = None) -> None:
+    for key in RESULT_KEYS:
+        result = st.session_state.get(key)
+        if result is not None and (ctx is None or result.get("signature") != ctx.signature):
+            # Giữ dấu báo kết quả cũ, giải phóng mảng ảnh và bytes xuất.
+            # Dấu stale ngăn khôi phục payload đã bỏ nếu người dùng chọn lại ảnh cũ.
+            st.session_state[key] = {"signature": result.get("signature"), "_stale": True}
     st.session_state["_input_ctx"] = ctx
     st.session_state["_input_error"] = error
 
@@ -99,14 +114,14 @@ def store_result(key: str, signature: str, payload: dict) -> None:
 def get_result(key: str, signature: str) -> dict | None:
     """Trả về kết quả đã lưu nếu khớp với đầu vào hiện tại, ngược lại None."""
     res = st.session_state.get(key)
-    if res is None or res.get("signature") != signature:
+    if res is None or res.get("_stale") or res.get("signature") != signature:
         return None
     return res
 
 
 def has_stale_result(key: str, signature: str) -> bool:
     res = st.session_state.get(key)
-    return res is not None and res.get("signature") != signature
+    return res is not None and (res.get("_stale", False) or res.get("signature") != signature)
 
 
 __all__ = [

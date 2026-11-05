@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from src.processing.pipeline import default_foreground, fit_ground_truth, kmeans_outputs, run_kmeans, run_otsu
+from src.processing.pipeline import TIMING_SCOPE, default_foreground, fit_ground_truth, kmeans_outputs, run_kmeans, run_otsu
 from src.ui import components as ui
 from src.ui.page_kmeans import params_form
 from src.ui.page_otsu import POLARITY_HELP, POLARITY_OPTIONS, polarity_caption
@@ -31,7 +31,8 @@ QUALITATIVE = [
     ("Bản chất", "Phân cụm không giám sát: tối thiểu tổng bình phương khoảng cách tới tâm cụm (SSE).",
      "Phân ngưỡng toàn cục: chọn t làm cực đại phương sai giữa hai lớp trên histogram."),
     ("Dữ liệu đầu vào", "Vector đặc trưng mỗi pixel: mức xám (1D) hoặc RGB (3D).", "Chỉ ảnh xám (histogram 256 mức)."),
-    ("Số vùng đầu ra", "K cụm (người dùng chọn K); cần chọn cụm nào là đối tượng.", "Luôn 2 lớp: nền / đối tượng."),
+    ("Số vùng đầu ra", "K cụm (người dùng chọn K); cần chọn cụm nào là đối tượng.",
+     "Hai lớp sáng/tối nếu có ngưỡng hợp lệ; cần chọn lớp đối tượng."),
     ("Tham số", "K, khởi tạo, seed, số vòng lặp, ngưỡng hội tụ.", "Không có tham số (chỉ chọn lớp sáng/tối là đối tượng)."),
     ("Phụ thuộc tham số", "Cao: K và khởi tạo ảnh hưởng kết quả; có thể rơi vào cực tiểu địa phương.",
      "Thấp: kết quả xác định duy nhất từ histogram."),
@@ -59,8 +60,14 @@ def render() -> None:
         gt_file = st.file_uploader("Ground-truth mask (tuỳ chọn, PNG trắng = đối tượng)", type=["png", "bmp"],
                                    key="cmp_gt_upload")
     if params is not None:
-        with st.spinner("Đang chạy K-means và Otsu…"):
-            km = run_kmeans(prep, params)
+        try:
+            with st.spinner("Đang chạy K-means…"):
+                km = run_kmeans(prep, params)
+        except (ValueError, MemoryError) as exc:
+            st.session_state.pop(RESULT_KEY, None)
+            st.error("Không chạy được K-means. Hãy kiểm tra tham số hoặc giảm giới hạn cạnh dài. " + str(exc))
+            return
+        else:
             store_result(RESULT_KEY, ctx.signature, {"params": params, "km": km,
                                                      "run_id": st.session_state.get("cmp_run_id", 0) + 1})
             st.session_state["cmp_run_id"] = st.session_state.get("cmp_run_id", 0) + 1
@@ -78,8 +85,17 @@ def render() -> None:
 
 def _render(ctx, run, gt_file) -> None:
     prep, km = ctx.prepared, run["km"]
-    # Otsu rất nhanh (< 10 ms) nên được tính lại theo lựa chọn cực tính hiện tại
-    otsu = run_otsu(prep, polarity=POLARITY_OPTIONS[st.session_state.get("cmp_otsu_polarity", "Gợi ý theo viền ảnh")])
+    # Chạy trên cùng PreparedInput; cập nhật theo lựa chọn cực tính hiện tại.
+    try:
+        otsu = run_otsu(prep, polarity=POLARITY_OPTIONS[st.session_state.get("cmp_otsu_polarity", "Gợi ý theo viền ảnh")])
+    except (ValueError, MemoryError) as exc:
+        st.error("Không phân ngưỡng được ảnh. Hãy giảm giới hạn cạnh dài hoặc kiểm tra dữ liệu. " + str(exc))
+        return
+    for warning in km.core.warnings:
+        st.warning("K-means: " + warning)
+    for warning in otsu.warnings:
+        st.warning("Otsu: " + warning)
+    st.caption("Phạm vi đo thời gian: " + TIMING_SCOPE)
 
     fg = st.multiselect("Cụm K-means làm đối tượng", list(range(km.core.k_effective)), default=default_foreground(km),
                         format_func=lambda c: f"Cụm {c}", key=f"cmp_fg_{run['run_id']}",

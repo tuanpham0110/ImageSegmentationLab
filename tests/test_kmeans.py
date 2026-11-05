@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from src.algorithms.kmeans import assign_labels, kmeans, segment_image_kmeans, unique_rows
+from src.algorithms.kmeans import assign_labels, image_to_features, kmeans, segment_image_kmeans, unique_pixels, unique_rows
 
 
 def two_blobs(n=200, seed=1):
@@ -61,13 +61,15 @@ def test_uniform_image_gives_single_cluster():
 
 
 def test_empty_cluster_is_reinitialised():
-    # Khởi tạo random có thể đặt 2 tâm ở cùng nhóm; ép tình huống cụm rỗng bằng dữ liệu lệch:
-    # 3 tâm nhưng dữ liệu có 3 giá trị, trong đó một nhóm rất lớn.
-    x = np.concatenate([np.zeros(1000), np.full(1000, 1.0), np.full(1, 255.0)])
-    for seed in range(20):
-        res = kmeans(x, 3, seed=seed, init="random")
-        assert res.counts.min() > 0, "Không được còn cụm rỗng trong kết quả cuối"
-        assert res.counts.sum() == x.size
+    # Dữ liệu lệch có trọng số, tái lập được và thực sự tạo cụm rỗng sau cập nhật.
+    rng = np.random.default_rng(42)
+    x = rng.normal(size=(80, 3)) * rng.lognormal(0, 2, (80, 1))
+    weights = rng.integers(1, 1000, 80)
+    res = kmeans(x, 8, weights=weights, seed=42, init="random", tol=0.0)
+    assert any("lần cụm rỗng" in warning for warning in res.warnings)
+    assert res.converged and res.counts.min() > 0
+    assert res.counts.sum() == weights.sum()
+    assert np.all(np.diff(res.sse_history) <= 1e-6)
 
 
 def test_max_iter_is_respected():
@@ -186,7 +188,7 @@ def test_invalid_weights_rejected():
         kmeans(np.arange(4.0), 2, weights=np.ones(3))
 
 
-@pytest.mark.parametrize("bad_k", [0, 9, 2.5, -1])
+@pytest.mark.parametrize("bad_k", [0, 9, 2.5, -1, True, np.bool_(True)])
 def test_invalid_k_rejected(bad_k):
     with pytest.raises(ValueError):
         kmeans(np.arange(10.0), bad_k)
@@ -201,3 +203,49 @@ def test_invalid_params_rejected():
         kmeans(np.array([1.0, np.nan]), 2)
     with pytest.raises(ValueError):
         segment_image_kmeans(np.zeros((4, 4), np.uint8), 2, feature="rgb")
+
+
+@pytest.mark.parametrize("chunk_size", [0, -1, 1.5, True, None])
+def test_invalid_chunk_size_is_rejected_before_assignment(chunk_size):
+    x = np.arange(10.0)[:, None]
+    with pytest.raises(ValueError, match="khối"):
+        assign_labels(x, np.array([[0.0], [9.0]]), chunk_size=chunk_size)
+    with pytest.raises(ValueError, match="khối"):
+        kmeans(x, 2, chunk_size=chunk_size)
+
+
+@pytest.mark.parametrize("params", [dict(tol=None), dict(tol="0.1"), dict(tol=np.nan),
+                                    dict(tol=np.inf), dict(max_iter=True), dict(max_iter=1.5),
+                                    dict(seed=-1), dict(seed=1.5), dict(seed=True)])
+def test_invalid_parameter_types_are_rejected(params):
+    with pytest.raises(ValueError):
+        kmeans(np.arange(10.0), 2, **params)
+
+
+@pytest.mark.parametrize("init", ["random", "kmeans++"])
+def test_duplicate_pixels_do_not_create_duplicate_initial_centers(init):
+    x = np.repeat([0.0, 128.0, 255.0], 100)
+    result = kmeans(x, 8, seed=5, init=init)
+    assert result.k_effective == 3 and result.converged
+    assert np.unique(result.centers_history[0], axis=0).shape[0] == 3
+    assert result.counts.tolist() == [100, 100, 100]
+
+
+def test_empty_feature_dimension_is_rejected():
+    with pytest.raises(ValueError, match="D >= 1"):
+        kmeans(np.empty((4, 0)), 2)
+
+
+@pytest.mark.parametrize("channels", [1, 3])
+def test_compact_pixel_packing_preserves_values_counts_and_inverse(channels):
+    rng = np.random.default_rng(99)
+    pixels = rng.integers(0, 256, (2000, channels), dtype=np.uint8)
+    pixels[1000:] = pixels[:1000]
+    values, inverse, counts = unique_pixels(pixels)
+    expected, expected_counts = np.unique(pixels, axis=0, return_counts=True)
+    np.testing.assert_array_equal(values, expected)
+    np.testing.assert_array_equal(values[inverse], pixels)
+    np.testing.assert_array_equal(counts, expected_counts)
+    image = pixels.reshape(40, 50, channels) if channels == 3 else pixels.reshape(40, 50)
+    features = image_to_features(image, "rgb" if channels == 3 else "gray", dtype=np.uint8)
+    assert features.dtype == np.uint8 and np.shares_memory(features, image)

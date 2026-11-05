@@ -44,15 +44,26 @@ class KMeansResult:
     warnings: list[str] = field(default_factory=list)
 
 
-def _validate_params(k: int, max_iter: int, tol: float, init: str) -> None:
-    if not isinstance(k, (int, np.integer)) or not MIN_K <= int(k) <= MAX_K:
+def _validate_chunk_size(chunk_size: int) -> None:
+    if isinstance(chunk_size, (bool, np.bool_)) or not isinstance(chunk_size, (int, np.integer)) or chunk_size < 1:
+        raise ValueError("Kích thước khối phải là số nguyên >= 1.")
+
+
+def _validate_params(k: int, max_iter: int, tol: float, init: str,
+                     chunk_size: int = DEFAULT_CHUNK_SIZE, seed: int | None = 0) -> None:
+    if isinstance(k, (bool, np.bool_)) or not isinstance(k, (int, np.integer)) or not MIN_K <= int(k) <= MAX_K:
         raise ValueError(f"K phải là số nguyên trong khoảng [{MIN_K}, {MAX_K}], nhận được {k!r}.")
-    if not isinstance(max_iter, (int, np.integer)) or int(max_iter) < 1:
+    if isinstance(max_iter, (bool, np.bool_)) or not isinstance(max_iter, (int, np.integer)) or int(max_iter) < 1:
         raise ValueError(f"Số vòng lặp tối đa phải là số nguyên >= 1, nhận được {max_iter!r}.")
-    if not np.isfinite(tol) or tol < 0:
+    if (isinstance(tol, (bool, np.bool_)) or not isinstance(tol, (int, float, np.integer, np.floating))
+            or not np.isfinite(tol) or tol < 0):
         raise ValueError(f"Ngưỡng hội tụ phải là số thực >= 0, nhận được {tol!r}.")
     if init not in ("kmeans++", "random"):
         raise ValueError(f"Phương pháp khởi tạo không hợp lệ: {init!r} (chỉ hỗ trợ 'kmeans++' hoặc 'random').")
+    _validate_chunk_size(chunk_size)
+    if seed is not None and (isinstance(seed, (bool, np.bool_))
+                             or not isinstance(seed, (int, np.integer)) or seed < 0):
+        raise ValueError("Random seed phải là số nguyên >= 0 hoặc None.")
 
 
 def unique_rows(data: np.ndarray) -> np.ndarray:
@@ -95,6 +106,7 @@ def assign_labels(
         labels: (N,) int32 — chỉ số tâm gần nhất (hoà thì lấy chỉ số nhỏ nhất).
         min_sq_dist: (N,) float64 — bình phương khoảng cách tới tâm đó.
     """
+    _validate_chunk_size(chunk_size)
     n = data.shape[0]
     labels = np.empty(n, dtype=np.int32)
     min_sq = np.empty(n, dtype=np.float64)
@@ -187,14 +199,14 @@ def kmeans(
     Returns:
         KMeansResult — nhãn được sắp xếp sao cho cụm 0 có tâm tối nhất.
     """
-    _validate_params(k, max_iter, tol, init)
+    _validate_params(k, max_iter, tol, init, chunk_size, seed)
     k = int(k)
     max_iter = int(max_iter)
     x = np.asarray(data, dtype=np.float64)
     if x.ndim == 1:
         x = x[:, None]
-    if x.ndim != 2 or x.shape[0] == 0:
-        raise ValueError("Dữ liệu phải là mảng 2 chiều (N, D) với N >= 1.")
+    if x.ndim != 2 or x.shape[0] == 0 or x.shape[1] == 0:
+        raise ValueError("Dữ liệu phải là mảng 2 chiều (N, D) với N >= 1 và D >= 1.")
     if not np.all(np.isfinite(x)):
         raise ValueError("Dữ liệu chứa giá trị NaN hoặc vô cực.")
     if weights is None:
@@ -311,21 +323,22 @@ class ImageKMeansResult:
     core: KMeansResult
 
 
-def image_to_features(image: np.ndarray, feature: str) -> np.ndarray:
+def image_to_features(image: np.ndarray, feature: str, *, dtype=np.float64) -> np.ndarray:
     """Chuyển ảnh thành ma trận đặc trưng (H*W, D).
 
     feature='gray': D = 1 (mức xám); feature='rgb': D = 3 (R, G, B).
-    Ảnh 2 chiều chỉ cho phép 'gray'.
+    Ảnh 2 chiều chỉ cho phép 'gray'. dtype mặc định float64; đường xử lý ảnh
+    giữ uint8 ở bước gom màu để tránh bản sao float64 trên toàn bộ pixel.
     """
     img = np.asarray(image)
     if feature == "gray":
-        if img.ndim == 3:
-            raise ValueError("Ảnh màu cần được chuyển sang mức xám trước khi dùng đặc trưng 'gray'.")
-        return img.reshape(-1, 1).astype(np.float64)
+        if img.ndim != 2:
+            raise ValueError("Đặc trưng 'gray' yêu cầu ảnh xám 2 chiều; ảnh màu cần được chuyển xám trước.")
+        return img.reshape(-1, 1).astype(dtype, copy=False)
     if feature == "rgb":
         if img.ndim != 3 or img.shape[2] != 3:
             raise ValueError("Đặc trưng 'rgb' yêu cầu ảnh 3 kênh (H, W, 3).")
-        return img.reshape(-1, 3).astype(np.float64)
+        return img.reshape(-1, 3).astype(dtype, copy=False)
     raise ValueError(f"Loại đặc trưng không hợp lệ: {feature!r}.")
 
 
@@ -335,14 +348,23 @@ def unique_pixels(features: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndar
     Mỗi pixel 0..255 với D <= 3 kênh được gộp thành một số nguyên R*65536 + G*256 + B
     để np.unique chạy trên mảng 1 chiều.
     """
-    ints = features.astype(np.int64)
-    packed = np.zeros(ints.shape[0], dtype=np.int64)
-    for c in range(ints.shape[1]):
-        packed = packed * 256 + ints[:, c]
+    features = np.asarray(features)
+    if features.ndim != 2 or not 1 <= features.shape[1] <= 3:
+        raise ValueError("Pixel phải có 1 đến 3 kênh.")
+    if features.dtype != np.uint8:
+        if (features.dtype.kind not in "buif" or not np.all(np.isfinite(features))
+                or np.any(features < 0) or np.any(features > 255)
+                or np.any(features != np.round(features))):
+            raise ValueError("Pixel phải có giá trị nguyên trong [0, 255].")
+    # Tối đa 24 bit RGB, vừa int32. Không tạo thêm ma trận int64 N×D.
+    packed = np.zeros(features.shape[0], dtype=np.int32)
+    for c in range(features.shape[1]):
+        packed *= 256
+        np.add(packed, features[:, c], out=packed, casting="unsafe")
     uniq, inverse, counts = np.unique(packed, return_inverse=True, return_counts=True)
-    values = np.empty((uniq.size, ints.shape[1]), dtype=np.float64)
+    values = np.empty((uniq.size, features.shape[1]), dtype=np.float64)
     rest = uniq.copy()
-    for c in range(ints.shape[1] - 1, -1, -1):
+    for c in range(features.shape[1] - 1, -1, -1):
         values[:, c] = rest % 256
         rest //= 256
     return values, inverse.ravel(), counts
@@ -364,15 +386,19 @@ def segment_image_kmeans(
     if img.dtype != np.uint8:
         raise ValueError("Ảnh phải có kiểu uint8 (giá trị 0..255).")
     h, w = img.shape[:2]
+    if h == 0 or w == 0:
+        raise ValueError("Ảnh rỗng: chiều rộng và chiều cao phải >= 1.")
+    _validate_params(k, max_iter, tol, init, seed=seed)
     t0 = time.perf_counter()
-    values, inverse, counts = unique_pixels(image_to_features(img, feature))
+    values, inverse, counts = unique_pixels(image_to_features(img, feature, dtype=np.uint8))
     # K-means có trọng số trên các giá trị phân biệt == K-means trên toàn bộ pixel
     core = kmeans(values, k, max_iter=max_iter, tol=tol, seed=seed, init=init, weights=counts)
     core.labels = core.labels[inverse]  # trả nhãn về cho từng pixel
-    core.elapsed_seconds = time.perf_counter() - t0
     labels = core.labels.reshape(h, w)
     palette = np.clip(np.round(core.centers), 0, 255).astype(np.uint8)
     segmented = palette[labels]
     if feature == "gray":
         segmented = segmented[..., 0]
+    # Đo tới kết quả trực tiếp của thuật toán, gồm cả phục hồi nhãn và ảnh tâm.
+    core.elapsed_seconds = time.perf_counter() - t0
     return ImageKMeansResult(labels=labels, segmented=segmented, centers=core.centers, feature=feature, core=core)

@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from src.processing.pipeline import (
+    TIMING_SCOPE,
     KMeansParams,
     cluster_table,
     default_foreground,
@@ -80,12 +81,20 @@ def render() -> None:
         params = params_form(prep.is_color)
         st.button("Khôi phục mặc định", on_click=_reset_defaults, width="stretch")
     if params is not None:
-        with right, st.spinner("Đang phân cụm K-means…"):
-            result = run_kmeans(prep, params)
+        try:
+            with right, st.spinner("Đang phân cụm K-means…"):
+                result = run_kmeans(prep, params)
+        except (ValueError, MemoryError) as exc:
+            st.session_state.pop(RESULT_KEY, None)
+            with right:
+                st.error("Không chạy được K-means. Hãy kiểm tra tham số hoặc giảm giới hạn cạnh dài. " + str(exc))
+            return
         store_result(RESULT_KEY, ctx.signature, {"params": params, "result": result,
                                                  "run_id": st.session_state.get("km_run_id", 0) + 1})
         st.session_state["km_run_id"] = st.session_state.get("km_run_id", 0) + 1
-        st.toast(f"K-means hoàn thành sau {result.core.n_iter} vòng lặp ({result.core.elapsed_seconds:.2f} s).", icon="✅")
+        status = "đã hội tụ" if result.core.converged else "đã dừng, chưa hội tụ"
+        st.toast(f"K-means {status} sau {result.core.n_iter} vòng lặp ({result.core.elapsed_seconds:.2f} s).",
+                 icon="✅" if result.core.converged else "⚠️")
 
     run = get_result(RESULT_KEY, ctx.signature)
     with right:
@@ -105,7 +114,7 @@ def _render_result(ctx, run: dict) -> None:
     m[1].metric("Số vòng lặp", core.n_iter)
     m[2].metric("Hội tụ", "Có" if core.converged else "Chưa")
     m[3].metric("SSE (inertia)", ui.compact_number(core.sse), help=f"SSE = {core.sse:,.2f}")
-    m[4].metric("Thời gian", f"{core.elapsed_seconds * 1000:.0f} ms")
+    m[4].metric("Thời gian", f"{core.elapsed_seconds * 1000:.0f} ms", help=TIMING_SCOPE)
     st.caption(f"Đặc trưng: {'RGB' if result.feature == 'rgb' else 'mức xám'} · khởi tạo {params.init} · "
                f"seed {params.seed} · tối đa {params.max_iter} vòng · tol {params.tol:g}")
     for w in core.warnings:
@@ -161,4 +170,6 @@ def _render_result(ctx, run: dict) -> None:
 
     with tab_dl:
         st.caption("Các tệp được tạo từ đúng kết quả đang hiển thị (cùng ảnh, tham số và cụm đối tượng đã chọn).")
-        ui.download_buttons(kmeans_export_files(prep, params, result, out), DOWNLOAD_LABELS, "km_dl")
+        files = ui.cached_export_files(run, tuple(fg), lambda: kmeans_export_files(prep, params, result, out))
+        if files is not None:
+            ui.download_buttons(files, DOWNLOAD_LABELS, "km_dl")

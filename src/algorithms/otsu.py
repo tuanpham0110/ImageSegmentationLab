@@ -19,7 +19,8 @@ nên hai cách cho cùng ngưỡng. Giáo trình không gọi tên "Otsu".
 Quy ước của module:
     * Ngưỡng t chỉ được xét khi cả hai lớp khác rỗng; các t làm một lớp rỗng có sigma_B^2 = 0
       và bị đánh dấu không hợp lệ (tránh chia cho 0).
-    * Nếu nhiều t cùng đạt cực đại, chọn floor(trung bình cộng các t đó) (giống MATLAB graythresh).
+    * Nếu nhiều t cùng đạt cực đại, chọn ngưỡng TRONG tập cực đại gần floor(trung bình) nhất;
+      nếu cách đều thì chọn ngưỡng nhỏ hơn. Với một đoạn liên tục, kết quả là floor(trung bình).
     * Ảnh nhị phân: pixel > t -> 255, pixel <= t -> 0.
 """
 
@@ -52,17 +53,24 @@ class OtsuResult:
     warnings: list[str] = field(default_factory=list)
 
 
-def compute_histogram(gray: np.ndarray) -> np.ndarray:
-    """Histogram 256 mức của ảnh xám uint8 (đếm số pixel có mức xám g — mục 3.1.1 giáo trình)."""
+def _validate_gray(gray: np.ndarray) -> np.ndarray:
+    """Chuẩn hoá đầu vào ảnh xám, không ép kiểu âm thầm các pixel không hợp lệ."""
     arr = np.asarray(gray)
     if arr.ndim != 2:
         raise ValueError("Otsu yêu cầu ảnh xám 2 chiều (H, W).")
     if arr.size == 0:
         raise ValueError("Ảnh rỗng.")
     if arr.dtype != np.uint8:
-        if np.any(arr < 0) or np.any(arr > 255) or np.any(arr != np.round(arr)):
+        if (arr.dtype.kind not in "buif" or not np.all(np.isfinite(arr))
+                or np.any(arr < 0) or np.any(arr > 255) or np.any(arr != np.round(arr))):
             raise ValueError("Ảnh xám phải chứa giá trị nguyên trong [0, 255].")
         arr = arr.astype(np.uint8)
+    return arr
+
+
+def compute_histogram(gray: np.ndarray) -> np.ndarray:
+    """Histogram 256 mức của ảnh xám uint8 (đếm số pixel có mức xám g — mục 3.1.1 giáo trình)."""
+    arr = _validate_gray(gray)
     return np.bincount(arr.ravel(), minlength=N_LEVELS).astype(np.int64)
 
 
@@ -72,8 +80,16 @@ def otsu_from_histogram(hist: np.ndarray) -> OtsuResult:
     h = np.asarray(hist, dtype=np.float64)
     if h.shape != (N_LEVELS,):
         raise ValueError("Histogram phải có đúng 256 phần tử.")
+    if not np.all(np.isfinite(h)):
+        raise ValueError("Histogram phải chứa số đếm hữu hạn, không có NaN hoặc vô cực.")
     if np.any(h < 0):
         raise ValueError("Histogram không được chứa giá trị âm.")
+    if np.any(h != np.floor(h)):
+        raise ValueError("Histogram phải chứa số đếm nguyên.")
+    # float64 biểu diễn chính xác số đếm nguyên tới 2**53. Giới hạn này lớn
+    # hơn nhiều giới hạn ảnh đầu vào, đồng thời tránh tràn số khi đổi int64.
+    if np.any(h >= 2**53) or h.sum() >= 2**53:
+        raise ValueError("Tổng số pixel trong histogram quá lớn để tính chính xác bằng float64.")
     n = h.sum()
     if n <= 0:
         raise ValueError("Histogram rỗng (tổng số pixel = 0).")
@@ -101,7 +117,7 @@ def otsu_from_histogram(hist: np.ndarray) -> OtsuResult:
         level = int(np.flatnonzero(h)[0])
         warnings.append(
             f"Ảnh chỉ có một mức xám ({level}); không thể tách hai lớp. Ngưỡng được đặt bằng {level}, "
-            "toàn bộ ảnh thuộc lớp nền (giá trị 0)."
+            "ảnh nhị phân trực tiếp có toàn giá trị 0."
         )
         return OtsuResult(
             threshold=level,
@@ -123,11 +139,14 @@ def otsu_from_histogram(hist: np.ndarray) -> OtsuResult:
 
     max_var = float(sigma_b[valid].max())
     tied = np.flatnonzero(valid & (sigma_b == max_var))
-    threshold = int(np.floor(tied.mean()))
+    midpoint = int(np.floor(tied.mean()))
+    # Các cực đại có thể nằm trên nhiều khoảng rời nhau. Trung bình của chúng
+    # không nhất thiết là cực đại: phải chọn một phần tử thực sự thuộc argmax.
+    threshold = int(tied[np.argmin(np.abs(tied - midpoint))])
     if tied.size > 1:
         warnings.append(
             f"Có {tied.size} ngưỡng cùng đạt cực đại (từ {tied.min()} đến {tied.max()}); "
-            f"chọn floor(trung bình) = {threshold}."
+            f"chọn ngưỡng đạt cực đại gần floor(trung bình) nhất = {threshold}."
         )
 
     w0_t = float(w0[threshold])
@@ -165,6 +184,21 @@ def otsu_threshold(gray: np.ndarray) -> OtsuResult:
 
 def apply_threshold(gray: np.ndarray, threshold: int) -> np.ndarray:
     """Phân ngưỡng (mục 3.1.3 giáo trình): pixel > threshold -> 255, ngược lại -> 0."""
-    if not 0 <= int(threshold) <= 255:
-        raise ValueError("Ngưỡng phải nằm trong [0, 255].")
-    return np.where(np.asarray(gray) > int(threshold), 255, 0).astype(np.uint8)
+    if (isinstance(threshold, (bool, np.bool_)) or not isinstance(threshold, (int, np.integer))
+            or not 0 <= int(threshold) <= 255):
+        raise ValueError("Ngưỡng phải là số nguyên trong [0, 255].")
+    return np.where(_validate_gray(gray) > int(threshold), 255, 0).astype(np.uint8)
+
+
+def segment_image_otsu(gray: np.ndarray, manual_threshold: int | None = None) -> tuple[OtsuResult, np.ndarray]:
+    """Histogram + tìm ngưỡng + tạo ảnh nhị phân, cùng phạm vi đo với K-means ảnh.
+
+    Ở chế độ thủ công vẫn tính Otsu để đối chiếu. Không tính chuyển xám,
+    lựa chọn foreground, ảnh tách nền, hiển thị hoặc mã hoá tệp xuất.
+    """
+    t0 = time.perf_counter()
+    result = otsu_threshold(gray)
+    threshold = result.threshold if manual_threshold is None else manual_threshold
+    binary = apply_threshold(gray, threshold)
+    result.elapsed_seconds = time.perf_counter() - t0
+    return result, binary

@@ -155,3 +155,17 @@ def test_save_and_reload_rgba_png():
     img = Image.open(io.BytesIO(to_png_bytes(rgba)))
     assert img.mode == "RGBA" and img.size == (6, 5)
     np.testing.assert_array_equal(np.asarray(img), rgba)
+
+
+@pytest.mark.parametrize("text,fragment", [("9" * 400, "ngoài khoảng"),
+                                         ("1.00000000000000001", "số nguyên"),
+                                         ("255.00000000000000001", "ngoài khoảng"),
+                                         ('"1,2', "CSV không hợp lệ"),
+                                         ("9" * 150_000 + ",0", "CSV không hợp lệ")])
+def test_csv_extreme_values_and_syntax_are_input_errors(text, fragment):
+    with pytest.raises(InputError, match=fragment):
+        parse_csv_matrix(text)
+
+
+def test_csv_exact_integer_decimal_notation_is_preserved():
+    np.testing.assert_array_equal(parse_csv_matrix("1.0000000000000000000,+002,-0,255.0"), [[1, 2, 0, 255]])

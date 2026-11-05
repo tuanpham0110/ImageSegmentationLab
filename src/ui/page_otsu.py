@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from src.processing.pipeline import otsu_export_files, run_otsu
+from src.processing.pipeline import TIMING_SCOPE, otsu_export_files, run_otsu
 from src.processing.preprocessing import GRAY_METHODS
 from src.ui import components as ui
 from src.ui.state import get_result, has_stale_result, store_result
@@ -26,6 +26,8 @@ POLARITY_HELP = ("Otsu chỉ chia 2 lớp sáng/tối, không biết lớp nào 
 
 
 def polarity_caption(out) -> str:
+    if out.mode == "otsu" and not out.result.valid:
+        return "Không có ngưỡng chia hai lớp; mask tự động được để trống."
     side = "lớp tối (≤ t)" if out.invert else "lớp sáng (> t)"
     how = " — theo gợi ý viền ảnh" if out.polarity == "auto" else ""
     return f"Đối tượng = {side}{how}."
@@ -71,9 +73,18 @@ def render() -> None:
 
     if submitted:
         manual = int(manual_t) if mode == MODES[1] else None
-        out = run_otsu(prep, polarity=POLARITY_OPTIONS[polarity], manual_threshold=manual)
+        try:
+            with st.spinner("Đang phân ngưỡng…"):
+                out = run_otsu(prep, polarity=POLARITY_OPTIONS[polarity], manual_threshold=manual)
+        except (ValueError, MemoryError) as exc:
+            st.session_state.pop(RESULT_KEY, None)
+            st.error("Không phân ngưỡng được ảnh. Hãy kiểm tra dữ liệu hoặc giảm giới hạn cạnh dài. " + str(exc))
+            return
         store_result(RESULT_KEY, ctx.signature, {"out": out})
-        st.toast(f"Otsu: ngưỡng t* = {out.result.threshold} ({out.result.elapsed_seconds * 1000:.1f} ms).", icon="✅")
+        if out.mode == "otsu" and not out.result.valid:
+            st.toast("Otsu không chia được hai lớp; mask tự động được để trống.", icon="⚠️")
+        else:
+            st.toast(f"Ngưỡng sử dụng = {out.threshold_used} ({out.result.elapsed_seconds * 1000:.1f} ms).", icon="✅")
 
     run = get_result(RESULT_KEY, ctx.signature)
     with right:
@@ -82,19 +93,19 @@ def render() -> None:
                 st.warning("Ảnh đầu vào đã thay đổi — kết quả cũ đã bị ẩn. Hãy bấm **Chạy Otsu** lại.")
             ui.show_images([(prep.image, "Ảnh gốc"), (prep.gray, "Ảnh xám")])
             return
-        _render_result(ctx, run["out"])
+        _render_result(ctx, run["out"], run)
 
 
-def _render_result(ctx, out) -> None:
+def _render_result(ctx, out, run: dict | None = None) -> None:
     prep, r = ctx.prepared, out.result
     m = st.columns(5)
     m[0].metric("Ngưỡng Otsu t*", r.threshold if r.valid else f"{r.threshold} (không hợp lệ)")
     m[1].metric("Ngưỡng dùng", f"{out.threshold_used}" + (" (thủ công)" if out.mode == "manual" else ""))
     m[2].metric("Độ tách η", f"{r.separability:.3f}", help="η = σ²_B(t*) / σ²_T, trong [0, 1]; càng gần 1 hai lớp càng tách biệt.")
     m[3].metric("Đối tượng", f"{out.foreground_ratio * 100:.1f}%", help="Tỷ lệ pixel đối tượng; phần còn lại là nền.")
-    m[4].metric("Thời gian", f"{r.elapsed_seconds * 1000:.2f} ms")
+    m[4].metric("Thời gian", f"{r.elapsed_seconds * 1000:.2f} ms", help=TIMING_SCOPE)
     st.caption(f"Quy ước: pixel > {out.threshold_used} → 255 (lớp C1, sáng). " + polarity_caption(out))
-    for w in r.warnings:
+    for w in out.warnings:
         st.warning(w)
 
     tab_res, tab_hist, tab_dl = st.tabs(["Kết quả phân ngưỡng", "Histogram & phương sai", "Tải xuống"])
@@ -121,7 +132,8 @@ def _render_result(ctx, out) -> None:
             st.dataframe(stats, hide_index=True, width="stretch")
             st.caption(f"σ²_B(t*) = {r.max_variance:.3f} · σ²_T = {r.total_variance:.3f}. "
                        + (f"Có {len(r.tied_thresholds)} ngưỡng đồng hạng ({min(r.tied_thresholds)}–{max(r.tied_thresholds)}), "
-                          "chọn floor(trung bình)." if len(r.tied_thresholds) > 1 else "Ngưỡng cực đại là duy nhất."))
+                          "chọn một cực đại gần floor(trung bình) nhất; các khoảng có thể rời nhau."
+                          if len(r.tied_thresholds) > 1 else "Ngưỡng cực đại là duy nhất."))
         with st.expander("Bảng histogram đầy đủ (256 mức)"):
             nz = np.flatnonzero(r.histogram)
             st.dataframe(pd.DataFrame({"Mức xám g": nz, "h(g)": r.histogram[nz],
@@ -130,4 +142,8 @@ def _render_result(ctx, out) -> None:
 
     with tab_dl:
         st.caption("Các tệp được tạo từ đúng kết quả đang hiển thị.")
-        ui.download_buttons(otsu_export_files(prep, out), DOWNLOAD_LABELS, "otsu_dl")
+        files = ui.cached_export_files({} if run is None else run,
+                                       (out.mode, out.threshold_used, out.polarity),
+                                       lambda: otsu_export_files(prep, out))
+        if files is not None:
+            ui.download_buttons(files, DOWNLOAD_LABELS, "otsu_dl")

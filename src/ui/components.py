@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 import streamlit as st
 from PIL import Image
@@ -140,16 +142,38 @@ def require_input():
     return ctx
 
 
+def cached_export_files(run: dict, key: tuple, build: Callable[[], dict[str, tuple[bytes, str]]]):
+    """Giữ duy nhất một bộ tệp cho kết quả hiện tại; thay foreground thì tạo lại.
+
+    Cache nằm trong payload của lần chạy, được bỏ khi chạy lại hoặc đổi đầu vào.
+    Lỗi tạo tệp không được biến thành nút tải dữ liệu cũ.
+    """
+    cached = run.get("_export_cache")
+    if cached is not None and cached["key"] == key:
+        return cached["files"]
+    run.pop("_export_cache", None)
+    try:
+        files = build()
+    except (ValueError, OSError, MemoryError) as exc:
+        st.error("Không tạo được tệp tải xuống. Hãy kiểm tra kết quả hoặc giảm giới hạn cạnh dài. " + str(exc))
+        return None
+    run["_export_cache"] = {"key": key, "files": files}
+    return files
+
+
 def download_buttons(files: dict[str, tuple[bytes, str]], labels: dict[str, str], key_prefix: str) -> None:
     """Hiển thị các nút tải xuống theo lưới 3 cột."""
+    st.caption("Trình duyệt xử lý vị trí lưu và xác nhận ghi đè tệp.")
     names = list(files.keys())
     for row_start in range(0, len(names), 3):
         cols = st.columns(3)
         for col, name in zip(cols, names[row_start : row_start + 3]):
             data, mime = files[name]
             with col:
-                st.download_button(
+                requested = st.download_button(
                     labels.get(name, name), data=data, file_name=name, mime=mime,
                     key=f"{key_prefix}_{name}", width="stretch",
                 )
+                if requested:
+                    st.info(f"Đã yêu cầu trình duyệt tải {name}. Kiểm tra mục tải xuống của trình duyệt.")
                 st.caption(f"{name} · {human_bytes(len(data))}")
