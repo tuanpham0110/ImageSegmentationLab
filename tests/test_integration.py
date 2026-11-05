@@ -475,3 +475,21 @@ def test_export_failure_is_visible_and_does_not_offer_stale_files(monkeypatch, p
     monkeypatch.setattr(module, function, original)
     at.run()
     assert not at.exception and len(at.get("download_button")) == 7
+
+
+def test_decode_memory_failure_clears_input_and_existing_downloads(monkeypatch):
+    from src.ui import sidebar
+
+    at = _app("otsu").run()
+    next(b for b in at.button if b.label.startswith("Chạy Otsu")).click().run()
+    assert len(at.get("download_button")) == 7
+
+    def fail(*args, **kwargs):
+        raise MemoryError("Không đủ RAM giải mã")
+
+    monkeypatch.setattr(sidebar, "build_context", fail)
+    at.run()
+    assert not at.exception
+    assert any("thu nhỏ ảnh trước khi tải lên" in e.value for e in at.error)
+    assert at.session_state["_input_ctx"] is None
+    assert len(at.get("download_button")) == 0

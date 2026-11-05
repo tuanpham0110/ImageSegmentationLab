@@ -143,7 +143,8 @@ def parse_csv_matrix(text: str) -> np.ndarray:
     mọi dòng cùng số cột. Dòng trống bị bỏ qua.
     """
     text = text.lstrip("﻿")
-    lines = [ln for ln in text.splitlines() if ln.strip()]
+    # Giữ ký tự xuống dòng để csv.reader không ghép "1\n2" trong dấu nháy thành 12.
+    lines = [ln for ln in text.splitlines(keepends=True) if ln.strip()]
     if not lines:
         raise InputError("CSV rỗng: không có dòng dữ liệu nào.")
 

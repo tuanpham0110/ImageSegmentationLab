@@ -37,8 +37,10 @@ def render() -> None:
 
 #### 4. Otsu
 1. Chọn chế độ **Tự động (Otsu)** hoặc **Thủ công** (để đối chiếu với ngưỡng tự chọn).
-2. Bật **Đảo foreground/background** nếu đối tượng tối trên nền sáng.
+2. Ở **Đối tượng (foreground) là**, chọn *Lớp tối (≤ t)* nếu đối tượng tối trên nền sáng, *Lớp sáng (> t)*
+   cho đối tượng sáng, hoặc *Gợi ý theo viền ảnh*. Gợi ý có thể sai khi đối tượng phủ viền ảnh.
 3. Bấm **Chạy Otsu**; xem histogram (đường đỏ là t*) và đồ thị σ²_B(t).
+4. Nếu ảnh chỉ có một mức xám, Otsu báo không hợp lệ và mask tự động rỗng; có thể dùng chế độ thủ công để đối chiếu.
 
 #### 5. So sánh
 - Chạy K-means và Otsu trên cùng ảnh; so sánh ảnh kết quả và **mask nhị phân**.
@@ -56,6 +58,12 @@ def render() -> None:
 | `otsu_binary_matrix.csv` | Ma trận mask 0/1 |
 | `otsu_histogram.csv` | h(g) và σ²_B(g) cho 256 mức |
 | `*_stats.json` | Tham số và toàn bộ thống kê của lần chạy |
+
+Trình duyệt xử lý nơi lưu và xác nhận ghi đè. Thông báo sau khi bấm tải chỉ xác nhận đã yêu cầu trình duyệt
+tải tệp; ứng dụng không thể xác nhận tệp đã được ghi xuống ổ đĩa. Nếu tạo tệp thất bại, trang hiển thị lỗi.
+
+Thời gian hiển thị tính từ ảnh đã tiền xử lý đến nhãn/ảnh tâm hoặc ảnh nhị phân; loại trừ đọc tệp,
+chuyển xám/resize, chọn đối tượng, biểu đồ và xuất tệp.
 
 #### 7. Xử lý sự cố
 - *Kết quả biến mất sau khi đổi ảnh*: đúng thiết kế — kết quả cũ bị ẩn để không tải nhầm; bấm chạy lại.

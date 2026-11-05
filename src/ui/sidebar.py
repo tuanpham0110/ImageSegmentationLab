@@ -69,6 +69,11 @@ def render_input_sidebar() -> None:
         try:
             ctx = build_context(data, name, int(st.session_state["max_side"]), st.session_state["gray_method"],
                                 sample, gt_bytes)
+        except MemoryError:
+            message = "Không đủ bộ nhớ để đọc ảnh. Hãy thu nhỏ ảnh trước khi tải lên hoặc giải phóng RAM rồi thử lại."
+            set_context(None, message)
+            st.error(message)
+            return
         except (InputError, ValueError) as exc:
             set_context(None, str(exc))
             st.error(str(exc))

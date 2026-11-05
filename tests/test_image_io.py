@@ -161,6 +161,7 @@ def test_save_and_reload_rgba_png():
                                          ("1.00000000000000001", "số nguyên"),
                                          ("255.00000000000000001", "ngoài khoảng"),
                                          ('"1,2', "CSV không hợp lệ"),
+                                         ('0,"1\n2"', "không phải số"),
                                          ("9" * 150_000 + ",0", "CSV không hợp lệ")])
 def test_csv_extreme_values_and_syntax_are_input_errors(text, fragment):
     with pytest.raises(InputError, match=fragment):

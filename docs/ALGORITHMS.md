@@ -65,14 +65,14 @@ Kiểm thử `test_sse_is_non_increasing` xác nhận SSE không tăng.
 
 | Vấn đề | Cách xử lý |
 |---|---|
-| Khoảng cách | ‖x − c‖² = ‖x‖² − 2x·c + ‖c‖², tính bằng phép nhân ma trận NumPy, **theo khối 262 144 điểm** ⇒ bộ nhớ tạm ≤ ~16 MB với K = 8 dù ảnh lớn |
+| Khoảng cách | ‖x − c‖² = ‖x‖² − 2x·c + ‖c‖², tính bằng phép nhân ma trận NumPy, **theo khối 262 144 điểm**. Riêng một ma trận khoảng cách khoảng 16 MB với K = 8; tổng RAM còn gồm ảnh, nhãn, dữ liệu phân biệt và các mảng tạm khác |
 | Khởi tạo K-means++ **[bổ sung]** | Arthur & Vassilvitskii (2007), *k-means++: The Advantages of Careful Seeding*, SODA. Tâm đầu ngẫu nhiên; tâm tiếp theo chọn với xác suất ∝ w(x)·D(x)², D(x) = khoảng cách tới tâm gần nhất đã chọn |
 | Khởi tạo ngẫu nhiên | Chọn K giá trị **phân biệt** (tránh hai tâm trùng nhau ngay từ đầu) |
 | K > số giá trị phân biệt | Giảm K về số giá trị phân biệt, ghi cảnh báo (ví dụ ảnh một màu ⇒ K = 1) |
-| Cụm rỗng | Đặt lại tâm tại điểm xa tâm hiện tại của nó nhất, không trùng tâm khác; không được tính là hội tụ ở vòng đó |
+| Cụm rỗng | Đặt lại tâm tại điểm xa tâm hiện tại của nó nhất, không trùng tâm khác; không được tính là hội tụ ở vòng đó. Nếu dừng sớm rồi gán nhãn cuối sinh cụm rỗng: báo chưa hội tụ và cảnh báo, không vượt max_iter |
 | Tái lập | `numpy.random.default_rng(seed)` |
 | Nhất quán | Sau vòng lặp gán nhãn lại theo tâm cuối ⇒ nhãn, số pixel, SSE khớp với tâm báo cáo (`test_labels_consistent_with_centers_and_sse`) |
-| Thứ tự cụm | Sắp theo độ chói của tâm ⇒ cùng ảnh cho cùng thứ tự cụm, dễ giải thích |
+| Thứ tự cụm | Sắp theo độ chói tâm để chuẩn hoá tên nhãn; không bảo đảm cùng nghiệm giữa các seed |
 | **Tăng tốc có trọng số** | Ảnh `uint8` có nhiều pixel trùng giá trị. `segment_image_kmeans` gom pixel thành U giá trị phân biệt với trọng số w = số pixel, chạy K-means **có trọng số** J = Σ wᵢ‖xᵢ − Z‖², Z_k = Σwᵢxᵢ / Σwᵢ, rồi trả nhãn về từng pixel. Đây là **cùng một bài toán** với K-means trên mọi pixel (pixel trùng giá trị luôn cùng nhãn). Ảnh xám còn ≤ 256 điểm. Kiểm thử `test_weighted_equals_expanded_data` và `test_image_result_is_exact_kmeans_on_all_pixels` chứng minh |
 
 ### 3.4 Chọn đối tượng
@@ -84,7 +84,8 @@ phủ viền). Heuristic này sai khi đối tượng chạm viền hoặc nền
 ### 3.5 Độ phức tạp
 
 Thời gian O(U·K·D·T) với U ≤ N là số giá trị phân biệt, T là số vòng lặp; cộng O(N log N) cho bước gom pixel.
-Bộ nhớ O(N) cho nhãn + O(B·K) cho khối khoảng cách.
+Bộ nhớ O(N + U·D + B·K), gồm chỉ số phục hồi/nhãn, dữ liệu phân biệt và khối khoảng cách. Bước gom màu giữ
+pixel uint8 và đóng gói tối đa 24 bit RGB vào int32, tránh ma trận float64/int64 N×D không cần thiết.
 
 ---
 
@@ -139,14 +140,19 @@ giáo trình ghi 1.66 do làm tròn m(g) trước khi tính.
 | Vấn đề | Cách xử lý |
 |---|---|
 | Lớp rỗng (ω₀ = 0 hoặc ω₁ = 0) | t đó không hợp lệ, σ²_B = 0, không chia cho 0. Xác định bằng số pixel tích luỹ **nguyên** (không phụ thuộc sai số float) |
-| Ảnh một mức xám | Không có t hợp lệ ⇒ `valid = False`, cảnh báo, t = mức xám đó, toàn ảnh là nền |
-| Nhiều t cùng cực đại | Chọn **floor(trung bình các t đồng hạng)** (cùng quy tắc MATLAB `graythresh`). Ảnh tổng hợp có khoảng trống trong histogram nên thường có cả một đoạn t cho cùng phân hoạch; lấy giữa đoạn cho ngưỡng “đẹp” |
+| Ảnh một mức xám | Không có t hợp lệ ⇒ `valid = False`, cảnh báo, t = mức xám đó; mask tự động luôn rỗng dù chọn lớp sáng/tối. Chế độ thủ công vẫn cho chọn lớp có chủ đích |
+| Nhiều t cùng cực đại | Chọn **phần tử trong tập cực đại gần floor(trung bình) nhất**, hoà chọn phần tử nhỏ hơn. Với một đoạn liên tục, kết quả vẫn là floor(trung bình). Không lấy trung bình bên ngoài tập cực đại |
 | Quy ước nhị phân | pixel > t ⇒ 255 (C₁), ngược lại 0 (giống công thức 3.1.3 với θ = t + 1) |
 | Lớp nào là đối tượng | Lựa chọn: lớp sáng, lớp tối, hoặc **gợi ý theo viền ảnh** (lớp chiếm đa số viền là nền) — heuristic, cùng giả định như K-means |
 | Ngưỡng thủ công | Dùng `apply_threshold` với T người dùng chọn; t* vẫn được tính và vẽ để đối chiếu |
 
 Kiểm chứng: so với cài đặt duyệt trực tiếp từng ngưỡng theo định nghĩa ω₀ω₁(μ₀ − μ₁)² trên 5 ảnh ngẫu nhiên
-(`test_random_images_match_brute_force`).
+(`test_random_images_match_brute_force`) và histogram cực đại rời nhau (`test_disconnected_maxima_return_an_actual_optimum`).
+
+**Phản ví dụ quan trọng:** h(0)=h(255)=1, h(127)=h(128)=127. Tập cực đại là 0..126 và 128..254, σ²_B max = 63.75.
+Ngưỡng trung bình 127 chỉ có σ²_B = 2.2266 nên không tối ưu. Quy tắc hiện tại chọn 126 và mọi thống kê khớp ngưỡng đó.
+
+Đầu vào histogram phải là số đếm nguyên không âm, hữu hạn; ảnh và ngưỡng không được ép kiểu âm thầm từ dữ liệu sai.
 
 ---
 
@@ -173,3 +179,17 @@ báo *mức trùng khớp giữa hai mask* và ghi rõ đó không phải độ 
 | Tối ưu | Cục bộ, phụ thuộc khởi tạo | Toàn cục |
 | Thời gian | O(U·K·D·T) | O(N + 256) |
 | Hạn chế chung | Không dùng thông tin không gian ⇒ nhạy nhiễu muối tiêu, chiếu sáng không đều | như bên trái |
+
+Với ảnh xám 1 chiều, K = 2 và cùng dữ liệu pixel: SSE/N = σ²_W = σ²_T − σ²_B. Tối ưu K-means hai cụm và Otsu
+có cùng mục tiêu phân hoạch hai lớp; cách tìm nghiệm khác nhau. Lloyd phụ thuộc khởi tạo và có thể dừng ở cực tiểu
+cục bộ, còn Otsu duyệt các ngưỡng hợp lệ. Không nên giải thích sự khác biệt bằng việc gọi đây là hai tiêu chí không liên hệ.
+
+## 7. Phạm vi đo thời gian và dữ liệu xuất
+
+UI, JSON và script thực nghiệm đo từ ảnh đã tiền xử lý đến kết quả trực tiếp: gom màu + Lloyd + phục hồi nhãn/ảnh
+tâm cho K-means; histogram + tìm ngưỡng + tạo ảnh nhị phân cho Otsu. Loại trừ đọc tệp, resize/chuyển xám, chọn
+foreground, ảnh tách nền, biểu đồ và mã hoá PNG/CSV/JSON. Bảng mẫu lấy trung vị 5 lần; quét K/kích thước lấy 3 lần.
+
+Ảnh gốc chỉ giữ cho đầu vào hiện tại của phiên; cache ảnh đã xử lý giới hạn 4 mục và TTL 300 giây. Một bộ tệp xuất
+được giữ trong payload lần chạy và tạo lại khi foreground/kết quả đổi. Đổi đầu vào giải phóng payload cũ, giữ dấu
+cảnh báo stale; tên tệp cũng thuộc chữ ký để metadata xuất không nhầm ảnh.

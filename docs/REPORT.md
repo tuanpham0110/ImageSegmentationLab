@@ -41,7 +41,7 @@ pháp này.
 
 ### 1.4 Kết quả cần đạt
 
-Ứng dụng Streamlit 7 trang chạy trên Windows; 11 ảnh mẫu offline có ground truth khi phù hợp; 86 kiểm thử tự động;
+Ứng dụng Streamlit 7 trang chạy trên Windows; 11 ảnh mẫu offline có ground truth khi phù hợp; 170 kiểm thử tự động;
 báo cáo, slide, kịch bản demo và câu hỏi phản biện.
 
 ---
@@ -111,7 +111,7 @@ dù giáo trình không gọi tên. Các kỹ thuật khác ở mục 5.2 — đ
 1. h = histogram 256 mức;  p = h/N
 2. ω₀ = cumsum(p);  μ = cumsum(i·p);  μ_T = μ[255]
 3. Với mọi t làm hai lớp khác rỗng: σ²_B(t) = (μ_T·ω₀ − μ)² / (ω₀(1 − ω₀))
-4. t* = floor(trung bình các t đạt cực đại)
+4. t* = phần tử TRONG tập cực đại gần floor(trung bình) nhất; hoà chọn ngưỡng nhỏ hơn
 5. B = 255 nếu I > t*, ngược lại 0
 ```
 
@@ -176,10 +176,12 @@ Bốn tầng, phụ thuộc một chiều từ trên xuống:
 
 ### 3.5 Luồng dữ liệu và trạng thái
 
-Thanh bên đọc đầu vào và tạo `InputContext` (ảnh đã chuẩn bị + **chữ ký** = hash nội dung tệp + giới hạn kích thước +
+Thanh bên đọc đầu vào và tạo `InputContext` (ảnh đã chuẩn bị + **chữ ký** = hash nội dung tệp + tên tệp + giới hạn kích thước +
 cách chuyển xám). Khi bấm nút chạy, kết quả được lưu trong `st.session_state` cùng chữ ký. Mỗi lần vẽ trang, nếu chữ
 ký không khớp đầu vào hiện tại thì kết quả bị ẩn và có cảnh báo ⇒ không thể tải nhầm kết quả của ảnh cũ. Tham số
 nằm trong `st.form` nên thuật toán chỉ chạy khi bấm nút; việc chọn cụm đối tượng chỉ tính lại mask (rất nhanh).
+Ảnh gốc chỉ giữ cho đầu vào hiện tại của phiên; cache ảnh xử lý tối đa 4 mục, TTL 300 giây. Đổi ảnh giải phóng
+payload cũ; tệp xuất tái sử dụng trong cùng lần chạy và tạo lại khi foreground đổi. Nếu tạo tệp thất bại thì hiện lỗi.
 
 ---
 
@@ -193,25 +195,30 @@ mã nguồn để bảo đảm (`test_no_opencv_or_library_algorithms_imported`)
 
 ### 4.2 Cấu trúc mã nguồn
 
-Xem README mục 4. Tổng cộng 4 module thuật toán/xử lý, 3 module tiện ích, 10 module giao diện, 2 script, 4 tệp kiểm thử.
+Xem README mục 4. Tổng cộng 5 module thuật toán/xử lý, 3 module tiện ích, 10 module giao diện, 2 script, 4 tệp kiểm thử.
 
 ### 4.3 Cài đặt K-means (`src/algorithms/kmeans.py`)
 
-- `assign_labels`: khoảng cách bình phương theo khai triển ‖x‖² − 2x·c + ‖c‖², tính **theo khối 262 144 điểm** để
-  bộ nhớ tạm không phụ thuộc kích thước ảnh.
-- `kmeans`: vòng lặp Lloyd có trọng số; cập nhật tâm bằng `np.bincount(labels, weights=w·x_d)`; xử lý cụm rỗng; giảm K
-  khi thiếu giá trị phân biệt; gán nhãn lần cuối; sắp cụm theo độ sáng; lưu lịch sử SSE, độ dịch tâm, tâm từng vòng.
-- `segment_image_kmeans`: gom pixel trùng giá trị (mã hoá R·65536 + G·256 + B rồi `np.unique`), chạy K-means có trọng
-  số trên các giá trị phân biệt rồi trả nhãn về từng pixel. Đây là cùng bài toán với K-means trên mọi pixel (đã kiểm
-  thử). Đo với cùng tâm khởi tạo (nên cùng số vòng lặp), K = 4: cảnh RGB 86 400 pixel / 20 451 màu 158 → 47 ms
-  (3.4×); 4 hình màu 76 800 pixel / 5 màu 37 → 10 ms (3.6×); ảnh xám nhiễu 65 536 pixel / 256 mức 126 → 6 ms (19.6×).
+- `assign_labels`: khoảng cách bình phương theo khai triển ‖x‖² − 2x·c + ‖c‖², tính theo khối 262 144 điểm.
+  Riêng ma trận khoảng cách khoảng 16 MB với K=8; đây không phải giới hạn tổng RAM của ứng dụng.
+- `kmeans`: Lloyd có trọng số; cập nhật tâm bằng `np.bincount`; xử lý cụm rỗng; giảm K khi thiếu giá trị phân biệt;
+  gán nhãn lần cuối; sắp cụm theo độ sáng; lưu lịch sử SSE, độ dịch tâm và tâm. Kiểm tra K, seed, tol, max_iter,
+  chunk_size trước xử lý. Nếu gán nhãn cuối còn cụm rỗng thì báo chưa hội tụ, không vượt giới hạn vòng lặp.
+- `segment_image_kmeans`: giữ pixel uint8, đóng gói RGB 24 bit trong int32, gom pixel trùng với số đếm làm trọng số.
+  Chạy Lloyd trên U giá trị phân biệt rồi phục hồi nhãn từng pixel, tạo ảnh mỗi pixel mang màu tâm cụm.
+  Hàm mục tiêu và trung bình có trọng số tương đương với dữ liệu pixel khai triển; các kiểm thử đối chiếu vẫn đạt.
+  Số liệu hiệu năng hiện tại nằm trong Chương 5 và `docs/results/experiment_results.md`.
 
 ### 4.4 Cài đặt Otsu (`src/algorithms/otsu.py`)
 
 - `compute_histogram`: `np.bincount(minlength=256)`.
 - `otsu_from_histogram`: tính ω₀, μ bằng `cumsum`; σ²_B chỉ tại ngưỡng hợp lệ (số pixel tích luỹ nguyên 0 < c₀ < N);
-  ngưỡng đồng hạng ⇒ floor(trung bình); ảnh một mức xám ⇒ `valid = False`; trả về ω₀, ω₁, μ₀, μ₁, σ²_T, η.
-- `apply_threshold`: pixel > t ⇒ 255.
+  ngưỡng đồng hạng ⇒ chọn phần tử trong tập cực đại gần floor(trung bình) nhất; ảnh một mức xám ⇒ `valid = False`; trả về ω₀, ω₁, μ₀, μ₁, σ²_T, η.
+- `apply_threshold`: pixel > t ⇒ 255; từ chối ngưỡng không nguyên và ảnh sai miền giá trị.
+- `segment_image_otsu`: đo histogram + tìm ngưỡng + tạo ảnh nhị phân. Ảnh một mức xám có mask tự động rỗng
+  ở mọi cực tính; chế độ thủ công vẫn cho chọn lớp có chủ đích.
+- Histogram cực đại rời nhau được kiểm chứng: h(0)=h(255)=1, h(127)=h(128)=127. Chọn t=126, σ²_B=63.75;
+  trung bình 127 không tối ưu nên không được dùng.
 
 ### 4.5 Giao diện
 
@@ -255,37 +262,39 @@ trình. Không có ảnh chụp thật trong bộ dữ liệu (xem 5.7).
 ### 5.3 Quy tắc thử nghiệm
 
 K-means: K và đặc trưng theo gợi ý của mẫu, K-means++, seed 0, tol 1e-4, max 100 vòng, cụm đối tượng = gợi ý theo viền
-ảnh. Otsu: lớp đối tượng = gợi ý theo viền ảnh. Thời gian: trung vị 5 lần, chỉ phần thuật toán.
+ảnh. Otsu: lớp đối tượng = gợi ý theo viền ảnh. Bảng mẫu dùng trung vị 5 lần; quét K/kích thước dùng 3 lần.
+Phạm vi đo: từ ảnh đã tiền xử lý tới nhãn/ảnh tâm hoặc ảnh nhị phân; loại trừ đọc tệp, resize/chuyển xám,
+chọn foreground, ảnh tách nền, biểu đồ và xuất tệp. Thời điểm đo: 2026-11-05T15:41:08+07:00.
 
 ### 5.4 Kết quả
 
 | Mẫu | Kích thước | K | Vòng | K-means (ms) | t* | Otsu (ms) | IoU K-means | IoU Otsu | Dice K-means | Dice Otsu |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Hình tròn đen | 256×256 | 2 xám | 1 | 2.8 | 127 | 0.38 | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
-| Chữ nhật sáng | 256×192 | 2 xám | 1 | 3.6 | 124 | 0.31 | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
-| Nhiều hình màu | 320×240 | 5 RGB | 1 | 17.0 | 148 | 0.47 | **1.0000** | **0.7964** | 1.0000 | 0.8867 |
-| Nhiều mức xám | 300×200 | 4 xám | 1 | 4.5 | 119 | 0.38 | **1.0000** | **0.6667** | 1.0000 | 0.8000 |
-| Tròn có nhiễu | 256×256 | 2 xám | 3 | 4.4 | 126 | 0.30 | 0.8397 | 0.8397 | 0.9129 | 0.9129 |
-| Tương phản thấp | 256×256 | 2 xám | 6 | 4.8 | 139 | 0.38 | 0.9532 | 0.9532 | 0.9761 | 0.9761 |
-| Một màu | 128×128 | 1 (giảm từ 2) | 1 | 0.6 | 128 (không hợp lệ) | 0.14 | — | — | — | — |
-| Cảnh RGB | 360×240 | 6 RGB | 8 | 42.7 | 139 | 0.55 | — | — | — | — |
-| Ảnh 10×10 | 10×10 | 2 xám | 2 | 0.4 | 125 | 0.11 | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
-| CSV 32×32 | 32×32 | 2 xám | 2 | 0.6 | 119 | 0.13 | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
-| Ma trận giáo trình | 6×5 | 2 xám | 2 | 0.5 | **1** | 0.09 | — | — | — | — |
+| Hình tròn đen trên nền trắng | 256x256 | 2 gray | 1 | 1.9 | 127 | 0.59 | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
+| Hình chữ nhật sáng trên nền tối | 256x192 | 2 gray | 1 | 2.3 | 124 | 0.38 | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
+| Nhiều hình màu khác nhau (RGB) | 320x240 | 5 rgb | 1 | 5.0 | 148 | 0.64 | 1.0000 | 0.7964 | 1.0000 | 0.8867 |
+| Ảnh xám nhiều mức sáng | 300x200 | 4 gray | 1 | 3.1 | 119 | 0.39 | 1.0000 | 0.6667 | 1.0000 | 0.8000 |
+| Hình tròn có nhiễu Gauss + muối tiêu | 256x256 | 2 gray | 3 | 2.7 | 126 | 0.34 | 0.8397 | 0.8397 | 0.9129 | 0.9129 |
+| Ảnh độ tương phản thấp | 256x256 | 2 gray | 6 | 2.6 | 139 | 0.33 | 0.9532 | 0.9532 | 0.9761 | 0.9761 |
+| Ảnh chỉ có một màu (ngoại lệ) | 128x128 | 1 gray (yêu cầu 2) | 1 | 0.5 | 128 (không hợp lệ) | 0.16 | — | — | — | — |
+| Cảnh RGB nhiều vùng màu (tổng hợp) | 360x240 | 6 rgb | 8 | 36.3 | 139 | 0.64 | — | — | — | — |
+| Ảnh nhỏ 10x10 (minh hoạ từng bước) | 10x10 | 2 gray | 2 | 0.4 | 125 | 0.13 | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
+| Ma trận CSV 32x32 | 32x32 | 2 gray | 2 | 0.4 | 119 | 0.14 | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
+| Ma trận ví dụ giáo trình mục 3.1.6 | 6x5 | 2 gray | 2 | 0.4 | 1 | 0.11 | — | — | — | — |
 
-“—”: không có ground truth nên không tính. Hình kết quả từng mẫu: `docs/figures/<mã mẫu>.png`
-(ảnh gốc | K-means | mask K-means | Otsu | mask Otsu).
+“—”: không có ground truth nên không tính. Bảng được đồng bộ từ `docs/results/experiment_results.json`.
+Hình minh hoạ trong `docs/figures/` được giữ nguyên vì phân hoạch của các mẫu cũ không đổi.
 
 ### 5.5 Thời gian thực thi
 
-Otsu luôn dưới 1 ms với ảnh ≤ 360×240 và 4.4 ms với ảnh 1024×1024. K-means tỷ lệ với số giá trị phân biệt × K × số
-vòng: trường hợp xấu nhất (ảnh ngẫu nhiên, mọi pixel khác màu) K = 4, 20 vòng: 35 ms (128²), 178 ms (256²),
-859 ms (512²), 3.7 s (1024²). Vì vậy giao diện mặc định giới hạn cạnh dài 800 px.
+Trong lần đo 2026-11-05T15:41:08+07:00, ảnh RGB ngẫu nhiên 1024×1024, K=4, tối đa 20 vòng: K-means 3125.3 ms và Otsu 6.92 ms. K-means chưa hội tụ sau 20 vòng ở ca này.
+
+K-means có chi phí gom màu O(N log N), sau đó phụ thuộc U×K×D×số vòng. Otsu dựng histogram và phân ngưỡng O(N), tìm ngưỡng trên 256 mức. Số đo chỉ áp dụng cho máy, dữ liệu và phạm vi đo đã ghi, không bảo đảm thời gian cho mọi ảnh. Giao diện mặc định giới hạn cạnh dài 800 px.
 
 ### 5.6 So sánh và phân tích
 
-1. **Ảnh hai mức tách biệt** (tròn, chữ nhật, CSV, 10×10): cả hai đạt IoU = 1. Otsu không cần tham số và nhanh hơn
-   khoảng 4–12 lần (ví dụ 0.38 ms so với 2.8 ms).
+1. **Ảnh hai mức tách biệt** (tròn, chữ nhật, CSV, 10×10): cả hai đạt IoU = 1.
+   Thời gian đo trong bảng 5.4; không suy ra ưu thế cho mọi ảnh hoặc mọi máy.
 2. **Nhiều đối tượng khác màu/khác mức xám**: K-means với K phù hợp đạt IoU = 1, Otsu chỉ 0.7964 và 0.6667 vì chỉ có
    2 lớp: hình vàng (xám ≈ 187) bị gộp với nền (≈ 234); khối xám 90 bị gộp với nền 35. Đây là ưu điểm rõ nhất của
    K-means: nhiều cụm + dùng màu.
@@ -293,10 +302,9 @@ vòng: trường hợp xấu nhất (ảnh ngẫu nhiên, mọi pixel khác màu
    Đây là **trường hợp thất bại chung**; khắc phục bằng lọc trung vị trước khi phân đoạn (giáo trình 3.2.3) hoặc phép
    toán hình thái (4.4) sau phân đoạn — ngoài phạm vi đề tài.
 4. **Tương phản thấp**: η = 0.778, thấp nhất; IoU 0.9532 — hai đỉnh histogram chồng lấn do nhiễu.
-5. **Ảnh xám, K = 2**: K-means và Otsu cho **cùng IoU** trên cả 6 ảnh xám chạy với K = 2. Giải thích: điểm dừng của K-means 1 chiều
-   với K = 2 thoả t = (μ₀ + μ₁)/2 — chính là điều kiện của thuật toán đẳng liệu (giáo trình 5.2.1) — và trên các ảnh
-   này nó trùng phân hoạch cực đại σ²_B. Nói chung hai tiêu chí khác nhau và có thể cho ngưỡng khác nhau khi hai lớp
-   có kích thước hoặc phương sai chênh lệch lớn.
+5. **Ảnh xám, K = 2**: SSE/N = σ²_W = σ²_T − σ²_B. Cực tiểu SSE tương đương cực đại phương sai giữa lớp
+   cho cùng dữ liệu và bài toán hai lớp. Lloyd có thể dừng ở cực tiểu cục bộ phụ thuộc khởi tạo; Otsu duyệt
+   các ngưỡng hợp lệ. Các mẫu hai lớp rõ cho cùng phân hoạch, nhưng không bảo đảm mọi ảnh đều như vậy.
 6. **Ảnh một màu**: cả hai báo cảnh báo thay vì bịa kết quả.
 7. **Chọn K** (cảnh RGB): SSE giảm 235.8 → 133.7 → 103.0 → **11.0** → 6.5 → 3.8 → 2.9 triệu với K = 2..8; “khuỷu” rõ ở
    K = 5 — đúng số vùng màu chính.
@@ -326,14 +334,14 @@ Không có ground truth thì chỉ nhận xét trực quan, không ghi IoU.
   ngưỡng đồng hạng, ảnh một mức xám) bằng NumPy, không dùng OpenCV.
 - Chứng minh và kiểm chứng số liệu: hàm f(g) ở giáo trình mục 3.1.6 là tiêu chí Otsu.
 - Ứng dụng 7 trang: tải/lưu ảnh thật và CSV, xem kết quả trực quan, tách nền, so sánh, tải 7 loại tệp mỗi thuật toán.
-- 11 test case offline, 86 kiểm thử tự động đều đạt, số liệu thực nghiệm sinh tự động.
+- 11 test case offline, 170 kiểm thử tự động đều đạt, số liệu thực nghiệm sinh tự động.
 
 ### 6.2 Hạn chế
 
 - Cả hai thuật toán không dùng thông tin không gian ⇒ nhạy nhiễu muối tiêu, chiếu sáng không đều.
 - Otsu chỉ 2 lớp toàn cục; K-means cần chọn K, phụ thuộc khởi tạo, và không biết cụm nào là đối tượng — gợi ý theo
   viền ảnh chỉ là heuristic.
-- K-means chậm với ảnh lớn có rất nhiều màu khác nhau (~3.7 s cho 1 triệu màu, 20 vòng).
+- K-means chậm với ảnh lớn có rất nhiều màu khác nhau (lần đo hiện tại: 3.13 s cho 1024², K=4, tối đa 20 vòng, chưa hội tụ).
 - Bộ dữ liệu là ảnh tổng hợp; chưa đánh giá định lượng trên ảnh thật có ground truth.
 
 ### 6.3 Hướng phát triển

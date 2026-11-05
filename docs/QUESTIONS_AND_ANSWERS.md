@@ -6,7 +6,8 @@ gần nhất theo khoảng cách Euclid; cập nhật mỗi tâm bằng trung b�
 khi tâm không dịch chuyển quá ngưỡng `tol` hoặc đạt số vòng tối đa. Ảnh phân đoạn thay mỗi pixel bằng màu tâm cụm.
 
 **2. Vì sao cần chọn K?**
-K-means cực tiểu J với K cố định; J luôn giảm khi K tăng (K = N cho J = 0), nên không thể chọn K bằng cách cực tiểu J.
+K-means cực tiểu J với K cố định; giá trị tối ưu toàn cục của J không tăng khi K tăng (K = N cho J = 0), nên không
+thể chọn K chỉ bằng cách cực tiểu J. Các lần chạy Lloyd riêng có thể không đơn điệu do khác khởi tạo/nghiệm cục bộ.
 K phản ánh số vùng màu ta muốn. Ứng dụng cho chọn K = 2..8; thực nghiệm cho thấy “khuỷu” của SSE (ảnh cảnh RGB: SSE
 103 → 11 triệu khi K từ 4 lên 5, sau đó giảm chậm) là gợi ý tốt.
 
@@ -19,6 +20,7 @@ cùng trung bình như tính trên mọi pixel. Cụm rỗng: đặt tâm tại 
 Bước gán và bước cập nhật đều không làm tăng J ≥ 0, số cách gán hữu hạn ⇒ luôn dừng sau hữu hạn bước. Nhưng chỉ đạt
 **cực tiểu địa phương**: với cùng ảnh cảnh RGB, K = 6, khởi tạo ngẫu nhiên, seed 1 cho SSE gấp ~10.8 lần seed 2.
 Ứng dụng dừng khi độ dịch tâm lớn nhất ≤ tol (mặc định 1e-4) và có `max_iter` để chặn trên.
+Nếu gán nhãn cuối còn cụm rỗng thì báo chưa hội tụ; không tự chạy thêm vòng vượt giới hạn.
 
 **5. K-means khác Otsu ở đâu?**
 K-means là phân cụm, nhiều cụm, dùng được màu, có tham số và cho cực tiểu địa phương. Otsu là phân ngưỡng một ngưỡng,
@@ -32,8 +34,8 @@ Cực đại phương sai giữa hai lớp σ²_B(t) = ω₀ω₁(μ₀ − μ�
 
 **7. Vì sao cần histogram?**
 σ²_B chỉ phụ thuộc phân bố mức xám, không phụ thuộc vị trí pixel. Histogram nén N pixel thành 256 số, nên mọi ω₀, μ
-tính bằng tổng tích luỹ O(256) và duyệt hết các ngưỡng gần như tức thời (4.4 ms cho ảnh 1 triệu pixel, gồm cả dựng
-histogram).
+tính bằng tổng tích luỹ O(256). Dựng histogram và tạo ảnh nhị phân cần O(N); số đo thực tế và phạm vi đo được ghi
+trong `docs/results/experiment_results.md`, không suy ra thời gian cho mọi máy từ độ phức tạp.
 
 **8. Otsu có hoạt động tốt với ảnh nhiều đối tượng không?**
 Chỉ khi các đối tượng cùng phía so với nền về độ sáng. Ảnh mẫu 3 khối xám 90/150/215 trên nền 35: Otsu chọn t* = 119,
@@ -72,21 +74,24 @@ nhanh, không tham số, kết quả tất định.
 
 **15. Những hạn chế thực tế của sản phẩm?**
 Không dùng thông tin lân cận ⇒ nhạy nhiễu (ảnh nhiễu: IoU 0.84 cho cả hai); Otsu toàn cục kém khi chiếu sáng không
-đều; K-means chậm với ảnh lớn rất nhiều màu (~3.7 s với 1 triệu màu, 20 vòng) nên mặc định thu nhỏ cạnh dài 800 px;
+đều; K-means chậm với ảnh lớn rất nhiều màu (xem số đo trong `docs/results/experiment_results.md`) nên mặc định thu nhỏ cạnh dài 800 px;
 gợi ý nền theo viền ảnh sai khi đối tượng chạm viền; bộ dữ liệu đánh giá định lượng là ảnh tổng hợp.
 
 **16. Với ảnh xám, K = 2, vì sao K-means và Otsu cho cùng kết quả trên các ảnh thử?**
-Điểm dừng của K-means 1 chiều với K = 2 là ngưỡng t thoả t = (μ₀ + μ₁)/2 — đúng điều kiện của thuật toán đẳng liệu
-(giáo trình 5.2.1). Otsu cực đại σ²_B, nói chung là tiêu chí khác; trên các ảnh thử (hai lớp tách khá rõ) hai tiêu chí
-cho cùng phân hoạch. Khi hai lớp chênh lệch mạnh về kích thước hoặc phương sai, hai ngưỡng có thể khác nhau.
+Với cùng dữ liệu xám và K = 2: SSE/N = σ²_W = σ²_T − σ²_B. Vì σ²_T cố định, cực tiểu SSE tương đương cực đại
+phương sai giữa lớp cho bài toán phân hoạch hai lớp. Lloyd có thể tìm nghiệm cục bộ phụ thuộc khởi tạo, còn Otsu
+duyệt ngưỡng để tìm tối ưu toàn cục. Khi hai tâm khác nhau, ranh giới gán nhãn của Lloyd nằm tại trung điểm hai tâm;
+trên các mẫu hai lớp rõ, hai cách tìm nghiệm cho cùng phân hoạch. Không có bảo đảm hai cách luôn trả cùng kết quả.
 
 **17. Vì sao Otsu báo “nhiều ngưỡng cùng đạt cực đại”? Chọn ngưỡng nào?**
 Nếu histogram có khoảng trống (ví dụ ảnh chỉ có mức 0 và 255), mọi t trong khoảng trống cho cùng phân hoạch nên cùng
-σ²_B. Nhóm chọn floor(trung bình các t đồng hạng) — giữa khoảng trống, cùng quy tắc với MATLAB `graythresh`. Mọi lựa
-chọn trong đoạn đều cho cùng ảnh nhị phân.
+σ²_B. Nhóm chọn ngưỡng **thuộc tập cực đại**, gần floor(trung bình) nhất, hoà chọn ngưỡng nhỏ hơn. Với một khoảng
+trống liên tục thì lấy giữa đoạn. Nếu các cực đại rời nhau, trung bình có thể không tối ưu: histogram
+h(0)=h(255)=1 và h(127)=h(128)=127 có cực đại ở 0..126 và 128..254; phải tránh ngưỡng 127.
 
 **18. Ảnh chỉ có một màu thì sao?**
-Otsu: không có ngưỡng nào làm cả hai lớp khác rỗng ⇒ `valid = False`, cảnh báo, toàn ảnh là nền. K-means: số giá trị
+Otsu: không có ngưỡng nào làm cả hai lớp khác rỗng ⇒ `valid = False`, cảnh báo, mask tự động rỗng ở mọi cực tính.
+Chế độ thủ công vẫn cho chọn lớp có chủ đích. K-means: số giá trị
 phân biệt = 1 < K ⇒ K giảm về 1, cảnh báo. Không chia cho 0, không crash (kiểm thử `test_uniform_image_*`,
 `test_all_black_image`, `test_all_white_image`).
 

@@ -105,14 +105,16 @@ $m(g)=\\mu_0$, $m(G-1)=\\mu_T$ và $\\mu_0-\\mu_T=\\omega_1(\\mu_0-\\mu_1)$, nê
 ⇒ hai tiêu chí **cho cùng ngưỡng**. Các kỹ thuật khác trong giáo trình như *thuật toán đẳng liệu* (5.2.1, lặp trung bình hai
 lớp), *đối xứng nền* (5.2.2) và *tam giác* (5.2.3) **không** phải Otsu.
 
-**Quy ước cài đặt:** chỉ xét t làm cả hai lớp khác rỗng (tránh chia 0); nhiều t cùng cực đại → chọn floor(trung bình);
-ảnh một mức xám → không hợp lệ, toàn ảnh là nền; nhị phân: pixel > t → 255.
+**Quy ước cài đặt:** chỉ xét t làm cả hai lớp khác rỗng (tránh chia 0); nhiều t cùng cực đại → chọn phần tử trong
+tập cực đại gần floor(trung bình) nhất, hoà thì chọn ngưỡng nhỏ hơn. Khi các cực đại rời nhau, trung bình có thể
+không tối ưu. Ảnh một mức xám → không hợp lệ, mask tự động rỗng ở mọi lựa chọn cực tính; chế độ thủ công vẫn cho
+phép chọn lớp. Nhị phân: pixel > t → 255.
 """)
     st.code("""Vào: ảnh xám I (H×W, uint8)
 1. h = histogram 256 mức;  p = h / N
 2. ω0 = cumsum(p);  μ = cumsum(i·p);  μT = μ[255]
 3. Với t có 0 < số pixel ≤ t < N:  σB²(t) = (μT·ω0(t) − μ(t))² / (ω0(t)·(1 − ω0(t)))
-4. t* = floor(trung bình các t đạt max σB²)
+4. t* = ngưỡng TRONG tập cực đại gần floor(trung bình tập đó) nhất (hoà chọn ngưỡng nhỏ hơn)
 5. B(x,y) = 255 nếu I(x,y) > t*, ngược lại 0
 Ra: t*, σB², ảnh nhị phân""", language="text")
 
@@ -140,12 +142,16 @@ def _complexity() -> None:
     st.markdown("""
 | | K-means | Otsu |
 |---|---|---|
-| Độ phức tạp thời gian | O(N · K · D · số vòng lặp) | O(N) dựng histogram + O(L) với L = 256 |
-| Bộ nhớ thêm | O(N) nhãn + O(B · K) cho mỗi khối khoảng cách (B = 262 144 điểm) | O(L) |
+| Độ phức tạp thời gian | O(N log N) gom màu + O(U · K · D · số vòng lặp), U ≤ N giá trị phân biệt | O(N) dựng histogram + O(L) với L = 256 |
+| Bộ nhớ thêm | O(N + U·D + B·K), gồm chỉ số phục hồi, tâm/dữ liệu và khối khoảng cách | O(L) thống kê; O(N) nếu tính cả ảnh nhị phân |
 | Kết quả | Cực tiểu địa phương, phụ thuộc khởi tạo | Tối ưu toàn cục theo σ²_B (duyệt mọi t) |
 | Thông tin dùng | Giá trị pixel (màu/xám) | Chỉ histogram mức xám |
 | Không dùng | Vị trí không gian của pixel | Vị trí không gian của pixel |
 
 Cả hai đều **không dùng quan hệ lân cận** giữa các pixel, nên nhạy với nhiễu muối tiêu và chiếu sáng không đều —
 đây là hạn chế chung, thấy rõ trên ảnh mẫu “Hình tròn có nhiễu”.
+
+Với ảnh xám và K = 2, SSE/N = σ²_W = σ²_T − σ²_B. Hai bài toán có cùng mục tiêu phân hoạch hai lớp;
+Lloyd có thể dừng ở nghiệm cục bộ, còn Otsu duyệt ngưỡng để tìm tối ưu toàn cục. SSE hoặc η không thay thế
+IoU/Dice so với ground truth để đánh giá đúng đối tượng cần tách.
 """)

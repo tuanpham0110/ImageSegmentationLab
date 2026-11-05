@@ -8,7 +8,7 @@
 
 - **Không dùng OpenCV**, không dùng `sklearn.cluster.KMeans` hay `skimage.filters.threshold_otsu`.
 - K-means và Otsu nằm trong [src/algorithms/](src/algorithms/), tách biệt hoàn toàn với giao diện.
-- 86 kiểm thử tự động (Pytest), gồm cả kiểm thử giao diện bằng Streamlit `AppTest`.
+- 170 kiểm thử tự động (Pytest), gồm kiểm thử hồi quy và giao diện bằng Streamlit `AppTest`.
 - Không cần Internet, không có API, không có cơ sở dữ liệu.
 
 ---
@@ -52,6 +52,8 @@ Dữ liệu mẫu đã có sẵn trong `data/`. Nếu muốn tạo lại (kết 
 ```powershell
 python scripts\generate_samples.py      # ảnh mẫu, ground truth, CSV -> data/
 python scripts\run_experiments.py       # số liệu thật -> docs/results/, hình -> docs/figures/
+# Chỉ cập nhật số liệu, giữ nguyên các ảnh minh hoạ:
+python scripts\run_experiments.py --skip-figures
 ```
 
 ---
@@ -124,6 +126,16 @@ docs/                          Báo cáo, thuật toán, test case, kịch bản
 | [docs/SLIDES_OUTLINE.md](docs/SLIDES_OUTLINE.md) | Nội dung 15 slide |
 | [docs/QUESTIONS_AND_ANSWERS.md](docs/QUESTIONS_AND_ANSWERS.md) | Câu hỏi phản biện và trả lời |
 | [docs/results/experiment_results.md](docs/results/experiment_results.md) | Số liệu thực nghiệm sinh tự động |
+| [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md) | Phạm vi sửa P0/P1/P2, bằng chứng kiểm thử và các mục nhóm cần bổ sung |
+
+Sau đợt sửa ngày 05/11/2026: Otsu chọn ngưỡng thuộc tập cực đại kể cả các cực đại rời nhau; ảnh đồng nhất có
+mask tự động rỗng; CSV được kiểm tra chính xác, không làm tròn thập phân thành số nguyên. K-means kiểm tra tham
+số trước khi xử lý và báo rõ nếu dừng sớm còn cụm rỗng. Thời gian UI/JSON/thực nghiệm dùng cùng phạm vi đo.
+Các tệp xuất được tái sử dụng trong lần chạy hiện tại; đổi ảnh/tên tệp hoặc foreground sẽ vô hiệu hoá dữ liệu cũ.
+Streamlit cố định ở phiên bản 1.66.1 đã kiểm thử. Dữ liệu trong `data/` được giữ nguyên.
+
+Đã kiểm tra upload, chạy cả hai thuật toán và đọc lại PNG/CSV tải bằng Chrome; kiểm tra chiều rộng 1440, 768,
+390 px. Ảnh mẫu vẫn là ảnh tổng hợp; ảnh chụp thật của nhóm chưa có để nghiệm thu.
 
 ## 6. Xử lý sự cố
 

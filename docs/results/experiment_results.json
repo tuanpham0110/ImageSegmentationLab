@@ -3,7 +3,11 @@
     "python": "3.11.7",
     "os": "Windows-10-10.0.19045-SP0",
     "processor": "Intel64 Family 6 Model 165 Stepping 2, GenuineIntel",
-    "numpy": "2.4.6"
+    "numpy": "2.4.6",
+    "measured_at": "2026-11-05T15:41:08+07:00",
+    "timing_scope": "Từ ảnh đã tiền xử lý đến kết quả trực tiếp của thuật toán (nhãn/ảnh tâm hoặc ảnh nhị phân); không gồm đọc tệp, resize/chuyển xám, chọn foreground, ảnh tách nền, biểu đồ và xuất tệp.",
+    "sample_repeats": 5,
+    "sweep_repeats": 3
   },
   "samples": [
     {
@@ -20,14 +24,14 @@
       "kmeans_fg_clusters": [
         0
       ],
-      "kmeans_time_ms": 3.297800023574382,
+      "kmeans_time_ms": 1.904600067064166,
       "otsu_threshold": 127,
       "otsu_valid": true,
       "otsu_invert": true,
       "otsu_eta": 1.0,
-      "otsu_time_ms": 0.37799999699927866,
+      "otsu_time_ms": 0.5910000763833523,
       "warnings": [
-        "Có 255 ngưỡng cùng đạt cực đại (từ 0 đến 254); chọn floor(trung bình) = 127."
+        "Có 255 ngưỡng cùng đạt cực đại (từ 0 đến 254); chọn ngưỡng đạt cực đại gần floor(trung bình) nhất = 127."
       ],
       "kmeans_iou": 1.0,
       "kmeans_dice": 1.0,
@@ -48,14 +52,14 @@
       "kmeans_fg_clusters": [
         1
       ],
-      "kmeans_time_ms": 3.578400006517768,
+      "kmeans_time_ms": 2.3300000466406345,
       "otsu_threshold": 124,
       "otsu_valid": true,
       "otsu_invert": false,
       "otsu_eta": 1.0,
-      "otsu_time_ms": 0.3099000023212284,
+      "otsu_time_ms": 0.380899989977479,
       "warnings": [
-        "Có 190 ngưỡng cùng đạt cực đại (từ 30 đến 219); chọn floor(trung bình) = 124."
+        "Có 190 ngưỡng cùng đạt cực đại (từ 30 đến 219); chọn ngưỡng đạt cực đại gần floor(trung bình) nhất = 124."
       ],
       "kmeans_iou": 1.0,
       "kmeans_dice": 1.0,
@@ -79,14 +83,14 @@
         2,
         3
       ],
-      "kmeans_time_ms": 7.637000002432615,
+      "kmeans_time_ms": 4.953600000590086,
       "otsu_threshold": 148,
       "otsu_valid": true,
       "otsu_invert": true,
       "otsu_eta": 0.9579227204941616,
-      "otsu_time_ms": 0.4284000024199486,
+      "otsu_time_ms": 0.6393999792635441,
       "warnings": [
-        "Có 76 ngưỡng cùng đạt cực đại (từ 111 đến 186); chọn floor(trung bình) = 148."
+        "Có 76 ngưỡng cùng đạt cực đại (từ 111 đến 186); chọn ngưỡng đạt cực đại gần floor(trung bình) nhất = 148."
       ],
       "kmeans_iou": 1.0,
       "kmeans_dice": 1.0,
@@ -109,14 +113,14 @@
         2,
         3
       ],
-      "kmeans_time_ms": 4.28630001260899,
+      "kmeans_time_ms": 3.0689999694004655,
       "otsu_threshold": 119,
       "otsu_valid": true,
       "otsu_invert": false,
       "otsu_eta": 0.8629078199201363,
-      "otsu_time_ms": 0.377499993192032,
+      "otsu_time_ms": 0.3868999192491174,
       "warnings": [
-        "Có 60 ngưỡng cùng đạt cực đại (từ 90 đến 149); chọn floor(trung bình) = 119."
+        "Có 60 ngưỡng cùng đạt cực đại (từ 90 đến 149); chọn ngưỡng đạt cực đại gần floor(trung bình) nhất = 119."
       ],
       "kmeans_iou": 1.0,
       "kmeans_dice": 1.0,
@@ -137,12 +141,12 @@
       "kmeans_fg_clusters": [
         0
       ],
-      "kmeans_time_ms": 4.95900001260452,
+      "kmeans_time_ms": 2.731500077061355,
       "otsu_threshold": 126,
       "otsu_valid": true,
       "otsu_invert": true,
       "otsu_eta": 0.9221033685737735,
-      "otsu_time_ms": 0.2985999744851142,
+      "otsu_time_ms": 0.34229992888867855,
       "warnings": [],
       "kmeans_iou": 0.8397130992827482,
       "kmeans_dice": 0.9128739688923544,
@@ -163,12 +167,12 @@
       "kmeans_fg_clusters": [
         1
       ],
-      "kmeans_time_ms": 4.350100003648549,
+      "kmeans_time_ms": 2.56910000462085,
       "otsu_threshold": 139,
       "otsu_valid": true,
       "otsu_invert": false,
       "otsu_eta": 0.7783560004984239,
-      "otsu_time_ms": 0.29609998455271125,
+      "otsu_time_ms": 0.327400048263371,
       "warnings": [],
       "kmeans_iou": 0.9532476802284083,
       "kmeans_dice": 0.9760643157317742,
@@ -187,15 +191,16 @@
       "kmeans_converged": true,
       "kmeans_sse": 0.0,
       "kmeans_fg_clusters": [],
-      "kmeans_time_ms": 0.7265999738592654,
+      "kmeans_time_ms": 0.5259999306872487,
       "otsu_threshold": 128,
       "otsu_valid": false,
       "otsu_invert": false,
       "otsu_eta": 0.0,
-      "otsu_time_ms": 0.1281999866478145,
+      "otsu_time_ms": 0.1561000244691968,
       "warnings": [
         "Dữ liệu chỉ có 1 giá trị phân biệt nên K được giảm từ 2 xuống 1.",
-        "Ảnh chỉ có một mức xám (128); không thể tách hai lớp. Ngưỡng được đặt bằng 128, toàn bộ ảnh thuộc lớp nền (giá trị 0)."
+        "Ảnh chỉ có một mức xám (128); không thể tách hai lớp. Ngưỡng được đặt bằng 128, ảnh nhị phân trực tiếp có toàn giá trị 0.",
+        "Otsu không chia được hai lớp: mask tự động được để trống (toàn nền), không áp dụng lựa chọn lớp sáng/tối. Có thể dùng ngưỡng thủ công để đối chiếu."
       ]
     },
     {
@@ -216,14 +221,14 @@
         4,
         5
       ],
-      "kmeans_time_ms": 47.18309998861514,
+      "kmeans_time_ms": 36.29660001024604,
       "otsu_threshold": 139,
       "otsu_valid": true,
       "otsu_invert": true,
       "otsu_eta": 0.9014565434372107,
-      "otsu_time_ms": 0.36189999082125723,
+      "otsu_time_ms": 0.6372000789269805,
       "warnings": [
-        "Có 32 ngưỡng cùng đạt cực đại (từ 124 đến 155); chọn floor(trung bình) = 139."
+        "Có 32 ngưỡng cùng đạt cực đại (từ 124 đến 155); chọn ngưỡng đạt cực đại gần floor(trung bình) nhất = 139."
       ]
     },
     {
@@ -240,14 +245,14 @@
       "kmeans_fg_clusters": [
         1
       ],
-      "kmeans_time_ms": 0.5027000152040273,
+      "kmeans_time_ms": 0.394799979403615,
       "otsu_threshold": 125,
       "otsu_valid": true,
       "otsu_invert": false,
       "otsu_eta": 0.9882129271984685,
-      "otsu_time_ms": 0.10560001828707755,
+      "otsu_time_ms": 0.125700025819242,
       "warnings": [
-        "Có 108 ngưỡng cùng đạt cực đại (từ 72 đến 179); chọn floor(trung bình) = 125."
+        "Có 108 ngưỡng cùng đạt cực đại (từ 72 đến 179); chọn ngưỡng đạt cực đại gần floor(trung bình) nhất = 125."
       ],
       "kmeans_iou": 1.0,
       "kmeans_dice": 1.0,
@@ -268,14 +273,14 @@
       "kmeans_fg_clusters": [
         1
       ],
-      "kmeans_time_ms": 0.4853999998886138,
+      "kmeans_time_ms": 0.43979997280985117,
       "otsu_threshold": 119,
       "otsu_valid": true,
       "otsu_invert": false,
       "otsu_eta": 0.9859103662644402,
-      "otsu_time_ms": 0.11630001245066524,
+      "otsu_time_ms": 0.13679999392479658,
       "warnings": [
-        "Có 130 ngưỡng cùng đạt cực đại (từ 55 đến 184); chọn floor(trung bình) = 119."
+        "Có 130 ngưỡng cùng đạt cực đại (từ 55 đến 184); chọn ngưỡng đạt cực đại gần floor(trung bình) nhất = 119."
       ],
       "kmeans_iou": 1.0,
       "kmeans_dice": 1.0,
@@ -296,12 +301,12 @@
       "kmeans_fg_clusters": [
         1
       ],
-      "kmeans_time_ms": 0.40779999108053744,
+      "kmeans_time_ms": 0.38700003642588854,
       "otsu_threshold": 1,
       "otsu_valid": true,
       "otsu_invert": false,
       "otsu_eta": 0.7857142857142857,
-      "otsu_time_ms": 0.08090000483207405,
+      "otsu_time_ms": 0.10830000974237919,
       "warnings": []
     }
   ],
@@ -310,43 +315,43 @@
       "k": 2,
       "sse": 235777058.50753045,
       "iter": 3,
-      "time_ms": 21.638000005623326
+      "time_ms": 16.88739995006472
     },
     {
       "k": 3,
       "sse": 133726637.39356422,
       "iter": 4,
-      "time_ms": 24.842799990437925
+      "time_ms": 19.43430001847446
     },
     {
       "k": 4,
       "sse": 103020593.1059767,
       "iter": 2,
-      "time_ms": 22.214199998416007
+      "time_ms": 16.750100068747997
     },
     {
       "k": 5,
       "sse": 11011447.26407456,
       "iter": 2,
-      "time_ms": 25.701699982164428
+      "time_ms": 19.10700008738786
     },
     {
       "k": 6,
       "sse": 6507221.530239783,
       "iter": 8,
-      "time_ms": 46.82879999745637
+      "time_ms": 36.46400000434369
     },
     {
       "k": 7,
       "sse": 3797604.9581384594,
       "iter": 8,
-      "time_ms": 50.573899992741644
+      "time_ms": 35.97379999700934
     },
     {
       "k": 8,
       "sse": 2878251.226216291,
       "iter": 19,
-      "time_ms": 101.36159998364747
+      "time_ms": 68.50689998827875
     }
   ],
   "seed_sweep_rgb_regions_k6_random": [
@@ -380,26 +385,34 @@
     {
       "side": 128,
       "pixels": 16384,
-      "kmeans_20iter_ms": 39.33920001145452,
-      "otsu_ms": 0.13460000627674162
+      "kmeans_20iter_ms": 32.336900010704994,
+      "kmeans_iter": 20,
+      "kmeans_converged": false,
+      "otsu_ms": 0.16670010518282652
     },
     {
       "side": 256,
       "pixels": 65536,
-      "kmeans_20iter_ms": 261.2956000084523,
-      "otsu_ms": 0.27710001450031996
+      "kmeans_20iter_ms": 160.68470000755042,
+      "kmeans_iter": 20,
+      "kmeans_converged": false,
+      "otsu_ms": 0.3336999798193574
     },
     {
       "side": 512,
       "pixels": 262144,
-      "kmeans_20iter_ms": 1047.1598000149243,
-      "otsu_ms": 1.8331999890506268
+      "kmeans_20iter_ms": 760.6874000048265,
+      "kmeans_iter": 20,
+      "kmeans_converged": false,
+      "otsu_ms": 1.7913999035954475
     },
     {
       "side": 1024,
       "pixels": 1048576,
-      "kmeans_20iter_ms": 4001.190700015286,
-      "otsu_ms": 5.8862000005319715
+      "kmeans_20iter_ms": 3125.253700069152,
+      "kmeans_iter": 20,
+      "kmeans_converged": false,
+      "otsu_ms": 6.920900079421699
     }
   ]
 }

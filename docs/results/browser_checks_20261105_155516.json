@@ -1,0 +1,77 @@
+{
+  "measured_at": "20261105_155516",
+  "checks": [
+    {
+      "test": "HTTP and default page",
+      "status": "PASS",
+      "health": 200
+    },
+    {
+      "test": "RGB upload, K=5, K-means PNG/CSV download",
+      "status": "PASS",
+      "size": [
+        240,
+        320
+      ],
+      "screenshot": "docs\\screenshots\\10_browser_kmeans_20261105_155516.png"
+    },
+    {
+      "test": "Same RGB input, Otsu PNG/CSV download",
+      "status": "PASS",
+      "threshold": 148,
+      "screenshot": "docs\\screenshots\\11_browser_otsu_20261105_155516.png"
+    },
+    {
+      "test": "Navigation and comparison on same uploaded input",
+      "status": "PASS",
+      "screenshot": "docs\\screenshots\\12_browser_compare_20261105_155516.png"
+    },
+    {
+      "test": "Viewport 1440",
+      "status": "PASS",
+      "dimensions": {
+        "viewport": 1440,
+        "document": 1440,
+        "body": 1440,
+        "exceptions": 0
+      },
+      "screenshot": "docs\\screenshots\\13_browser_compare_1440_20261105_155516.png"
+    },
+    {
+      "test": "Viewport 768",
+      "status": "PASS",
+      "dimensions": {
+        "viewport": 768,
+        "document": 768,
+        "body": 768,
+        "exceptions": 0
+      },
+      "screenshot": "docs\\screenshots\\13_browser_compare_768_20261105_155516.png"
+    },
+    {
+      "test": "Viewport 390",
+      "status": "PASS",
+      "dimensions": {
+        "viewport": 390,
+        "document": 390,
+        "body": 390,
+        "exceptions": 0
+      },
+      "screenshot": "docs\\screenshots\\13_browser_compare_390_20261105_155516.png"
+    },
+    {
+      "test": "Invalid CSV through browser upload",
+      "status": "PASS",
+      "uncaught_exceptions": 0
+    },
+    {
+      "test": "Invalid PNG through browser upload",
+      "status": "PASS"
+    },
+    {
+      "test": "Browser JavaScript exceptions",
+      "status": "PASS",
+      "count": 0
+    }
+  ]
+}

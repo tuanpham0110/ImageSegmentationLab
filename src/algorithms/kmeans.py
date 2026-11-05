@@ -292,6 +292,12 @@ def kmeans(
     centers_history = [c[order] for c in centers_history]
     counts_f = np.bincount(labels, weights=w, minlength=k_eff)
     counts = np.rint(counts_f).astype(np.int64) if np.all(w == np.rint(w)) else counts_f
+    # Gán nhãn cuối có thể làm một cụm rỗng nếu dừng sớm do tol/max_iter.
+    # Không chạy lén thêm vòng vượt giới hạn, cũng không báo hội tụ trong trường hợp này.
+    if np.any(counts_f == 0):
+        converged = False
+        warnings.append(f"Kết quả cuối còn {np.count_nonzero(counts_f == 0)} cụm rỗng sau bước gán nhãn; "
+                        "chưa hội tụ. Hãy tăng max_iter hoặc giảm tol.")
 
     return KMeansResult(
         labels=labels,

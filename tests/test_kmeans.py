@@ -249,3 +249,16 @@ def test_compact_pixel_packing_preserves_values_counts_and_inverse(channels):
     image = pixels.reshape(40, 50, channels) if channels == 3 else pixels.reshape(40, 50)
     features = image_to_features(image, "rgb" if channels == 3 else "gray", dtype=np.uint8)
     assert features.dtype == np.uint8 and np.shares_memory(features, image)
+
+
+def test_final_empty_cluster_is_reported_without_exceeding_iteration_budget():
+    rng = np.random.default_rng(42)
+    x = rng.normal(size=(80, 3)) * rng.lognormal(0, 2, (80, 1))
+    weights = rng.integers(1, 1000, 80)
+    result = kmeans(x, 8, weights=weights, seed=42, init="random", max_iter=1, tol=1000.0)
+    assert result.n_iter == 1 and result.counts.min() == 0
+    assert not result.converged
+    assert any("Kết quả cuối còn" in warning for warning in result.warnings)
+    labels, distances = assign_labels(x, result.centers)
+    np.testing.assert_array_equal(labels, result.labels)
+    assert result.sse == pytest.approx(np.dot(weights, distances))

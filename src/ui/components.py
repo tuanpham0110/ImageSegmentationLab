@@ -116,7 +116,8 @@ def input_summary(ctx) -> None:
     pw, ph = prep.resize.processed_size
     chans = "3 (RGB)" if loaded.is_color else "1 (mức xám)"
     cols = st.columns([1.4, 1, 1, 1, 1])
-    cols[0].metric("Tệp", loaded.source_name if len(loaded.source_name) < 26 else loaded.source_name[:23] + "…")
+    cols[0].metric("Tệp", loaded.source_name if len(loaded.source_name) <= 20 else loaded.source_name[:17] + "…",
+                   help=loaded.source_name)
     cols[1].metric("Định dạng", loaded.file_format)
     cols[2].metric("Kích thước gốc", f"{ow}×{oh}")
     cols[3].metric("Số kênh", chans)

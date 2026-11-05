@@ -170,6 +170,6 @@ def _render_result(ctx, run: dict) -> None:
 
     with tab_dl:
         st.caption("Các tệp được tạo từ đúng kết quả đang hiển thị (cùng ảnh, tham số và cụm đối tượng đã chọn).")
-        files = ui.cached_export_files(run, tuple(fg), lambda: kmeans_export_files(prep, params, result, out))
+        files = ui.cached_export_files(run, tuple(sorted(fg)), lambda: kmeans_export_files(prep, params, result, out))
         if files is not None:
             ui.download_buttons(files, DOWNLOAD_LABELS, "km_dl")
