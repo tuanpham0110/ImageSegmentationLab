@@ -195,3 +195,23 @@ def test_image_endpoint_returns_the_actual_binary_without_mutating_input(manual)
     np.testing.assert_array_equal(binary, np.where(gray > threshold, 255, 0).astype(np.uint8))
     np.testing.assert_array_equal(gray, before)
     assert result.elapsed_seconds > 0
+
+
+@pytest.mark.parametrize("n", [4_000_000, 40_000_000, 2**52])
+def test_extremely_imbalanced_histogram_preserves_minority_class(n):
+    hist = np.zeros(256, np.int64)
+    hist[254], hist[255] = n - 1, 1
+    with np.errstate(all="raise"):
+        result = otsu_from_histogram(hist)
+    assert result.threshold == 254 and result.valid
+    assert result.mean0 == 254.0 and result.mean1 == 255.0
+    assert result.weight1 == pytest.approx(1 / n, rel=1e-12, abs=0)
+    assert result.max_variance == pytest.approx((n - 1) / n / n, rel=1e-12, abs=0)
+    assert result.separability == pytest.approx(1.0, rel=1e-12)
+
+
+@pytest.mark.parametrize("hist", [np.ones(256, dtype=complex) * (1 + 1j),
+                                  np.full(256, "1"), np.full(256, object())])
+def test_histogram_does_not_silently_coerce_non_real_counts(hist):
+    with pytest.raises(ValueError):
+        otsu_from_histogram(hist)

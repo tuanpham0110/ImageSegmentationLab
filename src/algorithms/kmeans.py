@@ -107,6 +107,20 @@ def assign_labels(
         min_sq_dist: (N,) float64 — bình phương khoảng cách tới tâm đó.
     """
     _validate_chunk_size(chunk_size)
+    data, centers = np.asarray(data), np.asarray(centers)
+    if (data.ndim != 2 or centers.ndim != 2 or data.shape[0] == 0 or centers.shape[0] == 0
+            or data.shape[1] == 0 or data.shape[1] != centers.shape[1]):
+        raise ValueError("Dữ liệu và tâm phải là các ma trận không rỗng, có cùng số chiều đặc trưng.")
+    if data.dtype.kind not in "buif" or centers.dtype.kind not in "buif":
+        raise ValueError("Dữ liệu và tâm phải chứa số thực hữu hạn.")
+    data, centers = data.astype(np.float64, copy=False), centers.astype(np.float64, copy=False)
+    if not np.all(np.isfinite(data)) or not np.all(np.isfinite(centers)):
+        raise ValueError("Dữ liệu và tâm phải chứa số thực hữu hạn.")
+    return _assign_labels(data, centers, chunk_size)
+
+
+def _assign_labels(data: np.ndarray, centers: np.ndarray, chunk_size: int) -> tuple[np.ndarray, np.ndarray]:
+    """Đường nội bộ cho float64 đã kiểm tra; không lặp lại kiểm tra N×D ở mỗi vòng Lloyd."""
     n = data.shape[0]
     labels = np.empty(n, dtype=np.int32)
     min_sq = np.empty(n, dtype=np.float64)
@@ -239,7 +253,7 @@ def kmeans(
     for it in range(1, max_iter + 1):
         n_iter = it
         # Bước 1: gán nhãn theo tâm gần nhất
-        labels, min_sq = assign_labels(x, centers, chunk_size)
+        labels, min_sq = _assign_labels(x, centers, chunk_size)
         sse_history.append(float(np.dot(w, min_sq)))
 
         # Bước 2: cập nhật tâm = trung bình (có trọng số) các điểm trong cụm, dùng np.bincount theo từng chiều
@@ -281,7 +295,7 @@ def kmeans(
         warnings.append(f"Chưa hội tụ sau {max_iter} vòng lặp (độ dịch tâm cuối = {shift_history[-1]:.4g}).")
 
     # Gán nhãn lần cuối theo tâm cuối cùng để nhãn, số điểm và SSE nhất quán với tâm báo cáo.
-    labels, min_sq = assign_labels(x, centers, chunk_size)
+    labels, min_sq = _assign_labels(x, centers, chunk_size)
 
     # Sắp xếp lại thứ tự cụm theo độ sáng tâm
     order = _relabel_by_brightness(centers)

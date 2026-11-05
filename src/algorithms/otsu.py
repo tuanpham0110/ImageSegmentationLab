@@ -77,10 +77,10 @@ def compute_histogram(gray: np.ndarray) -> np.ndarray:
 def otsu_from_histogram(hist: np.ndarray) -> OtsuResult:
     """Tính ngưỡng Otsu từ histogram 256 mức."""
     t0 = time.perf_counter()
-    h = np.asarray(hist, dtype=np.float64)
+    h = np.asarray(hist)
     if h.shape != (N_LEVELS,):
         raise ValueError("Histogram phải có đúng 256 phần tử.")
-    if not np.all(np.isfinite(h)):
+    if h.dtype.kind not in "buif" or not np.all(np.isfinite(h)):
         raise ValueError("Histogram phải chứa số đếm hữu hạn, không có NaN hoặc vô cực.")
     if np.any(h < 0):
         raise ValueError("Histogram không được chứa giá trị âm.")
@@ -90,24 +90,27 @@ def otsu_from_histogram(hist: np.ndarray) -> OtsuResult:
     # hơn nhiều giới hạn ảnh đầu vào, đồng thời tránh tràn số khi đổi int64.
     if np.any(h >= 2**53) or h.sum() >= 2**53:
         raise ValueError("Tổng số pixel trong histogram quá lớn để tính chính xác bằng float64.")
-    n = h.sum()
+    counts = h.astype(np.int64)
+    n = int(counts.sum())
     if n <= 0:
         raise ValueError("Histogram rỗng (tổng số pixel = 0).")
 
-    levels = np.arange(N_LEVELS, dtype=np.float64)
-    p = h / n  # xác suất từng mức xám
-    w0 = np.cumsum(p)  # w0(t)
-    mu = np.cumsum(levels * p)  # mu(t)
-    mu_t = mu[-1]
-    w1 = 1.0 - w0
-
-    # Số pixel tích luỹ (số nguyên chính xác) để xác định lớp rỗng, không phụ thuộc sai số float
-    c0 = np.cumsum(np.asarray(hist, dtype=np.int64))
-    valid = (c0 > 0) & (c0 < int(n))
+    levels = np.arange(N_LEVELS, dtype=np.int64)
+    p = counts / n  # xác suất từng mức xám
+    c0 = np.cumsum(counts)
+    c1 = n - c0
+    # Với N < 2**53, tổng i*h(i) < 255*2**53 < 2**61, vẫn vừa int64.
+    # Trừ các mômen NGUYÊN trước khi chia để không mất lớp thiểu số do triệt tiêu float.
+    moment0 = np.cumsum(levels * counts)
+    moment1 = moment0[-1] - moment0
+    mu_t = float(moment0[-1] / n)
+    w0, w1 = c0 / n, c1 / n
+    valid = (c0 > 0) & (c1 > 0)
 
     sigma_b = np.zeros(N_LEVELS, dtype=np.float64)
-    denom = w0[valid] * w1[valid]
-    sigma_b[valid] = (mu_t * w0[valid] - mu[valid]) ** 2 / denom
+    mean0_valid = moment0[valid] / c0[valid]
+    mean1_valid = moment1[valid] / c1[valid]
+    sigma_b[valid] = w0[valid] * w1[valid] * (mean0_valid - mean1_valid) ** 2
 
     total_var = float(np.sum(((levels - mu_t) ** 2) * p))
     warnings: list[str] = []
@@ -122,7 +125,7 @@ def otsu_from_histogram(hist: np.ndarray) -> OtsuResult:
         return OtsuResult(
             threshold=level,
             valid=False,
-            histogram=np.asarray(hist, dtype=np.int64),
+            histogram=counts,
             between_class_variance=sigma_b,
             valid_thresholds=valid,
             max_variance=0.0,
@@ -150,15 +153,15 @@ def otsu_from_histogram(hist: np.ndarray) -> OtsuResult:
         )
 
     w0_t = float(w0[threshold])
-    w1_t = 1.0 - w0_t
-    mean0 = float(mu[threshold] / w0_t)
-    mean1 = float((mu_t - mu[threshold]) / w1_t)
+    w1_t = float(w1[threshold])
+    mean0 = float(moment0[threshold] / c0[threshold])
+    mean1 = float(moment1[threshold] / c1[threshold])
     separability = max_var / total_var if total_var > 0 else 0.0
 
     return OtsuResult(
         threshold=threshold,
         valid=True,
-        histogram=np.asarray(hist, dtype=np.int64),
+        histogram=counts,
         between_class_variance=sigma_b,
         valid_thresholds=valid,
         max_variance=max_var,

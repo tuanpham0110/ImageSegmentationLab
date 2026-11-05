@@ -262,3 +262,21 @@ def test_final_empty_cluster_is_reported_without_exceeding_iteration_budget():
     labels, distances = assign_labels(x, result.centers)
     np.testing.assert_array_equal(labels, result.labels)
     assert result.sse == pytest.approx(np.dot(weights, distances))
+
+
+def test_distance_assignment_accepts_uint8_without_integer_overflow():
+    pixels = np.array([[30], [210]], dtype=np.uint8)
+    centers = np.array([[20], [220]], dtype=np.uint8)
+    labels, distances = assign_labels(pixels, centers)
+    np.testing.assert_array_equal(labels, [0, 1])
+    np.testing.assert_array_equal(distances, [100.0, 100.0])
+
+
+@pytest.mark.parametrize("data,centers", [
+    (np.empty((0, 1)), np.ones((1, 1))), (np.ones((1, 2)), np.ones((1, 1))),
+    (np.ones((1, 1)), np.empty((0, 1))), (np.array([[np.nan]]), np.ones((1, 1))),
+    (np.ones((1, 1)), np.array([[np.inf]])), (np.array([[1j]]), np.ones((1, 1))),
+])
+def test_distance_assignment_rejects_invalid_features_or_centers(data, centers):
+    with pytest.raises(ValueError):
+        assign_labels(data, centers)
