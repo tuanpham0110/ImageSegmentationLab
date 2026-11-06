@@ -308,3 +308,28 @@ def test_kmeans_does_not_silently_coerce_non_real_data_or_weights(bad):
         kmeans(bad, 2)
     with pytest.raises(ValueError):
         kmeans(np.array([1.0, 3.0]), 2, weights=bad)
+
+
+def test_large_integral_weights_do_not_wrap_counts_to_negative_int64():
+    weights = np.array([2.0**63, 2.0**63])
+    result = kmeans(np.array([0.0, 10.0]), 1, weights=weights)
+    assert result.counts[0] == weights.sum()
+    assert np.all(result.counts > 0)
+    np.testing.assert_allclose(result.centers, [[5.0]])
+    assert result.sse == pytest.approx(25.0 * weights.sum())
+
+
+@pytest.mark.parametrize("data,k,weights", [
+    (np.array([1e308, 1e308]), 1, None),
+    (np.array([-1e200, 1e200]), 2, None),
+    (np.array([0.0, 10.0]), 1, np.array([1e308, 1e308])),
+    (np.array([0.0, 10.0]), 1, np.array([1e307, 1e307])),
+])
+def test_kmeans_rejects_arithmetic_overflow_instead_of_returning_nonfinite_results(data, k, weights):
+    with pytest.raises(ValueError):
+        kmeans(data, k, weights=weights)
+
+
+def test_assignment_rejects_unrepresentable_squared_distance():
+    with pytest.raises(ValueError):
+        assign_labels(np.array([[0.0]]), np.array([[1e200], [2e200]]))

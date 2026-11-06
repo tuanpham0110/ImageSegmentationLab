@@ -1,0 +1,125 @@
+{
+  "samples": [
+    {
+      "id": "circle_black_on_white",
+      "k_effective": 2,
+      "kmeans_iter": 1,
+      "kmeans_sse": 0.0,
+      "otsu_threshold": 127,
+      "otsu_valid": true,
+      "kmeans_iou": 1.0,
+      "kmeans_dice": 1.0,
+      "otsu_iou": 1.0,
+      "otsu_dice": 1.0
+    },
+    {
+      "id": "bright_rect_on_dark",
+      "k_effective": 2,
+      "kmeans_iter": 1,
+      "kmeans_sse": 0.0,
+      "otsu_threshold": 124,
+      "otsu_valid": true,
+      "kmeans_iou": 1.0,
+      "kmeans_dice": 1.0,
+      "otsu_iou": 1.0,
+      "otsu_dice": 1.0
+    },
+    {
+      "id": "multi_shapes_color",
+      "k_effective": 5,
+      "kmeans_iter": 1,
+      "kmeans_sse": 0.0,
+      "otsu_threshold": 148,
+      "otsu_valid": true,
+      "kmeans_iou": 1.0,
+      "kmeans_dice": 1.0,
+      "otsu_iou": 0.796398891966759,
+      "otsu_dice": 0.8866615265998458
+    },
+    {
+      "id": "gray_levels_objects",
+      "k_effective": 4,
+      "kmeans_iter": 1,
+      "kmeans_sse": 0.0,
+      "otsu_threshold": 119,
+      "otsu_valid": true,
+      "kmeans_iou": 1.0,
+      "kmeans_dice": 1.0,
+      "otsu_iou": 0.6666666666666666,
+      "otsu_dice": 0.8
+    },
+    {
+      "id": "noisy_circle",
+      "k_effective": 2,
+      "kmeans_iter": 3,
+      "kmeans_sse": 43123968.62675671,
+      "otsu_threshold": 126,
+      "otsu_valid": true,
+      "kmeans_iou": 0.8397130992827482,
+      "kmeans_dice": 0.9128739688923544,
+      "otsu_iou": 0.8397130992827482,
+      "otsu_dice": 0.9128739688923544
+    },
+    {
+      "id": "low_contrast",
+      "k_effective": 2,
+      "kmeans_iter": 6,
+      "kmeans_sse": 1034421.4815092698,
+      "otsu_threshold": 139,
+      "otsu_valid": true,
+      "kmeans_iou": 0.9532476802284083,
+      "kmeans_dice": 0.9760643157317742,
+      "otsu_iou": 0.9532476802284083,
+      "otsu_dice": 0.9760643157317742
+    },
+    {
+      "id": "uniform_gray",
+      "k_effective": 1,
+      "kmeans_iter": 1,
+      "kmeans_sse": 0.0,
+      "otsu_threshold": 128,
+      "otsu_valid": false
+    },
+    {
+      "id": "rgb_regions",
+      "k_effective": 6,
+      "kmeans_iter": 8,
+      "kmeans_sse": 6507221.530240181,
+      "otsu_threshold": 139,
+      "otsu_valid": true
+    },
+    {
+      "id": "tiny_10x10",
+      "k_effective": 2,
+      "kmeans_iter": 2,
+      "kmeans_sse": 4947.984375000001,
+      "otsu_threshold": 125,
+      "otsu_valid": true,
+      "kmeans_iou": 1.0,
+      "kmeans_dice": 1.0,
+      "otsu_iou": 1.0,
+      "otsu_dice": 1.0
+    },
+    {
+      "id": "csv_rectangle_32x32",
+      "k_effective": 2,
+      "kmeans_iter": 2,
+      "kmeans_sse": 81084.1715909091,
+      "otsu_threshold": 119,
+      "otsu_valid": true,
+      "kmeans_iou": 1.0,
+      "kmeans_dice": 1.0,
+      "otsu_iou": 1.0,
+      "otsu_dice": 1.0
+    },
+    {
+      "id": "textbook_otsu_5x6",
+      "k_effective": 2,
+      "kmeans_iter": 2,
+      "kmeans_sse": 13.75,
+      "otsu_threshold": 1,
+      "otsu_valid": true
+    }
+  ],
+  "all_match_round1": true
+}

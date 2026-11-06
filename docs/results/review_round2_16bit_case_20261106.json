@@ -1,0 +1,19 @@
+{
+  "before": {
+    "decoded_levels": [
+      255
+    ],
+    "gt_foreground_pixels": 0,
+    "kmeans_iou": 1.0,
+    "otsu_iou": 1.0
+  },
+  "after": {
+    "decoded_levels": [
+      128,
+      255
+    ],
+    "gt_foreground_pixels": 1536,
+    "kmeans_iou": 0.125,
+    "otsu_iou": 0.125
+  }
+}

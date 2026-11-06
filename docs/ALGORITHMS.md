@@ -196,3 +196,14 @@ cảnh báo stale; tên tệp cũng thuộc chữ ký để metadata xuất khô
 
 Trên trang So sánh, Otsu được giữ trong payload hiện tại và chỉ tính lại khi chạy mới hoặc đổi cực tính.
 Ground truth tải lên gắn với chữ ký đầu vào; khi đổi ảnh/tiền xử lý phải tải lại để tránh đánh giá bằng mask cũ.
+
+## 8. Quy ước dữ liệu và số học sau review lượt hai
+
+- PNG 16-bit có tRNS: đối chiếu khóa trong suốt trong thang gốc, chuẩn hóa độ sáng rồi ghép vùng trong suốt trắng.
+- Ground truth 16-bit dùng thang tuyệt đối 0–65535 → 0–255, không giãn theo min/max của từng mask;
+  pixel >=32768 là đối tượng. Mask trắng 65535 giữ toàn foreground.
+- Trong pipeline, mask bool, 0/1 và 0/255 cùng nghĩa: giá trị >0 là đối tượng; trước resize/đảo chuyển về 0/255.
+  Metrics và hậu xử lý dùng chung kiểm tra mask 2D, không rỗng, không âm/hữu hạn.
+- K-means giữ counts int64 cho số pixel thông thường. Trọng số lẻ hoặc tổng ngoài miền int64 trả counts float64;
+  phép tính vượt khả năng biểu diễn float64 được báo ValueError, không trả kết quả NaN/Inf.
+- PNG/CSV/JSON xuất được kiểm tra trước chuyển đổi; JSON không chứa NaN/Infinity và lưu cách chuyển xám của K-means.

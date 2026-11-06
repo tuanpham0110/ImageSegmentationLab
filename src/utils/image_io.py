@@ -66,6 +66,11 @@ def load_image_bytes(data: bytes, name: str = "image") -> LoadedImage:
     - Ảnh có alpha được ghép lên nền trắng.
     - Ảnh màu có R = G = B ở mọi pixel được coi là ảnh xám (H, W).
     """
+    return _load_image_bytes(data, name, normalize_high_depth=True)
+
+
+def _load_image_bytes(data: bytes, name: str, *, normalize_high_depth: bool) -> LoadedImage:
+    """Dùng chung kiểm tra/giải mã; mask giữ thang sáng tuyệt đối thay vì giãn tương phản."""
     ext = Path(name).suffix.lower()
     if ext and ext not in SUPPORTED_IMAGE_EXTS:
         raise InputError(f"Định dạng '{ext}' không được hỗ trợ. Chỉ nhận PNG, JPG, JPEG, BMP.")
@@ -75,45 +80,21 @@ def load_image_bytes(data: bytes, name: str = "image") -> LoadedImage:
         raise InputError(f"Tệp quá lớn ({len(data) / 1e6:.1f} MB). Giới hạn {MAX_FILE_BYTES // (1024 * 1024)} MB.")
     notes: list[str] = []
     try:
-        img = Image.open(io.BytesIO(data))
-        fmt = img.format or ext.lstrip(".").upper()
-        if fmt not in ("PNG", "JPEG", "BMP", "MPO"):
-            raise InputError(f"Nội dung tệp là định dạng {fmt}, không phải PNG/JPG/BMP.")
-        w, h = img.size
-        if w * h > MAX_DECODE_PIXELS:
-            raise InputError(
-                f"Ảnh quá lớn ({w} x {h} = {w * h / 1e6:.1f} triệu pixel). Giới hạn {MAX_DECODE_PIXELS / 1e6:.0f} triệu pixel."
-            )
-        img.load()
+        with Image.open(io.BytesIO(data)) as img:
+            fmt = img.format or ext.lstrip(".").upper()
+            if fmt not in ("PNG", "JPEG", "BMP", "MPO"):
+                raise InputError(f"Nội dung tệp là định dạng {fmt}, không phải PNG/JPG/BMP.")
+            w, h = img.size
+            if w * h > MAX_DECODE_PIXELS:
+                raise InputError(
+                    f"Ảnh quá lớn ({w} x {h} = {w * h / 1e6:.1f} triệu pixel). Giới hạn {MAX_DECODE_PIXELS / 1e6:.0f} triệu pixel."
+                )
+            img.load()
+            arr, mode = _decoded_array(img, notes, normalize_high_depth)
     except InputError:
         raise
     except (UnidentifiedImageError, OSError, SyntaxError, ValueError, Image.DecompressionBombError) as exc:
         raise InputError(f"Không đọc được ảnh '{name}': tệp hỏng hoặc không phải ảnh hợp lệ ({exc}).") from exc
-
-    orientation = img.getexif().get(0x0112, 1)  # thẻ EXIF Orientation
-    if orientation not in (1, None):
-        img = ImageOps.exif_transpose(img)
-        notes.append(f"Ảnh đã được xoay/lật theo thông tin hướng chụp EXIF (Orientation = {orientation}).")
-    mode = img.mode
-
-    # PNG tRNS cũng có thể nằm trong ảnh L/RGB, không chỉ ảnh bảng màu P.
-    if mode in ("LA", "RGBA", "PA") or "transparency" in img.info:
-        arr = np.asarray(_composite_alpha(img, notes))
-    elif mode in ("1", "L"):
-        arr = np.asarray(img.convert("L"))
-    elif mode in ("I;16", "I;16B", "I;16L", "I", "F"):
-        raw = np.asarray(img, dtype=np.float64)
-        lo, hi = float(raw.min()), float(raw.max())
-        arr = np.zeros(raw.shape, np.uint8) if hi == lo else np.round((raw - lo) / (hi - lo) * 255).astype(np.uint8)
-        notes.append(f"Ảnh {mode} (độ sâu > 8 bit) được chuẩn hoá tuyến tính về [0, 255].")
-    else:
-        arr = np.asarray(img.convert("RGB"))
-        if mode not in ("RGB",):
-            notes.append(f"Ảnh chế độ {mode} được chuyển sang RGB.")
-
-    if arr.ndim == 3 and np.array_equal(arr[..., 0], arr[..., 1]) and np.array_equal(arr[..., 1], arr[..., 2]):
-        arr = arr[..., 0].copy()
-        notes.append("Ảnh có R = G = B tại mọi pixel nên được xử lý như ảnh xám 1 kênh.")
 
     return LoadedImage(
         array=np.ascontiguousarray(arr, dtype=np.uint8),
@@ -123,6 +104,48 @@ def load_image_bytes(data: bytes, name: str = "image") -> LoadedImage:
         original_mode=mode,
         notes=notes,
     )
+
+
+def _decoded_array(img: Image.Image, notes: list[str], normalize_high_depth: bool) -> tuple[np.ndarray, str]:
+    orientation = img.getexif().get(0x0112, 1)  # thẻ EXIF Orientation
+    if orientation not in (1, None):
+        img = ImageOps.exif_transpose(img)
+        notes.append(f"Ảnh đã được xoay/lật theo thông tin hướng chụp EXIF (Orientation = {orientation}).")
+    mode = img.mode
+
+    # So khóa tRNS trong thang gốc trước khi chuyển 16 bit về 8 bit.
+    # convert("RGBA") trực tiếp từ I;16 sẽ clip các pixel >255 thành trắng.
+    if mode in ("I;16", "I;16B", "I;16L", "I", "F"):
+        raw = np.asarray(img, dtype=np.float64)
+        if not np.all(np.isfinite(raw)):
+            raise InputError("Ảnh chứa pixel NaN hoặc vô cực.")
+        if normalize_high_depth:
+            lo, hi = float(raw.min()), float(raw.max())
+            arr = np.zeros(raw.shape, np.uint8) if hi == lo else np.round((raw - lo) / (hi - lo) * 255).astype(np.uint8)
+            notes.append(f"Ảnh {mode} (độ sâu > 8 bit) được chuẩn hoá tuyến tính về [0, 255].")
+        else:
+            arr = np.round(np.clip(raw / np.iinfo(np.uint16).max, 0, 1) * 255).astype(np.uint8)
+            notes.append("Mask 16 bit được đổi từ thang [0, 65535] về [0, 255], giữ độ sáng tuyệt đối.")
+        transparent = img.info.get("transparency")
+        if transparent is not None:
+            transparent_pixels = raw == transparent
+            if np.any(transparent_pixels):
+                arr[transparent_pixels] = 255
+                notes.append("Ảnh có kênh alpha (trong suốt): các vùng trong suốt được ghép lên nền trắng.")
+    elif mode in ("LA", "RGBA", "PA") or "transparency" in img.info:
+        arr = np.asarray(_composite_alpha(img, notes))
+    elif mode in ("1", "L"):
+        arr = np.asarray(img.convert("L"))
+    else:
+        arr = np.asarray(img.convert("RGB"))
+        if mode not in ("RGB",):
+            notes.append(f"Ảnh chế độ {mode} được chuyển sang RGB.")
+
+    if arr.ndim == 3 and np.array_equal(arr[..., 0], arr[..., 1]) and np.array_equal(arr[..., 1], arr[..., 2]):
+        arr = arr[..., 0].copy()
+        notes.append("Ảnh có R = G = B tại mọi pixel nên được xử lý như ảnh xám 1 kênh.")
+
+    return arr, mode
 
 
 def _csv_rows(lines: list[str], delimiter: str | None):
@@ -221,8 +244,12 @@ def load_path(path: str | Path) -> LoadedImage:
 
 
 def load_mask_bytes(data: bytes, name: str = "mask.png") -> np.ndarray:
-    """Đọc mask ground truth: pixel > 127 là đối tượng. Trả về uint8 0/255."""
-    loaded = load_any(data, name)
+    """Đọc mask: pixel 8 bit >127 (16 bit >=32768) là đối tượng; trả uint8 0/255.
+
+    Không giãn tương phản mask: ảnh trắng 16 bit phải giữ nguyên toàn đối tượng.
+    """
+    loaded = (load_csv_bytes(data, name) if Path(name).suffix.lower() == ".csv"
+              else _load_image_bytes(data, name, normalize_high_depth=False))
     arr = loaded.array if loaded.array.ndim == 2 else loaded.array.mean(axis=2)
     return np.where(arr > 127, 255, 0).astype(np.uint8)
 
@@ -231,7 +258,15 @@ def load_mask_bytes(data: bytes, name: str = "mask.png") -> np.ndarray:
 
 def to_png_bytes(array: np.ndarray) -> bytes:
     """Mã hoá mảng uint8 (H,W), (H,W,3) hoặc (H,W,4) thành PNG."""
-    arr = np.asarray(array, dtype=np.uint8)
+    arr = np.asarray(array)
+    if (arr.ndim not in (2, 3) or arr.size == 0
+            or (arr.ndim == 3 and arr.shape[2] not in (3, 4))):
+        raise ValueError("PNG yêu cầu ảnh không rỗng dạng (H,W), (H,W,3) hoặc (H,W,4).")
+    if arr.dtype != np.uint8:
+        if (arr.dtype.kind not in "buif" or not np.all(np.isfinite(arr))
+                or np.any(arr < 0) or np.any(arr > 255) or np.any(arr != np.round(arr))):
+            raise ValueError("Pixel PNG phải là số nguyên trong [0, 255].")
+        arr = arr.astype(np.uint8)
     buf = io.BytesIO()
     Image.fromarray(arr).save(buf, format="PNG")
     return buf.getvalue()
@@ -240,10 +275,12 @@ def to_png_bytes(array: np.ndarray) -> bytes:
 def matrix_to_csv_bytes(matrix: np.ndarray) -> bytes:
     """Ghi ma trận 2 chiều số nguyên thành CSV (không tiêu đề), đọc lại được bằng parse_csv_matrix."""
     m = np.asarray(matrix)
-    if m.ndim != 2:
-        raise ValueError("Chỉ ghi được ma trận 2 chiều ra CSV.")
+    if m.ndim != 2 or m.size == 0:
+        raise ValueError("Chỉ ghi được ma trận 2 chiều không rỗng ra CSV.")
+    if m.dtype.kind not in "buif" or not np.all(np.isfinite(m)) or np.any(m != np.floor(m)):
+        raise ValueError("Ma trận CSV phải chứa số nguyên hữu hạn.")
     buf = io.StringIO()
-    np.savetxt(buf, m.astype(np.int64), fmt="%d", delimiter=",")
+    np.savetxt(buf, m, fmt="%d", delimiter=",")
     return buf.getvalue().encode("utf-8")
 
 
@@ -258,10 +295,12 @@ def table_to_csv_bytes(rows: list[dict]) -> bytes:
 
 
 def to_json_bytes(obj: dict) -> bytes:
-    return json.dumps(obj, ensure_ascii=False, indent=2, default=_json_default).encode("utf-8")
+    return json.dumps(obj, ensure_ascii=False, indent=2, default=_json_default, allow_nan=False).encode("utf-8")
 
 
 def _json_default(o):
+    if isinstance(o, np.bool_):
+        return bool(o)
     if isinstance(o, np.integer):
         return int(o)
     if isinstance(o, np.floating):

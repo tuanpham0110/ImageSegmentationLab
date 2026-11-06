@@ -24,6 +24,7 @@ from src.processing.postprocessing import (
 from src.processing.preprocessing import ResizeInfo, limit_size, resize_to, to_grayscale
 from src.utils.image_io import LoadedImage, matrix_to_csv_bytes, table_to_csv_bytes, to_json_bytes, to_png_bytes
 from src.utils.metrics import compare_masks, foreground_ratio
+from src.utils.masks import mask_to_bool
 
 TIMING_SCOPE = ("Từ ảnh đã tiền xử lý đến kết quả trực tiếp của thuật toán (nhãn/ảnh tâm hoặc ảnh nhị phân); "
                 "không gồm đọc tệp, resize/chuyển xám, chọn foreground, ảnh tách nền, biểu đồ và xuất tệp.")
@@ -56,9 +57,7 @@ def prepare_input(loaded: LoadedImage, max_side: int, gray_method: str = "lumina
 
 def fit_ground_truth(gt: np.ndarray, prepared: PreparedInput) -> np.ndarray:
     """Đưa mask ground truth về đúng kích thước xử lý (nội suy láng giềng gần nhất)."""
-    gt = np.asarray(gt)
-    if gt.ndim != 2 or gt.size == 0:
-        raise ValueError("Ground truth phải là ma trận 2 chiều không rỗng.")
+    gt = np.where(mask_to_bool(gt), 255, 0).astype(np.uint8)
     w, h = prepared.resize.processed_size
     if gt.shape == (h, w):
         return gt
@@ -146,6 +145,7 @@ def kmeans_stats(prepared: PreparedInput, params: KMeansParams, result: ImageKMe
         "anh": prepared.name,
         "kich_thuoc_goc_WxH": list(prepared.resize.original_size),
         "kich_thuoc_xu_ly_WxH": list(prepared.resize.processed_size),
+        "chuyen_xam": prepared.gray_method,
         "tham_so": {**params.as_dict(), "feature_thuc_te": result.feature},
         "k_yeu_cau": core.k_requested,
         "k_thuc_te": core.k_effective,

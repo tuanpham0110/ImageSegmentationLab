@@ -1,0 +1,33 @@
+{
+  "source_files_parsed": 27,
+  "static_issues": [],
+  "commands": {
+    "compile": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "dependencies": {
+      "exit_code": 0,
+      "stdout": "No broken requirements found.",
+      "stderr": ""
+    },
+    "whitespace": {
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  },
+  "pytest_by_module": {
+    "tests.test_image_io": 58,
+    "tests.test_integration": 85,
+    "tests.test_kmeans": 64,
+    "tests.test_metrics": 11,
+    "tests.test_otsu": 44,
+    "tests.test_postprocessing": 9,
+    "tests.test_preprocessing": 24
+  },
+  "head": "66f3245",
+  "lint": "No configured/installed linter; AST checks only.",
+  "coverage_and_cve": "Not measured/scanned in this environment."
+}

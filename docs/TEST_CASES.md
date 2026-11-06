@@ -84,18 +84,19 @@ Dữ liệu ngẫu nhiên có nhiều màu, không bảo đảm mọi pixel khá
 
 ## C. Kiểm thử tự động (Pytest)
 
-Lệnh: `python -X utf8 -m pytest -q --junitxml=docs/results/review_pytest_20261106.xml`. Kết quả ngày 06/11/2026: **249 passed**.
-Bằng chứng lần tổng kiểm tra: `docs/results/review_pytest_20261106.xml`; môi trường Python 3.11.7, NumPy 2.4.6, Streamlit 1.66.1.
+Lệnh: `python -X utf8 -m pytest -q --junitxml=docs/results/review_round2_pytest_20261106.xml`. Kết quả lượt hai ngày 06/11/2026: **295 passed**.
+Bằng chứng lần tổng kiểm tra: `docs/results/review_round2_pytest_20261106.xml`; môi trường Python 3.11.7, NumPy 2.4.6, Streamlit 1.66.1.
 Nhật ký ngày 05/11 trong phần D và các artifact cũ được giữ để đối chiếu lịch sử.
 
 | Tệp | Số test | Nội dung chính |
 |---|---|---|
-| `tests/test_kmeans.py` | 58 | Nghiệm tính tay, có trọng số, SSE, cụm rỗng, seed/tham số; khoảng cách có độ lệch lớn; nhãn hoà khoảng cách khớp thứ tự tâm cuối; từ chối dữ liệu/phần trọng số không phải số thực |
+| `tests/test_kmeans.py` | 64 | Nghiệm tính tay, trọng số, SSE, cụm rỗng, tham số; khoảng cách/tie-break; counts vượt int64 và từ chối số học tràn float64 |
 | `tests/test_otsu.py` | 44 | Ví dụ giáo trình, brute force, ngưỡng đồng hạng rời nhau, lớp rỗng, histogram mất cân bằng, validation và cực tính |
-| `tests/test_image_io.py` | 34 | PNG/JPEG/BMP, alpha/EXIF, PNG tRNS xám/RGB, CSV chính xác và giới hạn số ô trước chuyển đổi, đọc lại tệp xuất |
-| `tests/test_integration.py` | 78 | Pipeline và 11 mẫu; 7 trang; tải thật qua AppTest; vô hiệu kết quả/GT cũ; cache; lỗi bộ nhớ, ảnh mẫu thiếu, danh mục hỏng; tệp xuất đúng kết quả |
+| `tests/test_image_io.py` | 58 | PNG/JPEG/BMP, alpha/EXIF/tRNS gồm 16-bit; mask 16-bit giữ thang sáng; CSV chính xác; validation PNG/CSV/JSON trước xuất |
+| `tests/test_integration.py` | 85 | Pipeline/11 mẫu/7 trang; upload/GT/cache; lỗi tài nguyên/dữ liệu; JSON ghi cách chuyển xám; luồng PNG 16-bit + GT trắng 16-bit cho đúng IoU |
 | `tests/test_preprocessing.py` | 24 | Pixel sai, NaN/Inf, ảnh rỗng/sai chiều; kích thước/phương pháp sai; bảo toàn pixel nguyên và mask khi resize nearest |
 | `tests/test_metrics.py` | 11 | Ma trận nhầm lẫn tính tay, IoU/Dice/accuracy, toàn nền hợp lệ; từ chối mask rỗng/sai chiều/không hữu hạn |
+| `tests/test_postprocessing.py` | 9 | Đảo mask bool/0–1/0–255; từ chối mask sai đồng bộ; RGBA/preview/overlay cùng quy ước foreground |
 
 Ngoài Pytest, giao diện đã được chạy thật bằng `python -m streamlit run app.py` và điều khiển bằng Chrome (headless)
 để bấm nút và chụp màn hình — ảnh trong `docs/screenshots/`.
@@ -154,3 +155,13 @@ Báo cáo máy: [browser_checks_20261105_155516.json](results/browser_checks_202
 - Chạy lại đủ 11 mẫu, 7 giá trị K, 5 seed, 4 kích thước. Ngưỡng/số cụm/số vòng/IoU/Dice của 11 mẫu giữ nguyên so với artifact cũ.
 - Chi tiết từng lỗi và giới hạn: [REVIEW_20261106.md](REVIEW_20261106.md).
 - Bằng chứng: [JUnit](results/review_pytest_20261106.xml), [trình duyệt](results/review_browser_20261106.json), [thực nghiệm](results/review_experiments_20261106/experiment_results.md).
+
+## F. Review tiếp — lượt hai ngày 06/11/2026
+
+- Từ 249 lên **295 PASS**, thêm 46 ca; báo cáo: [REVIEW_ROUND2_20261106.md](REVIEW_ROUND2_20261106.md).
+- PNG 16-bit có tRNS giữ tương phản pixel đục; GT 16-bit trắng giữ toàn foreground.
+- Mask bool/0–1/0–255 giữ đối tượng khi resize/đảo; không chấp nhận mask sai ở cutout/overlay.
+- K-means không trả counts âm hoặc NaN/Inf khi gặp tràn số; tệp xuất từ chối dữ liệu bị mất mát/chưa hợp lệ.
+- JSON K-means lưu cách chuyển xám; GT tải lên được tái sử dụng đến khi đổi tệp/chạy mới.
+- 12 kiểm tra trình duyệt và 7 tệp tải xuống đối chiếu dữ liệu; 11 mẫu giữ nguyên mọi số đo chất lượng đã đối chiếu.
+- Bằng chứng: [JUnit](results/review_round2_pytest_20261106.xml), [trình duyệt](results/review_round2_browser_20261106.json), [11 mẫu](results/review_round2_samples_20261106.json).

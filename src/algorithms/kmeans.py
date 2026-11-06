@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from functools import wraps
 
 import numpy as np
 
@@ -21,6 +22,26 @@ DEFAULT_CHUNK_SIZE = 262_144
 
 MIN_K = 1
 MAX_K = 8
+NUMERIC_RANGE_ERROR = "Dữ liệu hoặc trọng số vượt phạm vi tính toán an toàn của float64. Hãy giảm biên độ hoặc trọng số."
+
+
+def _checked_arithmetic(function):
+    """Chuyển lỗi số học thành lỗi dữ liệu rõ ràng thay vì trả NaN/Inf."""
+    @wraps(function)
+    def checked(*args, **kwargs):
+        try:
+            with np.errstate(over="raise", invalid="raise", divide="raise"):
+                return function(*args, **kwargs)
+        except FloatingPointError as exc:
+            raise ValueError(NUMERIC_RANGE_ERROR) from exc
+    return checked
+
+
+def _weighted_sse(weights: np.ndarray, squared_distances: np.ndarray) -> float:
+    value = float(np.dot(weights, squared_distances))
+    if not np.isfinite(value):
+        raise ValueError(NUMERIC_RANGE_ERROR)
+    return value
 
 
 @dataclass
@@ -29,7 +50,7 @@ class KMeansResult:
 
     labels: np.ndarray  # (N,) int32, nhãn cụm 0..k_effective-1
     centers: np.ndarray  # (k_effective, D) float64
-    counts: np.ndarray  # (k_effective,) int64, số điểm mỗi cụm
+    counts: np.ndarray  # int64 cho số pixel; float64 cho trọng số lẻ hoặc tổng ngoài miền int64
     sse: float  # tổng bình phương khoảng cách tới tâm (inertia)
     n_iter: int  # số vòng lặp thực tế đã chạy
     converged: bool  # True nếu dừng do độ dịch tâm <= tol
@@ -94,6 +115,7 @@ def unique_rows(data: np.ndarray) -> np.ndarray:
     return np.unique(data, axis=0)
 
 
+@_checked_arithmetic
 def assign_labels(
     data: np.ndarray, centers: np.ndarray, chunk_size: int = DEFAULT_CHUNK_SIZE
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -117,7 +139,10 @@ def assign_labels(
     data, centers = data.astype(np.float64, copy=False), centers.astype(np.float64, copy=False)
     if not np.all(np.isfinite(data)) or not np.all(np.isfinite(centers)):
         raise ValueError("Dữ liệu và tâm phải chứa số thực hữu hạn.")
-    return _assign_labels(data, centers, chunk_size)
+    labels, min_sq = _assign_labels(data, centers, chunk_size)
+    if not np.all(np.isfinite(min_sq)):
+        raise ValueError(NUMERIC_RANGE_ERROR)
+    return labels, min_sq
 
 
 def _assign_labels(data: np.ndarray, centers: np.ndarray, chunk_size: int) -> tuple[np.ndarray, np.ndarray]:
@@ -167,8 +192,11 @@ def _init_kmeans_pp(data: np.ndarray, weights: np.ndarray, k: int, rng: np.rando
     closest = np.einsum("nd,nd->n", data - centers[0], data - centers[0])
     for j in range(1, k):
         mass = weights * closest
-        if mass.sum() <= 0:  # không còn điểm nào khác các tâm đã chọn
-            raise RuntimeError("K-means++: không đủ điểm phân biệt để khởi tạo.")
+        total_mass = mass.sum()
+        if not np.isfinite(total_mass) or total_mass <= 0:
+            # k_eff đã được chặn bởi số điểm phân biệt. Khối lượng bằng 0/Inf
+            # ở đây là mất khả năng biểu diễn số học, không phải thiếu điểm.
+            raise ValueError(NUMERIC_RANGE_ERROR)
         centers[j] = data[_sample_index(mass, rng)]
         diff = data - centers[j]
         np.minimum(closest, np.einsum("nd,nd->n", diff, diff), out=closest)
@@ -187,6 +215,7 @@ def _relabel_by_brightness(centers: np.ndarray) -> np.ndarray:
     return np.argsort(key, kind="stable")
 
 
+@_checked_arithmetic
 def kmeans(
     data: np.ndarray,
     k: int,
@@ -240,6 +269,9 @@ def kmeans(
         w = w.astype(np.float64, copy=False)
         if w.shape != (x.shape[0],) or not np.all(np.isfinite(w)) or np.any(w <= 0):
             raise ValueError("Trọng số phải là mảng (N,) các số dương hữu hạn.")
+    total_weight = float(w.sum())
+    if not np.isfinite(total_weight):
+        raise ValueError(NUMERIC_RANGE_ERROR)
 
     t0 = time.perf_counter()
     rng = np.random.default_rng(seed)
@@ -265,13 +297,15 @@ def kmeans(
         n_iter = it
         # Bước 1: gán nhãn theo tâm gần nhất
         labels, min_sq = _assign_labels(x, centers, chunk_size)
-        sse_history.append(float(np.dot(w, min_sq)))
+        sse_history.append(_weighted_sse(w, min_sq))
 
         # Bước 2: cập nhật tâm = trung bình (có trọng số) các điểm trong cụm, dùng np.bincount theo từng chiều
         counts = np.bincount(labels, weights=w, minlength=k_eff)
         new_centers = np.empty_like(centers)
         for d in range(x.shape[1]):
             sums = np.bincount(labels, weights=w * x[:, d], minlength=k_eff)
+            if not np.all(np.isfinite(sums)):
+                raise ValueError(NUMERIC_RANGE_ERROR)
             with np.errstate(invalid="ignore", divide="ignore"):
                 new_centers[:, d] = sums / counts
 
@@ -292,6 +326,8 @@ def kmeans(
                 used.append(new_centers[j])
                 pos += 1
 
+        if not np.all(np.isfinite(new_centers)):
+            raise ValueError(NUMERIC_RANGE_ERROR)
         shift = float(np.max(np.sqrt(np.sum((new_centers - centers) ** 2, axis=1))))
         shift_history.append(shift)
         centers = new_centers
@@ -312,7 +348,9 @@ def kmeans(
     centers_history = [c[order] for c in centers_history]
     labels, min_sq = _assign_labels(x, centers, chunk_size)
     counts_f = np.bincount(labels, weights=w, minlength=k_eff)
-    counts = np.rint(counts_f).astype(np.int64) if np.all(w == np.rint(w)) else counts_f
+    fits_integer_counts = (np.all(w == np.rint(w)) and total_weight < 2**63
+                           and np.all(counts_f < 2**63))
+    counts = np.rint(counts_f).astype(np.int64) if fits_integer_counts else counts_f
     # Gán nhãn cuối có thể làm một cụm rỗng nếu dừng sớm do tol/max_iter.
     # Không chạy lén thêm vòng vượt giới hạn, cũng không báo hội tụ trong trường hợp này.
     if np.any(counts_f == 0):
@@ -324,7 +362,7 @@ def kmeans(
         labels=labels,
         centers=centers,
         counts=counts,
-        sse=float(np.dot(w, min_sq)),
+        sse=_weighted_sse(w, min_sq),
         n_iter=n_iter,
         converged=converged,
         k_requested=k,

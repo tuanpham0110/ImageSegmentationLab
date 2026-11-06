@@ -13,9 +13,11 @@ from src.utils.image_io import (
     load_any,
     load_csv_bytes,
     load_image_bytes,
+    load_mask_bytes,
     matrix_to_csv_bytes,
     parse_csv_matrix,
     to_png_bytes,
+    to_json_bytes,
 )
 
 
@@ -189,3 +191,49 @@ def test_csv_cell_limit_is_checked_before_converting_an_oversized_row(monkeypatc
     monkeypatch.setattr(image_io, "MAX_CSV_CELLS", 3)
     with pytest.raises(InputError, match="quá lớn"):
         parse_csv_matrix("1,2\ninvalid,4")
+
+
+def test_16bit_transparency_preserves_opaque_pixel_contrast():
+    pixels = np.array([[1000, 2000, 3000]], dtype=np.uint16)
+    loaded = load_image_bytes(encode(Image.fromarray(pixels), "PNG", transparency=1000), "depth.png")
+    np.testing.assert_array_equal(loaded.array, [[255, 128, 255]])
+    assert any("alpha" in note for note in loaded.notes)
+    assert any("16" in note for note in loaded.notes)
+
+
+@pytest.mark.parametrize("level,expected", [(0, 0), (32767, 0), (32768, 255), (65535, 255)])
+def test_16bit_ground_truth_preserves_absolute_black_and_white(level, expected):
+    data = encode(Image.fromarray(np.full((3, 4), level, np.uint16)), "PNG")
+    np.testing.assert_array_equal(load_mask_bytes(data, "gt.png"), np.full((3, 4), expected, np.uint8))
+
+
+@pytest.mark.parametrize("array", [np.array([[1.5]]), np.array([[np.nan]]), np.array([[np.inf]]),
+                                   np.array([[-1]]), np.array([[256]]), np.zeros((2, 2, 5), np.uint8),
+                                   np.empty((0, 2), np.uint8)])
+def test_png_export_rejects_data_that_would_be_silently_changed(array):
+    with pytest.raises(ValueError):
+        to_png_bytes(array)
+
+
+@pytest.mark.parametrize("matrix", [np.array([[1.5]]), np.array([[np.nan]]), np.array([[np.inf]]),
+                                    np.array([[1j]]), np.array([["1"]]), np.empty((0, 2))])
+def test_matrix_export_rejects_non_integer_or_empty_data(matrix):
+    with pytest.raises(ValueError):
+        matrix_to_csv_bytes(matrix)
+
+
+def test_matrix_export_preserves_unsigned_integer_range():
+    maximum = np.iinfo(np.uint64).max
+    assert matrix_to_csv_bytes(np.array([[maximum]], np.uint64)) == f"{maximum}\n".encode()
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -float("inf"), np.array([np.nan])])
+def test_json_export_does_not_emit_nonstandard_numeric_literals(value):
+    with pytest.raises(ValueError):
+        to_json_bytes({"nested": {"value": value}})
+
+
+def test_json_export_supports_numpy_boolean_values():
+    import json
+
+    assert json.loads(to_json_bytes({"valid": np.bool_(True)})) == {"valid": True}

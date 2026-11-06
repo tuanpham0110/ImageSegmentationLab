@@ -6,6 +6,8 @@ from collections.abc import Iterable
 
 import numpy as np
 
+from src.utils.masks import mask_to_bool
+
 # Bảng màu phân loại cố định (8 màu, thứ tự không đổi) — dùng cho bản đồ nhãn và biểu đồ cụm.
 CLUSTER_PALETTE_HEX = [
     "#2a78d6",  # xanh dương
@@ -37,7 +39,7 @@ def mask_from_labels(labels: np.ndarray, foreground_clusters: Iterable[int]) -> 
 
 
 def invert_mask(mask: np.ndarray) -> np.ndarray:
-    return (255 - np.asarray(mask, dtype=np.uint8)).astype(np.uint8)
+    return np.where(mask_to_bool(mask), 0, 255).astype(np.uint8)
 
 
 def to_rgb(image: np.ndarray) -> np.ndarray:
@@ -45,27 +47,32 @@ def to_rgb(image: np.ndarray) -> np.ndarray:
     return np.stack([img] * 3, axis=-1) if img.ndim == 2 else img
 
 
+def _mask_for_image(mask: np.ndarray, image: np.ndarray) -> np.ndarray:
+    m = mask_to_bool(mask)
+    if m.shape != image.shape[:2]:
+        raise ValueError("Kích thước mask không khớp với ảnh.")
+    return m
+
+
 def cutout_rgba(image: np.ndarray, mask: np.ndarray) -> np.ndarray:
     """Ảnh tách nền RGBA: giữ pixel đối tượng, nền trong suốt (alpha = 0)."""
     rgb = to_rgb(image)
-    m = np.asarray(mask)
-    if m.shape != rgb.shape[:2]:
-        raise ValueError("Kích thước mask không khớp với ảnh.")
-    alpha = np.where(m > 0, 255, 0).astype(np.uint8)
+    m = _mask_for_image(mask, rgb)
+    alpha = np.where(m, 255, 0).astype(np.uint8)
     return np.dstack([rgb, alpha])
 
 
 def cutout_on_color(image: np.ndarray, mask: np.ndarray, color: tuple[int, int, int] = (255, 255, 255)) -> np.ndarray:
     """Ảnh tách nền trên nền màu đặc (dùng để xem trước)."""
     rgb = to_rgb(image).copy()
-    rgb[np.asarray(mask) == 0] = color
+    rgb[~_mask_for_image(mask, rgb)] = color
     return rgb
 
 
 def overlay_mask(image: np.ndarray, mask: np.ndarray, color=(235, 104, 52), alpha: float = 0.45) -> np.ndarray:
     """Phủ màu bán trong suốt lên vùng đối tượng để kiểm tra trực quan."""
     rgb = to_rgb(image).astype(np.float64)
-    m = np.asarray(mask) > 0
+    m = _mask_for_image(mask, rgb)
     rgb[m] = (1 - alpha) * rgb[m] + alpha * np.array(color, dtype=np.float64)
     return np.clip(np.round(rgb), 0, 255).astype(np.uint8)
 

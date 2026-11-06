@@ -131,11 +131,22 @@ def _render(ctx, run, gt_file) -> None:
     gt, gt_source = ctx.ground_truth, "ground truth của ảnh mẫu"
     if gt_file is not None:
         try:
-            gt = fit_ground_truth(load_mask_bytes(gt_file.getvalue(), gt_file.name), prep)
+            # Chỉ giữ một mask ở kích thước xử lý; không giải mã lại ảnh GT gốc
+            # khi người dùng đổi cụm foreground hoặc cực tính Otsu.
+            cached_gt = run.get("_gt_cache")
+            if cached_gt is None or cached_gt["file_id"] != gt_file.file_id:
+                run.pop("_gt_cache", None)
+                gt = fit_ground_truth(load_mask_bytes(gt_file.getvalue(), gt_file.name), prep)
+                run["_gt_cache"] = {"file_id": gt_file.file_id, "mask": gt}
+            else:
+                gt = cached_gt["mask"]
             gt_source = f"ground truth tải lên ({gt_file.name})"
         except (InputError, ValueError, MemoryError) as exc:
+            run.pop("_gt_cache", None)
             st.error(f"Không dùng được ground-truth mask: {exc}")
             gt = None
+    else:
+        run.pop("_gt_cache", None)
 
     st.markdown("##### Đánh giá định lượng")
     rows = []

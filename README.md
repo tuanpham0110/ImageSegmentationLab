@@ -8,7 +8,7 @@
 
 - **Không dùng OpenCV**, không dùng `sklearn.cluster.KMeans` hay `skimage.filters.threshold_otsu`.
 - K-means và Otsu nằm trong [src/algorithms/](src/algorithms/), tách biệt hoàn toàn với giao diện.
-- 249 kiểm thử tự động (Pytest), gồm kiểm thử hồi quy và giao diện bằng Streamlit `AppTest`.
+- 295 kiểm thử tự động (Pytest), gồm kiểm thử hồi quy và giao diện bằng Streamlit `AppTest`.
 - Không cần Internet, không có API, không có cơ sở dữ liệu.
 
 ---
@@ -110,7 +110,7 @@ src/ui/                        Thanh bên, các trang, thành phần giao diện
 data/sample_images/ data/sample_csv/ data/ground_truth/ data/samples.json   Dữ liệu demo offline
 scripts/generate_samples.py    Sinh dữ liệu mẫu
 scripts/run_experiments.py     Chạy thực nghiệm, ghi số liệu thật
-tests/                         Kiểm thử thuật toán, I/O, tiền xử lý, metrics và tích hợp/giao diện (6 tệp)
+tests/                         Kiểm thử thuật toán, I/O, tiền/hậu xử lý, metrics và tích hợp/giao diện (7 tệp)
 docs/                          Báo cáo, thuật toán, test case, kịch bản demo, slide, câu hỏi phản biện,
                                kết quả thực nghiệm (results/), hình (figures/), ảnh chụp giao diện (screenshots/)
 ```
@@ -128,6 +128,11 @@ docs/                          Báo cáo, thuật toán, test case, kịch bản
 | [docs/results/experiment_results.md](docs/results/experiment_results.md) | Số liệu thực nghiệm sinh tự động |
 | [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md) | Phạm vi sửa P0/P1/P2, bằng chứng kiểm thử và các mục nhóm cần bổ sung |
 | [docs/REVIEW_20261106.md](docs/REVIEW_20261106.md) | Review toàn diện ngày 06/11/2026: lỗi, nguyên nhân, sửa trực tiếp và bằng chứng kiểm chứng mới |
+| [docs/REVIEW_ROUND2_20261106.md](docs/REVIEW_ROUND2_20261106.md) | Review tiếp: ảnh/mask 16-bit, quy ước mask, số học K-means, xuất tệp và cache ground truth |
+
+Lượt review tiếp ngày 06/11/2026: **295 test PASS**, thêm 46 ca; sửa PNG 16-bit có khóa trong suốt và mask trắng
+16-bit, thống nhất mask bool/0–1/0–255, kiểm tra số học/xuất tệp và ghi đủ cách chuyển xám trong JSON K-means.
+Ground truth tải lên chỉ giải mã lại khi đổi tệp hoặc chạy mới. Xem báo cáo lượt hai để đọc bằng chứng và giới hạn.
 
 Đợt review ngày 06/11/2026 bổ sung xử lý PNG trong suốt dạng `tRNS`, sửa tính khoảng cách và nhãn K-means khi
 hoà khoảng cách, kiểm tra tiền xử lý/metrics, ràng buộc ground truth theo ảnh hiện tại và xử lý lỗi dữ liệu mẫu.

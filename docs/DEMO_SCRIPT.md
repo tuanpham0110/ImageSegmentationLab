@@ -20,7 +20,7 @@
 | 4:50–5:20 | Trang K-means → tab **Tải xuống**: bấm *Ảnh tách nền RGBA* và *Ma trận nhãn cụm (CSV)*; mở tệp vừa tải | “Tải được PNG phân đoạn, mask, ảnh nền trong suốt, CSV nhãn, thống kê JSON — đúng kết quả đang hiển thị.” |
 | 5:20–6:00 | Thanh bên chọn **Hình tròn có nhiễu**, chạy Otsu và K-means K = 2 | “Ảnh nhiễu: cả hai IoU 0.84 — vì chỉ dùng giá trị pixel, không dùng lân cận. Đây là hạn chế chung; hướng khắc phục là lọc trung vị trước.” |
 | 6:00–6:30 | Tải `data/sample_csv/invalid_text.csv`; chỉ demo ảnh chụp thật khi nhóm đã có ảnh và thử trước | “Tệp CSV sai được báo lỗi rõ dòng, cột — ứng dụng không bị dừng. Bộ ảnh đã kiểm chứng trong báo cáo là ảnh tổng hợp; chưa có ảnh chụp thật của nhóm để nghiệm thu.” |
-| 6:30–7:00 | Kết luận | “Otsu duyệt ngưỡng tối ưu theo phương sai, chỉ hai lớp xám nếu có ngưỡng hợp lệ. K-means dùng màu/nhiều vùng nhưng cần chọn K và foreground, phụ thuộc khởi tạo. 249 kiểm thử tự động đạt. Bộ ảnh đánh giá hiện tại là tổng hợp; ảnh chụp thật chỉ demo khi nhóm đã chuẩn bị và thử trước.” |
+| 6:30–7:00 | Kết luận | “Otsu duyệt ngưỡng tối ưu theo phương sai, chỉ hai lớp xám nếu có ngưỡng hợp lệ. K-means dùng màu/nhiều vùng nhưng cần chọn K và foreground, phụ thuộc khởi tạo. 295 kiểm thử tự động đạt. Bộ ảnh đánh giá hiện tại là tổng hợp; ảnh chụp thật chỉ demo khi nhóm đã chuẩn bị và thử trước.” |
 
 **Phương án dự phòng:** nếu trình duyệt lỗi, mở ảnh kết quả có sẵn trong `docs/figures/` và ảnh chụp giao diện trong
 `docs/screenshots/`; nếu cần chứng minh thuật toán, chạy `python -m pytest tests/test_otsu.py -v`.

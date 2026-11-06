@@ -657,3 +657,66 @@ def test_theory_variance_table_has_numeric_arrow_compatible_values(monkeypatch, 
     assert not invalid["Ngưỡng hợp lệ"]
     assert pd.isna(invalid["f(g) = σ²_B"])
     assert "Serialization of dataframe to Arrow table was unsuccessful" not in caplog.text
+
+
+@pytest.mark.parametrize("dtype,level", [(bool, True), (np.uint8, 1), (np.uint8, 255)])
+def test_ground_truth_resize_preserves_binary_mask_representations(dtype, level):
+    prepared = prepare_input(load_image_bytes(to_png_bytes(np.zeros((4, 4), np.uint8)), "image.png"), 2)
+    gt = np.zeros((4, 4), dtype=dtype)
+    gt[:2, :2] = level
+    fitted = fit_ground_truth(gt, prepared)
+    np.testing.assert_array_equal(fitted, [[255, 0], [0, 0]])
+    assert fitted.dtype == np.uint8
+
+
+@pytest.mark.parametrize("method", ["average", "luminance"])
+def test_kmeans_json_records_grayscale_method_needed_to_reproduce_the_run(method):
+    image = np.array([[[200, 0, 0], [0, 200, 0]]], np.uint8)
+    prepared = prepare_input(load_image_bytes(to_png_bytes(image), "color.png"), 800, method)
+    params = KMeansParams(k=2, feature="gray")
+    result = run_kmeans(prepared, params)
+    out = kmeans_outputs(prepared, result, default_foreground(result))
+    stats = json.loads(kmeans_export_files(prepared, params, result, out)["kmeans_stats.json"][0])
+    assert stats["chuyen_xam"] == method
+
+
+def test_compare_16bit_transparent_input_and_all_white_16bit_ground_truth():
+    raw = np.full((32, 48), 1000, np.uint16)
+    raw[8:24, 12:24] = 2000
+    raw[8:24, 24:36] = 3000
+    image_bytes, gt_bytes = io.BytesIO(), io.BytesIO()
+    Image.fromarray(raw).save(image_bytes, "PNG", transparency=1000)
+    Image.fromarray(np.full(raw.shape, 65535, np.uint16)).save(gt_bytes, "PNG")
+    at = _app("compare").run()
+    at.radio(key="input_source").set_value("Tải tệp lên").run()
+    at.file_uploader(key="uploader").set_value(("depth.png", image_bytes.getvalue(), "image/png")).run()
+    next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
+    uploader = next(u for u in at.file_uploader if u.key.startswith("cmp_gt_upload_"))
+    uploader.set_value(("white16.png", gt_bytes.getvalue(), "image/png")).run()
+    assert not at.exception
+    scores = next(df.value for df in at.dataframe if "IoU" in df.value.columns)
+    assert scores["IoU"].tolist() == [0.125, 0.125]
+
+
+def test_uploaded_ground_truth_is_decoded_once_until_the_file_changes(monkeypatch):
+    from src.ui import page_compare
+
+    calls, original = [], page_compare.load_mask_bytes
+
+    def tracked(data, name):
+        calls.append(name)
+        return original(data, name)
+
+    monkeypatch.setattr(page_compare, "load_mask_bytes", tracked)
+    at = _app("compare")
+    at.session_state["sample_id"] = "circle_black_on_white"
+    at.run()
+    next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
+    gt_bytes = (DATA / "ground_truth" / "circle_black_on_white_gt.png").read_bytes()
+    at.file_uploader[0].set_value(("first.png", gt_bytes, "image/png")).run()
+    at.multiselect[0].set_value([]).run()
+    assert not at.exception and calls == ["first.png"]
+    at.file_uploader[0].set_value(("second.png", gt_bytes, "image/png")).run()
+    assert not at.exception and calls == ["first.png", "second.png"]
+    at.file_uploader[0].clear().run()
+    assert "_gt_cache" not in at.session_state["cmp_result"]
