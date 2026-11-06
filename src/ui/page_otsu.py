@@ -9,7 +9,7 @@ import streamlit as st
 from src.processing.pipeline import TIMING_SCOPE, otsu_export_files, run_otsu
 from src.processing.preprocessing import GRAY_METHODS
 from src.ui import components as ui
-from src.ui.state import get_result, has_stale_result, store_result
+from src.ui.state import get_result, has_stale_result, remember_widget, restore_widget, store_result
 from src.utils import visualization as viz
 from src.utils.metrics import compare_masks
 
@@ -57,7 +57,7 @@ def render() -> None:
     ui.input_summary(ctx)
     prep = ctx.prepared
     for k, v in DEFAULTS.items():
-        st.session_state.setdefault(k, v)
+        restore_widget(k, v)
 
     left, right = st.columns([1, 2.6], gap="large")
     with left:
@@ -68,6 +68,8 @@ def render() -> None:
             polarity = st.radio("Đối tượng (foreground) là", list(POLARITY_OPTIONS), key="otsu_polarity",
                                 help=POLARITY_HELP)
             submitted = st.form_submit_button("Chạy Otsu", type="primary", width="stretch")
+        for k in DEFAULTS:
+            remember_widget(k)
         st.button("Khôi phục mặc định", on_click=_reset_defaults, key="otsu_reset", width="stretch")
         st.caption(f"Ảnh màu được chuyển xám bằng: {GRAY_METHODS[prep.gray_method]} (đổi ở thanh bên).")
 
@@ -135,9 +137,11 @@ def _render_result(ctx, out, run: dict | None = None) -> None:
                           "chọn một cực đại gần floor(trung bình) nhất; các khoảng có thể rời nhau."
                           if len(r.tied_thresholds) > 1 else "Ngưỡng cực đại là duy nhất."))
         with st.expander("Bảng histogram đầy đủ (256 mức)"):
-            nz = np.flatnonzero(r.histogram)
-            st.dataframe(pd.DataFrame({"Mức xám g": nz, "h(g)": r.histogram[nz],
-                                       "σ²_B(g)": np.round(r.between_class_variance[nz], 4)}),
+            levels = np.arange(256)
+            st.caption(f"Đủ 256 mức xám, gồm cả mức có h(g) = 0; ảnh có {np.count_nonzero(r.histogram)} mức xuất hiện. "
+                       "σ²_B(g) = 0 tại ngưỡng làm một lớp rỗng (không hợp lệ).")
+            st.dataframe(pd.DataFrame({"Mức xám g": levels, "h(g)": r.histogram,
+                                       "σ²_B(g)": np.round(r.between_class_variance, 4)}),
                          hide_index=True, width="stretch", height=260)
 
     with tab_dl:

@@ -10,7 +10,15 @@ from src.processing.pipeline import TIMING_SCOPE, default_foreground, fit_ground
 from src.ui import components as ui
 from src.ui.page_kmeans import params_form
 from src.ui.page_otsu import POLARITY_HELP, POLARITY_OPTIONS, polarity_caption
-from src.ui.state import get_result, has_stale_result, store_result
+from src.ui.state import (
+    get_result,
+    has_stale_result,
+    persistent_foreground,
+    remember_widget,
+    restore_widget,
+    save_foreground,
+    store_result,
+)
 from src.utils.image_io import InputError, load_mask_bytes
 from src.utils.metrics import compare_masks
 
@@ -55,8 +63,9 @@ def render() -> None:
     left, right = st.columns([1, 2.6], gap="large")
     with left:
         params = params_form(prep.is_color, key_prefix="cmp")
-        st.session_state.setdefault("cmp_otsu_polarity", "Gợi ý theo viền ảnh")
+        restore_widget("cmp_otsu_polarity", "Gợi ý theo viền ảnh")
         st.radio("Otsu: đối tượng là", list(POLARITY_OPTIONS), key="cmp_otsu_polarity", help=POLARITY_HELP)
+        remember_widget("cmp_otsu_polarity")
         gt_file = st.file_uploader("Ground-truth mask (tuỳ chọn, PNG trắng = đối tượng)", type=["png", "bmp"],
                                    key=f"cmp_gt_upload_{ctx.signature}",
                                    help="Mask gắn với ảnh đầu vào hiện tại. Khi đổi ảnh hoặc tiền xử lý, hãy tải lại mask.")
@@ -103,9 +112,13 @@ def _render(ctx, run, gt_file) -> None:
         st.warning("Otsu: " + warning)
     st.caption("Phạm vi đo thời gian: " + TIMING_SCOPE)
 
-    fg = st.multiselect("Cụm K-means làm đối tượng", list(range(km.core.k_effective)), default=default_foreground(km),
-                        format_func=lambda c: f"Cụm {c}", key=f"cmp_fg_{run['run_id']}",
+    options = list(range(km.core.k_effective))
+    fg_key = f"cmp_fg_{run['run_id']}"
+    persistent_foreground(run, fg_key, options, default_foreground(km))
+    fg = st.multiselect("Cụm K-means làm đối tượng", options,
+                        format_func=lambda c: f"Cụm {c}", key=fg_key,
                         help="Mặc định là gợi ý theo viền ảnh; hãy chỉnh cho đúng đối tượng.")
+    save_foreground(run, fg)
     try:
         out = kmeans_outputs(prep, km, fg)
     except (ValueError, MemoryError) as exc:

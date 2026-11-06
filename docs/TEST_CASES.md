@@ -92,8 +92,8 @@ Nhật ký ngày 05/11 trong phần D và các artifact cũ được giữ để
 |---|---|---|
 | `tests/test_kmeans.py` | 64 | Nghiệm tính tay, trọng số, SSE, cụm rỗng, tham số; khoảng cách/tie-break; counts vượt int64 và từ chối số học tràn float64 |
 | `tests/test_otsu.py` | 44 | Ví dụ giáo trình, brute force, ngưỡng đồng hạng rời nhau, lớp rỗng, histogram mất cân bằng, validation và cực tính |
-| `tests/test_image_io.py` | 58 | PNG/JPEG/BMP, alpha/EXIF/tRNS gồm 16-bit; mask 16-bit giữ thang sáng; CSV chính xác; validation PNG/CSV/JSON trước xuất |
-| `tests/test_integration.py` | 85 | Pipeline/11 mẫu/7 trang; upload/GT/cache; lỗi tài nguyên/dữ liệu; JSON ghi cách chuyển xám; luồng PNG 16-bit + GT trắng 16-bit cho đúng IoU |
+| `tests/test_image_io.py` | 73 | PNG/JPEG/BMP, alpha/EXIF/tRNS gồm 16-bit; mask 16-bit giữ thang sáng; CSV chính xác; validation PNG/CSV/JSON trước xuất |
+| `tests/test_integration.py` | 92 | Pipeline/11 mẫu/7 trang; upload/GT/cache; lỗi tài nguyên/dữ liệu; JSON ghi cách chuyển xám; luồng PNG 16-bit + GT trắng 16-bit cho đúng IoU |
 | `tests/test_preprocessing.py` | 24 | Pixel sai, NaN/Inf, ảnh rỗng/sai chiều; kích thước/phương pháp sai; bảo toàn pixel nguyên và mask khi resize nearest |
 | `tests/test_metrics.py` | 11 | Ma trận nhầm lẫn tính tay, IoU/Dice/accuracy, toàn nền hợp lệ; từ chối mask rỗng/sai chiều/không hữu hạn |
 | `tests/test_postprocessing.py` | 9 | Đảo mask bool/0–1/0–255; từ chối mask sai đồng bộ; RGBA/preview/overlay cùng quy ước foreground |
@@ -165,3 +165,12 @@ Báo cáo máy: [browser_checks_20261105_155516.json](results/browser_checks_202
 - JSON K-means lưu cách chuyển xám; GT tải lên được tái sử dụng đến khi đổi tệp/chạy mới.
 - 12 kiểm tra trình duyệt và 7 tệp tải xuống đối chiếu dữ liệu; 11 mẫu giữ nguyên mọi số đo chất lượng đã đối chiếu.
 - Bằng chứng: [JUnit](results/review_round2_pytest_20261106.xml), [trình duyệt](results/review_round2_browser_20261106.json), [11 mẫu](results/review_round2_samples_20261106.json).
+
+## G. Sửa lỗi sau review độc lập (06/11/2026, sau commit 08d0b6a)
+
+- Từ 295 lên **317 PASS**, thêm 22 ca hồi quy; 18 ca mới fail trên mã 08d0b6a và pass sau khi sửa.
+- BUG-001: PNG màu 16-bit có tRNS bị từ chối kèm thông báo; PNG màu 16-bit không tRNS có ghi chú giảm về 8 bit.
+- BUG-002: cụm đối tượng (K-means, So sánh), cực tính Otsu và tham số form được giữ khi chuyển trang rồi quay lại; JSON xuất khớp lựa chọn.
+- BUG-003: bảng histogram hiển thị đủ 256 mức, kể cả h(g) = 0.
+- BUG-004: lỗi CSV báo số dòng thực trong tệp (tính cả dòng trống và hàng trải nhiều dòng).
+- RISK-002: hậu xử lý từ chối ảnh ngoài [0, 255], không nguyên, NaN hoặc sai số kênh thay vì ép kiểu quấn số.

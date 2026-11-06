@@ -6,6 +6,7 @@ import csv
 import io
 import json
 import re
+import struct
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -59,6 +60,22 @@ def _composite_alpha(img: Image.Image, notes: list[str]) -> Image.Image:
     return Image.alpha_composite(background, rgba).convert("RGB")
 
 
+_PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+_PNG_COLOR_TYPES = {0: "xám", 2: "RGB", 3: "bảng màu", 4: "xám + alpha", 6: "RGBA"}
+
+
+def _png_bit_depth(data: bytes) -> tuple[int, int] | None:
+    """Đọc (bit depth, color type) từ chunk IHDR của PNG; None nếu không phải PNG hợp lệ.
+
+    Pillow giải mã PNG màu 16 bit (RGB/RGBA/LA) thành chế độ 8 bit nên img.mode
+    không cho biết độ sâu gốc — phải đọc trực tiếp header.
+    """
+    if len(data) < 33 or not data.startswith(_PNG_SIGNATURE) or data[12:16] != b"IHDR":
+        return None
+    bit_depth, color_type = struct.unpack(">BB", data[24:26])
+    return bit_depth, color_type
+
+
 def load_image_bytes(data: bytes, name: str = "image") -> LoadedImage:
     """Đọc ảnh PNG/JPG/BMP từ bytes thành mảng uint8.
 
@@ -88,6 +105,20 @@ def _load_image_bytes(data: bytes, name: str, *, normalize_high_depth: bool) -> 
             if w * h > MAX_DECODE_PIXELS:
                 raise InputError(
                     f"Ảnh quá lớn ({w} x {h} = {w * h / 1e6:.1f} triệu pixel). Giới hạn {MAX_DECODE_PIXELS / 1e6:.0f} triệu pixel."
+                )
+            png_depth = _png_bit_depth(data) if fmt == "PNG" else None
+            # PNG màu 16 bit: Pillow chỉ giữ byte cao của mỗi kênh, còn khóa tRNS vẫn ở thang
+            # 0–65535 nên không thể so khớp đúng pixel trong suốt -> từ chối thay vì đọc sai âm thầm.
+            if png_depth is not None and png_depth[0] == 16 and png_depth[1] in (2, 4, 6):
+                if "transparency" in img.info:
+                    raise InputError(
+                        f"PNG {_PNG_COLOR_TYPES[png_depth[1]]} 16 bit có khóa trong suốt (tRNS) chưa được hỗ trợ. "
+                        "Hãy lưu lại ảnh ở 8 bit/kênh hoặc dùng kênh alpha thay cho tRNS."
+                    )
+                notes.append(
+                    f"PNG {_PNG_COLOR_TYPES[png_depth[1]]} 16 bit/kênh được giảm về 8 bit/kênh (giữ byte cao, "
+                    "tức ⌊v / 256⌋). Không giãn tương phản như ảnh xám 16 bit; "
+                    "các mức khác nhau dưới 1/256 thang sáng sẽ bị gộp."
                 )
             img.load()
             arr, mode = _decoded_array(img, notes, normalize_high_depth)
@@ -148,15 +179,24 @@ def _decoded_array(img: Image.Image, notes: list[str], normalize_high_depth: boo
     return arr, mode
 
 
-def _csv_rows(lines: list[str], delimiter: str | None):
-    """Chuyển lỗi cú pháp/ô quá dài của csv.reader thành lỗi đầu vào có kiểm soát."""
+def _csv_rows(lines: list[str], line_numbers: list[int], delimiter: str | None):
+    """Sinh (số dòng vật lý trong tệp, hàng ô) để báo lỗi đúng vị trí dù tệp có dòng trống.
+
+    Chuyển lỗi cú pháp/ô quá dài của csv.reader thành lỗi đầu vào có kiểm soát.
+    """
     if delimiter is None:
-        yield from (line.split() for line in lines)
+        yield from zip(line_numbers, (line.split() for line in lines))
         return
+    reader = csv.reader(lines, delimiter=delimiter, strict=True)
+    consumed = 0  # số dòng (đã lọc) csv.reader đã đọc trước hàng hiện tại
     try:
-        yield from csv.reader(lines, delimiter=delimiter, strict=True)
+        for row in reader:
+            # Một hàng có thể trải nhiều dòng nếu ô chứa xuống dòng trong dấu nháy: lấy dòng bắt đầu.
+            yield line_numbers[consumed], row
+            consumed = reader.line_num
     except csv.Error as exc:
-        raise InputError(f"CSV không hợp lệ (cú pháp dấu nháy hoặc ô dữ liệu quá dài): {exc}.") from exc
+        where = line_numbers[min(consumed, len(line_numbers) - 1)]
+        raise InputError(f"CSV không hợp lệ tại dòng {where} (cú pháp dấu nháy hoặc ô dữ liệu quá dài): {exc}.") from exc
 
 
 def parse_csv_matrix(text: str) -> np.ndarray:
@@ -164,14 +204,17 @@ def parse_csv_matrix(text: str) -> np.ndarray:
 
     Định dạng: mỗi dòng là một hàng ảnh, các giá trị nguyên 0..255 phân cách bởi
     dấu phẩy (hoặc chấm phẩy / tab / khoảng trắng), không có dòng tiêu đề,
-    mọi dòng cùng số cột. Dòng trống bị bỏ qua.
+    mọi dòng cùng số cột. Dòng trống bị bỏ qua; số dòng trong thông báo lỗi là
+    số dòng thực trong tệp (tính cả dòng trống).
     """
     text = text.lstrip("﻿")
     # Giữ ký tự xuống dòng để csv.reader không ghép "1\n2" trong dấu nháy thành 12.
-    lines = [ln for ln in text.splitlines(keepends=True) if ln.strip()]
-    if not lines:
+    numbered = [(i, ln) for i, ln in enumerate(text.splitlines(keepends=True), start=1) if ln.strip()]
+    if not numbered:
         raise InputError("CSV rỗng: không có dòng dữ liệu nào.")
 
+    line_numbers = [i for i, _ in numbered]
+    lines = [ln for _, ln in numbered]
     sample = lines[0]
     if "," in sample:
         delim = ","
@@ -184,16 +227,16 @@ def parse_csv_matrix(text: str) -> np.ndarray:
 
     rows: list[list[int]] = []
     n_cols = None
+    first_line = line_numbers[0]
     number = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)$")
-    reader = _csv_rows(lines, delim)
-    for r_idx, raw_row in enumerate(reader, start=1):
+    for r_idx, raw_row in _csv_rows(lines, line_numbers, delim):
         cells = [c.strip() for c in raw_row]
         if delim and cells and cells[-1] == "":  # cho phép dấu phân cách thừa cuối dòng
             cells = cells[:-1]
         if n_cols is None:
             n_cols = len(cells)
         elif len(cells) != n_cols:
-            raise InputError(f"Dòng {r_idx} có {len(cells)} cột, khác với {n_cols} cột của dòng 1.")
+            raise InputError(f"Dòng {r_idx} có {len(cells)} cột, khác với {n_cols} cột của dòng {first_line}.")
         if (len(rows) + 1) * n_cols > MAX_CSV_CELLS:
             raise InputError(f"CSV quá lớn (vượt {MAX_CSV_CELLS:,} phần tử).")
         row: list[int] = []

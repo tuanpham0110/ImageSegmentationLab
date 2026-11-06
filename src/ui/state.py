@@ -143,8 +143,43 @@ def has_stale_result(key: str, signature: str) -> bool:
     return res is not None and (res.get("_stale", False) or res.get("signature") != signature)
 
 
+# ---------------- Giữ giá trị widget qua điều hướng trang ----------------
+# Streamlit xoá state của widget có key nếu widget không được vẽ trong một lượt chạy
+# (ví dụ khi chuyển sang trang khác). Khi quay lại, widget dựng lại từ giá trị mặc định,
+# làm lựa chọn của người dùng (cụm đối tượng, cực tính, tham số form) tự đổi.
+# Hai hàm dưới lưu một bản sao ở key không phải widget (không bị xoá) và khôi phục lại.
+_PERSIST_PREFIX = "_persist__"
+
+
+def restore_widget(key: str, default) -> None:
+    """Gọi TRƯỚC khi vẽ widget: khôi phục giá trị đã lưu, hoặc dùng mặc định nếu chưa có."""
+    if key not in st.session_state:
+        st.session_state[key] = st.session_state.get(_PERSIST_PREFIX + key, default)
+
+
+def remember_widget(key: str) -> None:
+    """Gọi SAU khi vẽ widget: lưu giá trị hiện tại vào bản sao bền."""
+    if key in st.session_state:
+        value = st.session_state[key]
+        st.session_state[_PERSIST_PREFIX + key] = list(value) if isinstance(value, list) else value
+
+
+def persistent_foreground(run: dict, key: str, options: list[int], default: list[int]) -> None:
+    """Khôi phục lựa chọn cụm đối tượng từ payload kết quả (gắn với đúng ảnh và lần chạy)."""
+    if key not in st.session_state:
+        saved = run.get("foreground")
+        st.session_state[key] = ([c for c in saved if c in options] if saved is not None
+                                 else list(default))
+
+
+def save_foreground(run: dict, fg) -> None:
+    """Lưu lựa chọn hiện tại vào payload để giữ qua điều hướng và dùng cho dữ liệu xuất."""
+    run["foreground"] = sorted(int(c) for c in fg)
+
+
 __all__ = [
     "InputContext", "InputError", "MAX_SIDE_OPTIONS", "DEFAULT_MAX_SIDE", "DATA_DIR",
     "load_manifest", "sample_by_id", "thumbnail", "build_context", "set_context", "get_context",
     "get_input_error", "store_result", "get_result", "has_stale_result",
+    "restore_widget", "remember_widget", "persistent_foreground", "save_foreground",
 ]

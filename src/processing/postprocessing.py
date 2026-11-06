@@ -43,7 +43,21 @@ def invert_mask(mask: np.ndarray) -> np.ndarray:
 
 
 def to_rgb(image: np.ndarray) -> np.ndarray:
-    img = np.asarray(image, dtype=np.uint8)
+    """Ảnh xám (H, W) hoặc RGB (H, W, 3) với giá trị nguyên trong [0, 255] -> RGB uint8.
+
+    Kiểm tra trước khi ép kiểu: ép thẳng sang uint8 sẽ quấn số (-1 -> 255, 256 -> 0)
+    và ảnh 4 kênh sẽ tạo ảnh tách nền 5 kênh.
+    """
+    img = np.asarray(image)
+    if img.ndim not in (2, 3) or (img.ndim == 3 and img.shape[2] != 3):
+        raise ValueError(f"Ảnh phải có dạng (H, W) hoặc (H, W, 3); nhận được {img.shape}.")
+    if img.dtype != np.uint8:
+        if img.dtype == np.bool_ or img.dtype.kind not in "uif":
+            raise ValueError(f"Kiểu dữ liệu ảnh {img.dtype} không được hỗ trợ.")
+        if img.size and (not np.all(np.isfinite(img)) or img.min() < 0 or img.max() > 255
+                         or not np.array_equal(img, np.round(img))):
+            raise ValueError("Giá trị ảnh phải là số nguyên trong [0, 255].")
+        img = img.astype(np.uint8)
     return np.stack([img] * 3, axis=-1) if img.ndim == 2 else img
 
 

@@ -8,7 +8,7 @@
 
 - **Không dùng OpenCV**, không dùng `sklearn.cluster.KMeans` hay `skimage.filters.threshold_otsu`.
 - K-means và Otsu nằm trong [src/algorithms/](src/algorithms/), tách biệt hoàn toàn với giao diện.
-- 295 kiểm thử tự động (Pytest), gồm kiểm thử hồi quy và giao diện bằng Streamlit `AppTest`.
+- 317 kiểm thử tự động (Pytest), gồm kiểm thử hồi quy và giao diện bằng Streamlit `AppTest`.
 - Không cần Internet, không có API, không có cơ sở dữ liệu.
 
 ---
@@ -71,7 +71,7 @@ python scripts\run_experiments.py --skip-figures
 | **Hướng dẫn** | Thao tác, định dạng CSV, danh sách tệp tải xuống |
 
 **Đầu vào được xử lý:** ảnh xám, RGB, có kênh alpha (ghép lên nền trắng), có thẻ EXIF hướng chụp (xoay đúng chiều),
-ảnh 16-bit (chuẩn hoá về 0–255), ảnh RGB có R=G=B (xử lý như ảnh xám). Giới hạn: tệp ≤ 30 MB, ≤ 40 triệu pixel;
+PNG xám 16-bit (chuẩn hoá tuyến tính về 0–255), PNG màu 16-bit/kênh (giảm về 8 bit bằng byte cao, không giãn tương phản; loại có khoá trong suốt tRNS bị từ chối kèm thông báo), ảnh RGB có R=G=B (xử lý như ảnh xám). Giới hạn: tệp ≤ 30 MB, ≤ 40 triệu pixel;
 ảnh lớn được thu nhỏ theo **“Giới hạn cạnh dài khi xử lý”** (mặc định 800 px) và kích thước thật được ghi rõ trên trang.
 
 **Tải xuống:** ảnh phân đoạn, bản đồ nhãn, mask nhị phân, ảnh tách nền RGBA (nền trong suốt) dạng PNG; ma trận nhãn

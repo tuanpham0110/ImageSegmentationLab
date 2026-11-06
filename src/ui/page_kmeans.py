@@ -15,7 +15,15 @@ from src.processing.pipeline import (
     run_kmeans,
 )
 from src.ui import components as ui
-from src.ui.state import get_result, has_stale_result, store_result
+from src.ui.state import (
+    get_result,
+    has_stale_result,
+    persistent_foreground,
+    remember_widget,
+    restore_widget,
+    save_foreground,
+    store_result,
+)
 from src.utils import visualization as viz
 from src.utils.metrics import compare_masks
 
@@ -43,8 +51,9 @@ def _reset_defaults() -> None:
 
 def params_form(is_color: bool, key_prefix: str = "km") -> KMeansParams | None:
     """Form tham số K-means. Trả về KMeansParams khi người dùng bấm chạy, ngược lại None."""
-    for k, v in DEFAULTS.items():
-        st.session_state.setdefault(k.replace("km", key_prefix, 1), v)
+    keys = [k.replace("km", key_prefix, 1) for k in DEFAULTS]
+    for key, v in zip(keys, DEFAULTS.values()):
+        restore_widget(key, v)
     with st.form(f"{key_prefix}_form", border=True):
         st.markdown("**Tham số K-means**")
         k = st.slider("Số cụm K", 2, 8, key=f"{key_prefix}_k",
@@ -62,6 +71,8 @@ def params_form(is_color: bool, key_prefix: str = "km") -> KMeansParams | None:
                               key=f"{key_prefix}_tol",
                               help="Dừng khi tâm cụm dịch chuyển (chuẩn Euclid, thang 0–255) ≤ ngưỡng này.")
         submitted = st.form_submit_button("Chạy K-means", type="primary", width="stretch")
+    for key in keys:
+        remember_widget(key)
     if not submitted:
         return None
     return KMeansParams(k=int(k), feature=FEATURE_OPTIONS[feature_label] if is_color else "gray",
@@ -129,8 +140,11 @@ def _render_result(ctx, run: dict) -> None:
             "cụm chiếm nhiều pixel ở viền ảnh nhất được coi là nền."
         )
         options = list(range(core.k_effective))
-        fg = st.multiselect("Cụm làm đối tượng (foreground)", options, default=default_foreground(result),
-                            format_func=lambda c: f"Cụm {c}", key=f"km_fg_{run['run_id']}")
+        fg_key = f"km_fg_{run['run_id']}"
+        persistent_foreground(run, fg_key, options, default_foreground(result))
+        fg = st.multiselect("Cụm làm đối tượng (foreground)", options,
+                            format_func=lambda c: f"Cụm {c}", key=fg_key)
+        save_foreground(run, fg)
     try:
         out = kmeans_outputs(prep, result, fg)
     except (ValueError, MemoryError) as exc:

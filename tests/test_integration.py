@@ -720,3 +720,82 @@ def test_uploaded_ground_truth_is_decoded_once_until_the_file_changes(monkeypatc
     assert not at.exception and calls == ["first.png", "second.png"]
     at.file_uploader[0].clear().run()
     assert "_gt_cache" not in at.session_state["cmp_result"]
+
+
+# ---------------- Hồi quy: giữ lựa chọn người dùng khi chuyển trang ----------------
+
+def _navigate(at, page: str):
+    at.session_state["_test_page"] = page
+    return at.run()
+
+
+def _km_export(at) -> dict:
+    files = at.session_state["km_result"]["_export_cache"]["files"]
+    return json.loads(files["kmeans_stats.json"][0])
+
+
+@pytest.mark.parametrize("selection", [[0], []])
+def test_kmeans_foreground_selection_survives_navigation(selection):
+    at = _app("kmeans").run()
+    next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
+    sse = at.session_state["km_result"]["result"].core.sse
+    at.multiselect[0].set_value(selection).run()
+    assert _km_export(at)["cum_doi_tuong"] == selection
+    _navigate(at, "guide")
+    _navigate(at, "kmeans")
+    assert not at.exception
+    assert at.multiselect[0].value == selection
+    assert _km_export(at)["cum_doi_tuong"] == selection
+    assert at.session_state["km_result"]["result"].core.sse == sse  # không chạy lại thuật toán
+
+
+def test_kmeans_form_parameters_survive_navigation():
+    at = _app("kmeans").run()
+    at.slider(key="km_k").set_value(5)
+    next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
+    _navigate(at, "otsu")
+    _navigate(at, "kmeans")
+    assert not at.exception
+    assert at.slider(key="km_k").value == 5
+    assert at.session_state["km_result"]["params"].k == 5
+
+
+def test_compare_polarity_and_foreground_survive_navigation():
+    at = _app("compare").run()
+    next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
+    at.radio(key="cmp_otsu_polarity").set_value("Lớp sáng (> t)").run()
+    at.multiselect[0].set_value([1]).run()
+    _navigate(at, "guide")
+    _navigate(at, "compare")
+    assert not at.exception
+    assert at.radio(key="cmp_otsu_polarity").value == "Lớp sáng (> t)"
+    assert at.session_state["cmp_result"]["otsu"].polarity == "bright"
+    assert at.multiselect[0].value == [1]
+
+
+def test_otsu_form_survives_navigation():
+    at = _app("otsu").run()
+    at.radio(key="otsu_polarity").set_value("Lớp tối (≤ t)")
+    next(b for b in at.button if b.label.startswith("Chạy Otsu")).click().run()
+    _navigate(at, "theory")
+    _navigate(at, "otsu")
+    assert not at.exception
+    assert at.radio(key="otsu_polarity").value == "Lớp tối (≤ t)"
+    assert at.session_state["otsu_result"]["out"].polarity == "dark"
+
+
+def test_new_kmeans_run_starts_from_suggested_foreground():
+    at = _app("kmeans").run()
+    run_button = lambda: next(b for b in at.button if b.label.startswith("Chạy K-means"))
+    run_button().click().run()
+    suggested = list(at.multiselect[0].value)
+    at.multiselect[0].set_value([]).run()
+    run_button().click().run()
+    assert at.multiselect[0].value == suggested
+
+
+def test_otsu_histogram_table_lists_all_256_levels():
+    at = _app("otsu").run()
+    next(b for b in at.button if b.label.startswith("Chạy Otsu")).click().run()
+    tables = [df.value for df in at.dataframe if "Mức xám g" in df.value.columns]
+    assert tables and list(tables[0]["Mức xám g"]) == list(range(256))

@@ -237,3 +237,80 @@ def test_json_export_supports_numpy_boolean_values():
     import json
 
     assert json.loads(to_json_bytes({"valid": np.bool_(True)})) == {"valid": True}
+
+
+# ---------------- Hồi quy: PNG màu 16 bit, CSV có dòng trống, hậu xử lý ----------------
+
+def _png16(arr: np.ndarray, color_type: int, trns: tuple[int, ...] | None = None) -> bytes:
+    """Tự mã hoá PNG 16 bit/kênh (Pillow không ghi được RGB/RGBA 16 bit)."""
+    import struct
+    import zlib
+
+    def chunk(tag: bytes, body: bytes) -> bytes:
+        return struct.pack(">I", len(body)) + tag + body + struct.pack(">I", zlib.crc32(tag + body) & 0xFFFFFFFF)
+
+    h, w = arr.shape[:2]
+    raw = b"".join(b"\x00" + arr[y].astype(">u2").tobytes() for y in range(h))
+    out = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 16, color_type, 0, 0, 0))
+    if trns is not None:
+        out += chunk(b"tRNS", struct.pack(">" + "H" * len(trns), *trns))
+    return out + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
+
+
+def test_16bit_rgb_png_with_transparency_key_is_rejected_not_misread():
+    pixels = np.array([[[256, 256, 256], [1000, 2000, 3000]]])
+    with pytest.raises(InputError, match="16 bit có khóa trong suốt"):
+        load_image_bytes(_png16(pixels, 2, trns=(1000, 2000, 3000)), "key16.png")
+
+
+@pytest.mark.parametrize("color_type,pixels,expected", [
+    (2, [[[0, 0, 0], [65535, 32768, 512]]], [[[0, 0, 0], [255, 128, 2]]]),
+    (6, [[[0, 0, 0, 65535], [65535, 0, 0, 65535]]], [[[0, 0, 0], [255, 0, 0]]]),
+])
+def test_16bit_color_png_is_reduced_to_8bit_with_explicit_note(color_type, pixels, expected):
+    loaded = load_image_bytes(_png16(np.array(pixels), color_type), "deep.png")
+    np.testing.assert_array_equal(loaded.array, expected)
+    assert any("16 bit/kênh được giảm về 8 bit" in n for n in loaded.notes)
+
+
+def test_16bit_grayscale_png_still_uses_contrast_stretch_without_color_note():
+    loaded = load_image_bytes(_png16(np.array([[256, 257]]), 0), "gray16.png")
+    np.testing.assert_array_equal(loaded.array, [[0, 255]])
+    assert not any("giảm về 8 bit" in n for n in loaded.notes)
+
+
+def test_8bit_png_has_no_16bit_note():
+    loaded = load_image_bytes(to_png_bytes(np.zeros((2, 2, 3), np.uint8)), "a.png")
+    assert not any("16 bit" in n for n in loaded.notes)
+
+
+@pytest.mark.parametrize("text,fragment", [
+    ("1,2\n\n3,x\n", "dòng 3, cột 2"),
+    ("\n\n1,2\n3,4,5\n", "Dòng 4 có 3 cột, khác với 2 cột của dòng 3"),
+    ("1 2\n   \n3 x\n", "dòng 3, cột 2"),
+    ('"1",2\n\n"3\n",4\n5,x\n', "dòng 5, cột 2"),  # hàng 2 trải dòng 3–4 do ô trong dấu nháy
+])
+def test_csv_error_reports_physical_line_number_with_blank_lines(text, fragment):
+    with pytest.raises(InputError, match=fragment):
+        parse_csv_matrix(text)
+
+
+@pytest.mark.parametrize("image", [
+    np.array([[-1, 256]]),
+    np.array([[1.5, 2.0]]),
+    np.zeros((2, 2, 4), np.uint8),
+    np.zeros((2, 2, 1), np.uint8),
+    np.array([[np.nan, 0.0]]),
+])
+def test_postprocessing_rejects_invalid_images_instead_of_wrapping(image):
+    from src.processing.postprocessing import cutout_rgba
+
+    with pytest.raises(ValueError):
+        cutout_rgba(image, np.ones(image.shape[:2], bool))
+
+
+def test_postprocessing_accepts_integer_valued_non_uint8_images():
+    from src.processing.postprocessing import cutout_rgba
+
+    out = cutout_rgba(np.array([[0, 255]], dtype=np.int64), np.array([[True, False]]))
+    np.testing.assert_array_equal(out, [[[0, 0, 0, 255], [255, 255, 255, 0]]])
