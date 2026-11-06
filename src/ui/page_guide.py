@@ -45,6 +45,7 @@ def render() -> None:
 #### 5. So sánh
 - Chạy K-means và Otsu trên cùng ảnh; so sánh ảnh kết quả và **mask nhị phân**.
 - IoU/Dice chỉ được tính khi có **ground truth** (ảnh mẫu có sẵn, hoặc tải mask PNG trắng = đối tượng, cùng kích thước ảnh gốc).
+- Mask tải lên gắn với đầu vào hiện tại. Khi đổi ảnh hoặc tiền xử lý, hãy tải lại mask để tránh dùng nhầm ground truth.
 
 #### 6. Lưu kết quả
 | Tệp | Nội dung |

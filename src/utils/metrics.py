@@ -19,7 +19,12 @@ class MaskScores:
 
 
 def _as_bool(mask: np.ndarray) -> np.ndarray:
-    return np.asarray(mask) > 0
+    m = np.asarray(mask)
+    if m.ndim != 2 or m.size == 0:
+        raise ValueError("Mask phải là ma trận 2 chiều không rỗng.")
+    if m.dtype.kind not in "buif" or not np.all(np.isfinite(m)) or np.any(m < 0):
+        raise ValueError("Mask phải chứa giá trị số không âm, hữu hạn.")
+    return m > 0
 
 
 def compare_masks(pred: np.ndarray, reference: np.ndarray) -> MaskScores:

@@ -8,7 +8,7 @@
 
 - **Không dùng OpenCV**, không dùng `sklearn.cluster.KMeans` hay `skimage.filters.threshold_otsu`.
 - K-means và Otsu nằm trong [src/algorithms/](src/algorithms/), tách biệt hoàn toàn với giao diện.
-- 170 kiểm thử tự động (Pytest), gồm kiểm thử hồi quy và giao diện bằng Streamlit `AppTest`.
+- 249 kiểm thử tự động (Pytest), gồm kiểm thử hồi quy và giao diện bằng Streamlit `AppTest`.
 - Không cần Internet, không có API, không có cơ sở dữ liệu.
 
 ---
@@ -110,7 +110,7 @@ src/ui/                        Thanh bên, các trang, thành phần giao diện
 data/sample_images/ data/sample_csv/ data/ground_truth/ data/samples.json   Dữ liệu demo offline
 scripts/generate_samples.py    Sinh dữ liệu mẫu
 scripts/run_experiments.py     Chạy thực nghiệm, ghi số liệu thật
-tests/                         test_kmeans.py, test_otsu.py, test_image_io.py, test_integration.py
+tests/                         Kiểm thử thuật toán, I/O, tiền xử lý, metrics và tích hợp/giao diện (6 tệp)
 docs/                          Báo cáo, thuật toán, test case, kịch bản demo, slide, câu hỏi phản biện,
                                kết quả thực nghiệm (results/), hình (figures/), ảnh chụp giao diện (screenshots/)
 ```
@@ -127,6 +127,12 @@ docs/                          Báo cáo, thuật toán, test case, kịch bản
 | [docs/QUESTIONS_AND_ANSWERS.md](docs/QUESTIONS_AND_ANSWERS.md) | Câu hỏi phản biện và trả lời |
 | [docs/results/experiment_results.md](docs/results/experiment_results.md) | Số liệu thực nghiệm sinh tự động |
 | [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md) | Phạm vi sửa P0/P1/P2, bằng chứng kiểm thử và các mục nhóm cần bổ sung |
+| [docs/REVIEW_20261106.md](docs/REVIEW_20261106.md) | Review toàn diện ngày 06/11/2026: lỗi, nguyên nhân, sửa trực tiếp và bằng chứng kiểm chứng mới |
+
+Đợt review ngày 06/11/2026 bổ sung xử lý PNG trong suốt dạng `tRNS`, sửa tính khoảng cách và nhãn K-means khi
+hoà khoảng cách, kiểm tra tiền xử lý/metrics, ràng buộc ground truth theo ảnh hiện tại và xử lý lỗi dữ liệu mẫu.
+Kết quả: 249 test PASS; 12 kiểm tra trình duyệt và 6 tệp tải xuống được đối chiếu dữ liệu. Chi tiết và giới hạn
+kiểm chứng nằm trong báo cáo review ở trên.
 
 Sau đợt sửa ngày 05/11/2026: Otsu chọn ngưỡng thuộc tập cực đại kể cả các cực đại rời nhau; ảnh đồng nhất có
 mask tự động rỗng; CSV được kiểm tra chính xác, không làm tròn thập phân thành số nguyên. K-means kiểm tra tham

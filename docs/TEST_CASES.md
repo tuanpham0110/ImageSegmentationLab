@@ -84,15 +84,18 @@ Dữ liệu ngẫu nhiên có nhiều màu, không bảo đảm mọi pixel khá
 
 ## C. Kiểm thử tự động (Pytest)
 
-Lệnh: `python -B -m pytest -q -p no:cacheprovider --capture=sys`. Kết quả sau sửa: **170 passed**.
-Bằng chứng lần tổng kiểm tra: `docs/results/pytest_results.xml`; môi trường Python 3.11.7, NumPy 2.4.6, Streamlit 1.66.1.
+Lệnh: `python -X utf8 -m pytest -q --junitxml=docs/results/review_pytest_20261106.xml`. Kết quả ngày 06/11/2026: **249 passed**.
+Bằng chứng lần tổng kiểm tra: `docs/results/review_pytest_20261106.xml`; môi trường Python 3.11.7, NumPy 2.4.6, Streamlit 1.66.1.
+Nhật ký ngày 05/11 trong phần D và các artifact cũ được giữ để đối chiếu lịch sử.
 
 | Tệp | Số test | Nội dung chính |
 |---|---|---|
-| `tests/test_kmeans.py` | 45 | Hai nhóm tách biệt; ví dụ 1 chiều tính tay (tâm 2 và 11, SSE = 4); K > số giá trị phân biệt / số mẫu; ảnh đồng nhất; cụm rỗng; max_iter; ngưỡng hội tụ; seed tái lập; SSE không tăng; kích thước đầu ra và tổng pixel; nhãn–tâm–SSE nhất quán; sắp xếp cụm; tính theo khối = tính toàn bộ = brute force; K-means có trọng số = dữ liệu khai triển; kết quả ảnh là nghiệm K-means trên mọi pixel; tham số sai |
-| `tests/test_otsu.py` | 38 | Ví dụ giáo trình 3.1.6 (t* = 1); ma trận tính tay (đồng hạng 20–199 ⇒ 109); ảnh hai mức; toàn đen; toàn trắng; lớp rỗng không NaN; 5 ảnh ngẫu nhiên khớp cài đặt duyệt trực tiếp; ảnh hai đỉnh; mask chỉ 0/255; histogram; đầu vào sai; gợi ý cực tính theo viền |
-| `tests/test_image_io.py` | 31 | PNG RGB/xám, JPEG, BMP; R=G=B ⇒ xám; alpha; EXIF; tệp hỏng, rỗng, sai định dạng; ảnh quá lớn; CSV đọc–ghi, 4 kiểu phân cách, 7 loại lỗi, không phải UTF-8; chuyển xám; giới hạn kích thước; ghi–đọc PNG RGBA |
-| `tests/test_integration.py` | 56 | Mọi ảnh mẫu và GT hợp lệ; IoU = 1 trên hình tròn và CSV; CSV giáo trình; ảnh một màu; RGB nhiều hình; giới hạn kích thước và GT co theo; tệp xuất đọc lại đúng; đổi tham số đổi kết quả; **không import OpenCV/sklearn/skimage/scipy**; 7 trang giao diện chạy không lỗi; nút chạy, đổi K, 7 nút tải xuống; Otsu; So sánh có/không GT; CSV lỗi hiện thông báo |
+| `tests/test_kmeans.py` | 58 | Nghiệm tính tay, có trọng số, SSE, cụm rỗng, seed/tham số; khoảng cách có độ lệch lớn; nhãn hoà khoảng cách khớp thứ tự tâm cuối; từ chối dữ liệu/phần trọng số không phải số thực |
+| `tests/test_otsu.py` | 44 | Ví dụ giáo trình, brute force, ngưỡng đồng hạng rời nhau, lớp rỗng, histogram mất cân bằng, validation và cực tính |
+| `tests/test_image_io.py` | 34 | PNG/JPEG/BMP, alpha/EXIF, PNG tRNS xám/RGB, CSV chính xác và giới hạn số ô trước chuyển đổi, đọc lại tệp xuất |
+| `tests/test_integration.py` | 78 | Pipeline và 11 mẫu; 7 trang; tải thật qua AppTest; vô hiệu kết quả/GT cũ; cache; lỗi bộ nhớ, ảnh mẫu thiếu, danh mục hỏng; tệp xuất đúng kết quả |
+| `tests/test_preprocessing.py` | 24 | Pixel sai, NaN/Inf, ảnh rỗng/sai chiều; kích thước/phương pháp sai; bảo toàn pixel nguyên và mask khi resize nearest |
+| `tests/test_metrics.py` | 11 | Ma trận nhầm lẫn tính tay, IoU/Dice/accuracy, toàn nền hợp lệ; từ chối mask rỗng/sai chiều/không hữu hạn |
 
 Ngoài Pytest, giao diện đã được chạy thật bằng `python -m streamlit run app.py` và điều khiển bằng Chrome (headless)
 để bấm nút và chụp màn hình — ảnh trong `docs/screenshots/`.
@@ -143,3 +146,11 @@ Báo cáo máy: [browser_checks_20261105_155516.json](results/browser_checks_202
   được đọc lại và so mảng dữ liệu. Người dùng cuối vẫn chọn nơi lưu/ghi đè trong trình duyệt.
 
 Ảnh chụp tương ứng: `docs/screenshots/*_browser_*_20261105_155516.png`.
+
+## E. Review và kiểm chứng — 06/11/2026
+
+- Trước sửa: 183 test PASS; thêm 66 ca hồi quy, tổng sau sửa: **249 PASS**.
+- Trình duyệt: **12 kiểm tra PASS**, thêm **6 tệp PNG/CSV tải thật được đối chiếu từng pixel**; không có ngoại lệ JavaScript quan sát được.
+- Chạy lại đủ 11 mẫu, 7 giá trị K, 5 seed, 4 kích thước. Ngưỡng/số cụm/số vòng/IoU/Dice của 11 mẫu giữ nguyên so với artifact cũ.
+- Chi tiết từng lỗi và giới hạn: [REVIEW_20261106.md](REVIEW_20261106.md).
+- Bằng chứng: [JUnit](results/review_pytest_20261106.xml), [trình duyệt](results/review_browser_20261106.json), [thực nghiệm](results/review_experiments_20261106/experiment_results.md).

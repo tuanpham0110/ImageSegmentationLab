@@ -280,3 +280,31 @@ def test_distance_assignment_accepts_uint8_without_integer_overflow():
 def test_distance_assignment_rejects_invalid_features_or_centers(data, centers):
     with pytest.raises(ValueError):
         assign_labels(data, centers)
+
+
+@pytest.mark.parametrize("offset", [0.0, 1e9, 1e10])
+def test_distance_assignment_preserves_small_distances_at_large_offsets(offset):
+    data = np.arange(21, dtype=float)[:, None] + offset
+    centers = np.array([[0.0], [10.0], [20.0]]) + offset
+    squared = ((data[:, None, :] - centers[None, :, :]) ** 2).sum(axis=2)
+    labels, distances = assign_labels(data, centers, chunk_size=7)
+    np.testing.assert_array_equal(labels, squared.argmin(axis=1))
+    np.testing.assert_array_equal(distances, squared.min(axis=1))
+
+
+def test_final_labels_use_sorted_center_order_to_break_distance_ties():
+    rng = np.random.default_rng(44)
+    data = rng.integers(0, 20, 20)
+    result = kmeans(data, 3, seed=44, init="random", max_iter=1)
+    labels, distances = assign_labels(data[:, None], result.centers)
+    np.testing.assert_array_equal(result.labels, labels)
+    np.testing.assert_array_equal(result.counts, np.bincount(labels, minlength=3))
+    assert result.sse == pytest.approx(distances.sum())
+
+
+@pytest.mark.parametrize("bad", [np.array([1 + 2j, 3 + 4j]), np.array(["1", "3"])])
+def test_kmeans_does_not_silently_coerce_non_real_data_or_weights(bad):
+    with pytest.raises(ValueError):
+        kmeans(bad, 2)
+    with pytest.raises(ValueError):
+        kmeans(np.array([1.0, 3.0]), 2, weights=bad)

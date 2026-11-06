@@ -96,15 +96,16 @@ def load_image_bytes(data: bytes, name: str = "image") -> LoadedImage:
         notes.append(f"Ảnh đã được xoay/lật theo thông tin hướng chụp EXIF (Orientation = {orientation}).")
     mode = img.mode
 
-    if mode in ("1", "L"):
+    # PNG tRNS cũng có thể nằm trong ảnh L/RGB, không chỉ ảnh bảng màu P.
+    if mode in ("LA", "RGBA", "PA") or "transparency" in img.info:
+        arr = np.asarray(_composite_alpha(img, notes))
+    elif mode in ("1", "L"):
         arr = np.asarray(img.convert("L"))
     elif mode in ("I;16", "I;16B", "I;16L", "I", "F"):
         raw = np.asarray(img, dtype=np.float64)
         lo, hi = float(raw.min()), float(raw.max())
         arr = np.zeros(raw.shape, np.uint8) if hi == lo else np.round((raw - lo) / (hi - lo) * 255).astype(np.uint8)
         notes.append(f"Ảnh {mode} (độ sâu > 8 bit) được chuẩn hoá tuyến tính về [0, 255].")
-    elif mode in ("LA", "RGBA", "PA") or (mode == "P" and "transparency" in img.info):
-        arr = np.asarray(_composite_alpha(img, notes))
     else:
         arr = np.asarray(img.convert("RGB"))
         if mode not in ("RGB",):
@@ -170,6 +171,8 @@ def parse_csv_matrix(text: str) -> np.ndarray:
             n_cols = len(cells)
         elif len(cells) != n_cols:
             raise InputError(f"Dòng {r_idx} có {len(cells)} cột, khác với {n_cols} cột của dòng 1.")
+        if (len(rows) + 1) * n_cols > MAX_CSV_CELLS:
+            raise InputError(f"CSV quá lớn (vượt {MAX_CSV_CELLS:,} phần tử).")
         row: list[int] = []
         for c_idx, cell in enumerate(cells, start=1):
             if cell == "":
@@ -187,8 +190,6 @@ def parse_csv_matrix(text: str) -> np.ndarray:
                 raise InputError(f"Giá trị không phải số nguyên tại dòng {r_idx}, cột {c_idx}: {shown}.")
             row.append(int(value))
         rows.append(row)
-        if len(rows) * n_cols > MAX_CSV_CELLS:
-            raise InputError(f"CSV quá lớn (vượt {MAX_CSV_CELLS:,} phần tử).")
     if not n_cols:
         raise InputError("CSV không có cột dữ liệu.")
     return np.array(rows, dtype=np.uint8)

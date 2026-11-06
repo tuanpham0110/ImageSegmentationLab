@@ -1,0 +1,63 @@
+{
+  "source_files_parsed": 26,
+  "static_checks": [
+    "Python AST parse",
+    "bare except detection",
+    "dynamic eval/exec detection"
+  ],
+  "issues": [],
+  "commands": {
+    "compile": {
+      "command": [
+        ".venv/Scripts/python.exe",
+        "-X",
+        "utf8",
+        "-m",
+        "compileall",
+        "-q",
+        "app.py",
+        "src",
+        "scripts",
+        "tests"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "dependency_consistency": {
+      "command": [
+        ".venv/Scripts/python.exe",
+        "-X",
+        "utf8",
+        "-m",
+        "pip",
+        "check"
+      ],
+      "exit_code": 0,
+      "stdout": "No broken requirements found.",
+      "stderr": ""
+    },
+    "diff_whitespace": {
+      "command": [
+        "git",
+        "-c",
+        "core.safecrlf=false",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  },
+  "versions": {
+    "numpy": "2.4.6",
+    "pillow": "13.0.0",
+    "streamlit": "1.66.1",
+    "matplotlib": "3.11.2",
+    "pandas": "3.1.0",
+    "pytest": "9.2.0"
+  },
+  "lint": "No configured linter and no Ruff/Flake8/Pyflakes installed; no lint result claimed.",
+  "coverage": "No coverage tool installed; no line/branch coverage percentage claimed."
+}

@@ -170,3 +170,22 @@ def test_csv_extreme_values_and_syntax_are_input_errors(text, fragment):
 
 def test_csv_exact_integer_decimal_notation_is_preserved():
     np.testing.assert_array_equal(parse_csv_matrix("1.0000000000000000000,+002,-0,255.0"), [[1, 2, 0, 255]])
+
+
+@pytest.mark.parametrize("mode,pixels,transparent", [
+    ("L", [[0, 80]], 0),
+    ("RGB", [[[255, 0, 0], [0, 60, 120]]], (255, 0, 0)),
+])
+def test_png_transparency_key_is_composited_on_white(mode, pixels, transparent):
+    image = Image.fromarray(np.array(pixels, dtype=np.uint8))
+    assert image.mode == mode
+    loaded = load_image_bytes(encode(image, "PNG", transparency=transparent), "key.png")
+    np.testing.assert_array_equal(loaded.array[0, 0], 255 if mode == "L" else [255, 255, 255])
+    np.testing.assert_array_equal(loaded.array[0, 1], pixels[0][1])
+    assert any("alpha" in note for note in loaded.notes)
+
+
+def test_csv_cell_limit_is_checked_before_converting_an_oversized_row(monkeypatch):
+    monkeypatch.setattr(image_io, "MAX_CSV_CELLS", 3)
+    with pytest.raises(InputError, match="quá lớn"):
+        parse_csv_matrix("1,2\ninvalid,4")

@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 # Số điểm xử lý mỗi lần khi tính ma trận khoảng cách, để bộ nhớ tạm luôn nhỏ:
-# với chunk 262 144 điểm và K = 8, ma trận khoảng cách chỉ ~16 MB (float64).
+# Mỗi khối chỉ giữ hiệu N×D và khoảng cách tới một tâm, không tạo N×K×D.
 DEFAULT_CHUNK_SIZE = 262_144
 
 MIN_K = 1
@@ -99,8 +99,9 @@ def assign_labels(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Gán mỗi điểm vào tâm gần nhất (khoảng cách Euclid).
 
-    Dùng khai triển ||x - c||^2 = ||x||^2 - 2 x.c + ||c||^2 và xử lý theo từng khối
-    `chunk_size` điểm để không tạo ma trận khoảng cách N x K quá lớn.
+    Tính trực tiếp ||x - c||^2 theo từng tâm và khối `chunk_size` điểm.
+    Phép trừ trước khi bình phương tránh triệt tiêu số khi các vector có độ lệch lớn;
+    không tạo ma trận khoảng cách N x K x D.
 
     Returns:
         labels: (N,) int32 — chỉ số tâm gần nhất (hoà thì lấy chỉ số nhỏ nhất).
@@ -124,15 +125,19 @@ def _assign_labels(data: np.ndarray, centers: np.ndarray, chunk_size: int) -> tu
     n = data.shape[0]
     labels = np.empty(n, dtype=np.int32)
     min_sq = np.empty(n, dtype=np.float64)
-    center_sq = np.einsum("kd,kd->k", centers, centers)
     for start in range(0, n, chunk_size):
         block = data[start : start + chunk_size]
-        block_sq = np.einsum("nd,nd->n", block, block)
-        d2 = block_sq[:, None] - 2.0 * (block @ centers.T) + center_sq[None, :]
-        np.maximum(d2, 0.0, out=d2)  # loại sai số làm tròn âm
-        idx = np.argmin(d2, axis=1)
-        labels[start : start + chunk_size] = idx
-        min_sq[start : start + chunk_size] = d2[np.arange(block.shape[0]), idx]
+        diff = block - centers[0]
+        best = np.einsum("nd,nd->n", diff, diff)
+        block_labels = np.zeros(block.shape[0], dtype=np.int32)
+        for j in range(1, centers.shape[0]):
+            center = centers[j]
+            diff = block - center
+            d2 = np.einsum("nd,nd->n", diff, diff)
+            np.copyto(block_labels, j, where=d2 < best)  # Hoà thì giữ chỉ số nhỏ hơn.
+            np.minimum(best, d2, out=best)
+        labels[start : start + chunk_size] = block_labels
+        min_sq[start : start + chunk_size] = best
     return labels, min_sq
 
 
@@ -216,7 +221,10 @@ def kmeans(
     _validate_params(k, max_iter, tol, init, chunk_size, seed)
     k = int(k)
     max_iter = int(max_iter)
-    x = np.asarray(data, dtype=np.float64)
+    x = np.asarray(data)
+    if x.dtype.kind not in "buif":
+        raise ValueError("Dữ liệu phải chứa số thực hữu hạn.")
+    x = x.astype(np.float64, copy=False)
     if x.ndim == 1:
         x = x[:, None]
     if x.ndim != 2 or x.shape[0] == 0 or x.shape[1] == 0:
@@ -226,7 +234,10 @@ def kmeans(
     if weights is None:
         w = np.ones(x.shape[0], dtype=np.float64)
     else:
-        w = np.asarray(weights, dtype=np.float64)
+        w = np.asarray(weights)
+        if w.dtype.kind not in "buif":
+            raise ValueError("Trọng số phải là mảng (N,) các số dương hữu hạn.")
+        w = w.astype(np.float64, copy=False)
         if w.shape != (x.shape[0],) or not np.all(np.isfinite(w)) or np.any(w <= 0):
             raise ValueError("Trọng số phải là mảng (N,) các số dương hữu hạn.")
 
@@ -294,16 +305,12 @@ def kmeans(
     if not converged:
         warnings.append(f"Chưa hội tụ sau {max_iter} vòng lặp (độ dịch tâm cuối = {shift_history[-1]:.4g}).")
 
-    # Gán nhãn lần cuối theo tâm cuối cùng để nhãn, số điểm và SSE nhất quán với tâm báo cáo.
-    labels, min_sq = _assign_labels(x, centers, chunk_size)
-
-    # Sắp xếp lại thứ tự cụm theo độ sáng tâm
+    # Sắp xếp TRƯỚC khi gán nhãn cuối để quy tắc hoà (chỉ số nhỏ nhất) dùng
+    # đúng thứ tự tâm được báo cáo, kể cả khi dừng sớm do max_iter/tol.
     order = _relabel_by_brightness(centers)
-    remap = np.empty(k_eff, dtype=np.int32)
-    remap[order] = np.arange(k_eff, dtype=np.int32)
-    labels = remap[labels]
     centers = centers[order]
     centers_history = [c[order] for c in centers_history]
+    labels, min_sq = _assign_labels(x, centers, chunk_size)
     counts_f = np.bincount(labels, weights=w, minlength=k_eff)
     counts = np.rint(counts_f).astype(np.int64) if np.all(w == np.rint(w)) else counts_f
     # Gán nhãn cuối có thể làm một cụm rỗng nếu dừng sớm do tol/max_iter.

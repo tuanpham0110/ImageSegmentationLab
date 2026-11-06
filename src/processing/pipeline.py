@@ -56,6 +56,9 @@ def prepare_input(loaded: LoadedImage, max_side: int, gray_method: str = "lumina
 
 def fit_ground_truth(gt: np.ndarray, prepared: PreparedInput) -> np.ndarray:
     """Đưa mask ground truth về đúng kích thước xử lý (nội suy láng giềng gần nhất)."""
+    gt = np.asarray(gt)
+    if gt.ndim != 2 or gt.size == 0:
+        raise ValueError("Ground truth phải là ma trận 2 chiều không rỗng.")
     w, h = prepared.resize.processed_size
     if gt.shape == (h, w):
         return gt

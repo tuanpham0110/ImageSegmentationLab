@@ -493,3 +493,167 @@ def test_decode_memory_failure_clears_input_and_existing_downloads(monkeypatch):
     assert any("thu nhỏ ảnh trước khi tải lên" in e.value for e in at.error)
     assert at.session_state["_input_ctx"] is None
     assert len(at.get("download_button")) == 0
+
+
+def test_ground_truth_upload_is_bound_to_the_current_input():
+    at = _app("compare")
+    at.session_state["sample_id"] = "circle_black_on_white"
+    at.run()
+    gt_bytes = (DATA / "ground_truth" / "circle_black_on_white_gt.png").read_bytes()
+    at.file_uploader[0].set_value(("reference.png", gt_bytes, "image/png")).run()
+    assert at.file_uploader[0].value.name == "reference.png"
+    uploader_id = at.file_uploader[0].proto.id
+    at.run()
+    assert at.file_uploader[0].value.name == "reference.png"
+    assert at.file_uploader[0].proto.id == uploader_id
+    # Hai ảnh cùng kích thước: kiểm tra shape đơn thuần không phát hiện GT cũ.
+    at.selectbox(key="sample_id").set_value("noisy_circle").run()
+    assert not at.exception
+    assert at.file_uploader[0].proto.id != uploader_id
+    assert at.file_uploader[0].value is None
+
+
+def test_ground_truth_memory_error_does_not_crash_or_report_scores(monkeypatch):
+    from src.ui import page_compare
+
+    at = _app("compare").run()
+    next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
+
+    def fail(*args, **kwargs):
+        raise MemoryError("Không đủ RAM để đọc mask")
+
+    monkeypatch.setattr(page_compare, "load_mask_bytes", fail)
+    at.file_uploader[0].set_value(("reference.png", to_png_bytes(np.ones((2, 2), np.uint8)), "image/png")).run()
+    assert not at.exception
+    assert any("Không dùng được ground-truth" in error.value for error in at.error)
+    assert not any("IoU" in list(df.value.columns) for df in at.dataframe)
+
+
+def test_compare_reuses_otsu_until_polarity_changes(monkeypatch):
+    from src.ui import page_compare
+
+    calls, original = [], page_compare.run_otsu
+
+    def tracked(*args, **kwargs):
+        calls.append(kwargs["polarity"])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(page_compare, "run_otsu", tracked)
+    at = _app("compare").run()
+    next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
+    assert not at.exception and calls == ["auto"]
+    at.multiselect[0].set_value([]).run()
+    assert not at.exception and calls == ["auto"]
+    at.radio(key="cmp_otsu_polarity").set_value("Lớp sáng (> t)").run()
+    assert not at.exception and calls == ["auto", "bright"]
+    at.run()
+    assert calls == ["auto", "bright"]
+
+
+def test_missing_sample_file_is_reported_and_upload_still_works(monkeypatch, tmp_path):
+    from src.ui import sidebar
+
+    monkeypatch.setattr(sidebar, "DATA_DIR", tmp_path)
+    at = _app("otsu").run()
+    assert not at.exception
+    assert any("ảnh mẫu" in e.value for e in at.error)
+    assert at.session_state["_input_ctx"] is None
+    at.session_state["_test_upload"] = ("valid.png", to_png_bytes(np.zeros((3, 4), np.uint8)))
+    at.radio(key="input_source").set_value("Tải tệp lên").run()
+    assert not at.exception and at.session_state["_input_ctx"] is not None
+
+
+@pytest.mark.parametrize("gt", [np.array(1), np.empty((0, 2)), np.zeros((2, 2, 3))])
+def test_ground_truth_requires_a_nonempty_matrix(gt):
+    _, prepared, _ = load_sample("circle_black_on_white")
+    with pytest.raises(ValueError, match="2 chiều"):
+        fit_ground_truth(gt, prepared)
+
+
+def test_plot_is_closed_even_when_streamlit_rendering_fails(monkeypatch):
+    import matplotlib.pyplot as plt
+    from src.ui import components
+
+    fig = plt.figure()
+
+    def fail(*args, **kwargs):
+        raise OSError("Không render được biểu đồ")
+
+    monkeypatch.setattr(components.st, "pyplot", fail)
+    with pytest.raises(OSError):
+        components.show_figure(fig)
+    assert not plt.fignum_exists(fig.number)
+
+
+@pytest.mark.parametrize("page", ["kmeans", "compare"])
+def test_postprocessing_memory_error_is_visible_without_downloads(monkeypatch, page):
+    import importlib
+
+    at = _app(page).run()
+    next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
+
+    def fail(*args, **kwargs):
+        raise MemoryError("Không đủ RAM để tạo ảnh tách nền")
+
+    monkeypatch.setattr(importlib.import_module(f"src.ui.page_{page}"), "kmeans_outputs", fail)
+    at.multiselect[0].set_value([]).run()
+    assert not at.exception
+    assert any("tạo ảnh kết quả" in error.value for error in at.error)
+    assert len(at.get("download_button")) == 0
+    result_key = "km_result" if page == "kmeans" else "cmp_result"
+    assert "_export_cache" not in at.session_state[result_key]
+
+
+@pytest.mark.parametrize("page", ["otsu", "library", "theory"])
+@pytest.mark.parametrize("catalog", ["{invalid", "null", '[{"id":"broken"}]'])
+def test_corrupt_sample_catalog_is_reported_and_does_not_block_upload(monkeypatch, tmp_path, page, catalog):
+    from src.ui import state
+
+    broken = tmp_path / "samples.json"
+    broken.write_text(catalog, encoding="utf-8")
+    monkeypatch.setattr(state, "MANIFEST_PATH", broken)
+    state.load_manifest.clear()
+    try:
+        at = _app(page).run()
+        assert not at.exception
+        assert any("danh mục ảnh mẫu" in error.value.lower() for error in at.error)
+        at.radio(key="input_source").set_value("Tải tệp lên").run()
+        at.file_uploader(key="uploader").set_value(("valid.png", to_png_bytes(np.zeros((3, 4), np.uint8)), "image/png")).run()
+        assert not at.exception
+        assert at.session_state["_input_ctx"].loaded.source_name == "valid.png"
+    finally:
+        state.load_manifest.clear()
+
+
+@pytest.mark.parametrize("page", ["library", "theory"])
+def test_missing_demo_image_does_not_crash_other_content(monkeypatch, tmp_path, page):
+    import importlib
+
+    monkeypatch.setattr(importlib.import_module(f"src.ui.page_{page}"), "DATA_DIR", tmp_path)
+    at = _app(page).run()
+    assert not at.exception
+    assert any("Không đọc được ảnh mẫu" in error.value for error in at.error)
+
+
+def test_theory_variance_table_has_numeric_arrow_compatible_values(monkeypatch, caplog):
+    import pandas as pd
+    import pyarrow as pa
+    from src.ui import page_theory
+
+    tables, original = [], page_theory.st.dataframe
+
+    def capture(data, *args, **kwargs):
+        if isinstance(data, pd.DataFrame) and "f(g) = σ²_B" in data:
+            tables.append(data.copy())
+        return original(data, *args, **kwargs)
+
+    monkeypatch.setattr(page_theory.st, "dataframe", capture)
+    at = _app("theory").run()
+    assert not at.exception and len(tables) == 1
+    table = tables[0]
+    pa.Table.from_pandas(table, preserve_index=False)
+    assert pd.api.types.is_numeric_dtype(table["f(g) = σ²_B"])
+    invalid = table.loc[table["g"] == 5].iloc[0]
+    assert not invalid["Ngưỡng hợp lệ"]
+    assert pd.isna(invalid["f(g) = σ²_B"])
+    assert "Serialization of dataframe to Arrow table was unsuccessful" not in caplog.text

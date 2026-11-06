@@ -1,0 +1,110 @@
+{
+  "checks": [
+    {
+      "name": "Overview and navigation",
+      "passed": true
+    },
+    {
+      "name": "PNG tRNS upload, K-means and actual PNG/CSV downloads",
+      "passed": true
+    },
+    {
+      "name": "Otsu on same upload and actual PNG/CSV downloads",
+      "passed": true
+    },
+    {
+      "name": "Ground truth upload and quantitative scores",
+      "passed": true
+    },
+    {
+      "name": "Changing input clears uploaded ground truth and old scores",
+      "passed": true
+    },
+    {
+      "name": "Render library",
+      "passed": true
+    },
+    {
+      "name": "Render theory",
+      "passed": true
+    },
+    {
+      "name": "Render guide",
+      "passed": true
+    },
+    {
+      "name": "Compare viewport 1440",
+      "passed": true,
+      "viewport": 1440,
+      "scroll": 1440
+    },
+    {
+      "name": "Compare viewport 768",
+      "passed": true,
+      "viewport": 768,
+      "scroll": 768
+    },
+    {
+      "name": "Compare viewport 390",
+      "passed": true,
+      "viewport": 390,
+      "scroll": 390
+    },
+    {
+      "name": "No uncaught JavaScript errors",
+      "passed": true
+    }
+  ],
+  "javascript_errors": [],
+  "download_content_checks": [
+    {
+      "file": "kmeans_segmented.png",
+      "passed": true,
+      "size_WxH": [
+        48,
+        32
+      ]
+    },
+    {
+      "file": "otsu_gray.png",
+      "passed": true,
+      "size_WxH": [
+        48,
+        32
+      ]
+    },
+    {
+      "file": "kmeans_mask.png",
+      "passed": true,
+      "size_WxH": [
+        48,
+        32
+      ]
+    },
+    {
+      "file": "otsu_mask.png",
+      "passed": true,
+      "size_WxH": [
+        48,
+        32
+      ]
+    },
+    {
+      "file": "kmeans_labels.csv",
+      "passed": true,
+      "size_WxH": [
+        48,
+        32
+      ]
+    },
+    {
+      "file": "otsu_binary_matrix.csv",
+      "passed": true,
+      "size_WxH": [
+        48,
+        32
+      ]
+    }
+  ],
+  "browser": "Playwright Chromium, headless, normal sandbox, local server 127.0.0.1:8503"
+}

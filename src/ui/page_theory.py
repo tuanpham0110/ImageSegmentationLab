@@ -10,7 +10,7 @@ from src.algorithms.kmeans import segment_image_kmeans
 from src.algorithms.otsu import otsu_threshold
 from src.ui.components import page_header, show_image
 from src.ui.state import DATA_DIR, sample_by_id
-from src.utils.image_io import load_path
+from src.utils.image_io import InputError, load_path
 
 TEXTBOOK = np.array([[0, 1, 2, 3, 4, 5], [0, 0, 1, 2, 3, 4], [0, 0, 0, 1, 2, 3],
                      [0, 0, 0, 0, 1, 2], [0, 0, 0, 0, 0, 1]], dtype=np.uint8)
@@ -44,7 +44,7 @@ và số cụm K. K-means tìm các tâm $Z_1,\\dots,Z_K$ làm cực tiểu hàm
      b) Cập nhật:  Z_k = trung bình các x có c(x) = k
         – nếu cụm k rỗng: đặt Z_k = điểm xa tâm của nó nhất
      c) Nếu max_k ||Z_k(mới) − Z_k(cũ)|| ≤ tol: dừng (hội tụ)
-3. Gán nhãn lần cuối theo Z, tính SSE, số pixel mỗi cụm
+3. Sắp tâm theo độ sáng, gán nhãn lần cuối theo Z (hoà chọn chỉ số nhỏ nhất), tính SSE và số pixel mỗi cụm
 Ra: nhãn (H×W), tâm cụm, SSE, số vòng lặp""", language="text")
     st.markdown("""
 - **Hội tụ**: mỗi bước (a) và (b) đều không làm tăng J, và số cách gán nhãn là hữu hạn ⇒ thuật toán dừng sau hữu hạn bước,
@@ -55,11 +55,19 @@ Ra: nhãn (H×W), tâm cụm, SSE, số vòng lặp""", language="text")
 - **Cụm được sắp xếp theo độ sáng tâm** (cụm 0 tối nhất) để kết quả ổn định giữa các lần chạy.
 """)
     st.markdown("##### Minh hoạ từng bước trên ảnh 10×10")
-    entry = sample_by_id("tiny_10x10")
+    try:
+        entry = sample_by_id("tiny_10x10")
+    except InputError as exc:
+        st.error(str(exc))
+        return
     if entry is None:
         st.info("Thiếu ảnh mẫu tiny_10x10 — chạy scripts/generate_samples.py.")
         return
-    img = load_path(DATA_DIR / entry["file"]).array
+    try:
+        img = load_path(DATA_DIR / entry["file"]).array
+    except (InputError, OSError, MemoryError) as exc:
+        st.error(f"Không đọc được ảnh mẫu minh hoạ: {exc}")
+        return
     c1, c2 = st.columns([1, 2])
     with c1:
         show_image(img, "Ảnh 10×10")
@@ -131,9 +139,11 @@ Ra: t*, σB², ảnh nhị phân""", language="text")
     for g in range(6):
         rows.append({"g": g, "h(g)": int(h[g]), "t(g)": int(t_cum[g]), "Σ i·h(i)": int(gh[g]),
                      "m(g)": round(gh[g] / t_cum[g], 4),
-                     "f(g) = σ²_B": round(float(res.between_class_variance[g]), 4) if res.valid_thresholds[g] else "∞ / không hợp lệ"})
+                     "f(g) = σ²_B": round(float(res.between_class_variance[g]), 4) if res.valid_thresholds[g] else None,
+                     "Ngưỡng hợp lệ": bool(res.valid_thresholds[g])})
     with c2:
         st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+        st.caption("Không xét ngưỡng làm một lớp rỗng; ô phương sai để trống khi ngưỡng không hợp lệ.")
         st.write(f"Ngưỡng tìm được **t* = {res.threshold}**, trùng với θ = 1 trong giáo trình. "
                  "Giáo trình làm tròn trung gian nên ghi f(1) ≈ 1.66 (giá trị chính xác 1.6806).")
 
@@ -143,7 +153,7 @@ def _complexity() -> None:
 | | K-means | Otsu |
 |---|---|---|
 | Độ phức tạp thời gian | O(N log N) gom màu + O(U · K · D · số vòng lặp), U ≤ N giá trị phân biệt | O(N) dựng histogram + O(L) với L = 256 |
-| Bộ nhớ thêm | O(N + U·D + B·K), gồm chỉ số phục hồi, tâm/dữ liệu và khối khoảng cách | O(L) thống kê; O(N) nếu tính cả ảnh nhị phân |
+| Bộ nhớ thêm | O(N + U·D + B·D), gồm chỉ số phục hồi, tâm/dữ liệu và hiệu với từng tâm theo khối | O(L) thống kê; O(N) nếu tính cả ảnh nhị phân |
 | Kết quả | Cực tiểu địa phương, phụ thuộc khởi tạo | Tối ưu toàn cục theo σ²_B (duyệt mọi t) |
 | Thông tin dùng | Giá trị pixel (màu/xám) | Chỉ histogram mức xám |
 | Không dùng | Vị trí không gian của pixel | Vị trí không gian của pixel |

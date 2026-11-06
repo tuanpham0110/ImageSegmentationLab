@@ -6,6 +6,7 @@ import streamlit as st
 
 from src.ui import components as ui
 from src.ui.state import DATA_DIR, load_manifest, thumbnail
+from src.utils.image_io import InputError
 
 
 def _use_sample(sid: str) -> None:
@@ -20,7 +21,11 @@ def render() -> None:
     notice = st.session_state.pop("_library_notice", None)
     if notice:
         st.success(f"Đã chọn mẫu **{notice}**. Mở trang K-means, Otsu hoặc So sánh để xử lý.")
-    samples = load_manifest()
+    try:
+        samples = load_manifest()
+    except InputError as exc:
+        st.error(str(exc))
+        return
     if not samples:
         st.error("Không tìm thấy data/samples.json. Chạy: `python scripts/generate_samples.py`.")
         return
@@ -29,7 +34,10 @@ def render() -> None:
         cols = st.columns(3, gap="medium")
         for col, s in zip(cols, samples[row : row + 3]):
             with col, st.container(border=True):
-                st.image(thumbnail(str(DATA_DIR / s["file"])), width="stretch")
+                try:
+                    st.image(thumbnail(str(DATA_DIR / s["file"])), width="stretch")
+                except (InputError, OSError, MemoryError) as exc:
+                    st.error(f"Không đọc được ảnh mẫu: {exc}")
                 st.markdown(f"**{s['title']}**")
                 chips = [s["kind"].upper(), "có ground truth" if s["ground_truth"] else "không có ground truth",
                          f"gợi ý K = {s['suggested']['k']}", f"đặc trưng {s['suggested']['feature']}"]

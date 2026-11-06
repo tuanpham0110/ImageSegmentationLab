@@ -61,8 +61,8 @@ thước.
 
 **12. Độ phức tạp thời gian?**
 Otsu: O(N) dựng histogram + O(L) với L = 256. K-means: O(U·K·D·T) với U ≤ N số giá trị phân biệt, D số kênh, T số vòng,
-cộng O(N log N) gom pixel. Bộ nhớ K-means: O(N) cho nhãn và O(B·K) cho một khối khoảng cách (B = 262 144) nên không
-tạo ma trận N×K khổng lồ.
+cộng O(N log N) gom pixel. Bộ nhớ K-means: O(N + U·D) cho dữ liệu/nhãn và O(B·D) cho hiệu với từng tâm
+(B = 262 144); không tạo ma trận N×K×D.
 
 **13. Trường hợp nào nên chọn K-means?**
 Ảnh màu; nhiều vùng/nhiều đối tượng khác màu; đối tượng và nền khác màu nhưng gần độ sáng (ví dụ hình vàng trên nền

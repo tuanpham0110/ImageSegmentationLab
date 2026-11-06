@@ -1,0 +1,13 @@
+{
+  "before": {
+    "assign_512_rgb_k4_ms": 23.414399940520525,
+    "segment_512_rgb_k4_20iter_ms": 764.165599946864
+  },
+  "seed": 19,
+  "repeats": 3,
+  "numpy": "2.4.6",
+  "after": {
+    "assign_512_rgb_k4_ms": 20.763800013810396,
+    "segment_512_rgb_k4_20iter_ms": 741.7449000058696
+  }
+}

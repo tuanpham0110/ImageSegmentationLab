@@ -20,7 +20,12 @@ SOURCES = ["Ảnh mẫu", "Tải tệp lên"]
 
 def render_input_sidebar() -> None:
     """Vẽ phần chọn đầu vào ở thanh bên và lưu InputContext vào session_state."""
-    samples = load_manifest()
+    manifest_error = None
+    try:
+        samples = load_manifest()
+    except InputError as exc:
+        samples = []
+        manifest_error = str(exc)
     sample_ids = [s["id"] for s in samples]
     st.session_state.setdefault("input_source", SOURCES[0])
     st.session_state.setdefault("max_side", DEFAULT_MAX_SIDE)
@@ -33,6 +38,8 @@ def render_input_sidebar() -> None:
     with st.sidebar:
         st.markdown("### 🧩 Image Segmentation Lab")
         st.caption("K-means & Otsu · Đề tài 3 · Xử lý ảnh PTIT")
+        if manifest_error:
+            st.error(manifest_error)
         st.markdown("**Ảnh đầu vào**")
         source = st.radio("Nguồn dữ liệu", SOURCES, key="input_source", horizontal=True, label_visibility="collapsed")
 
@@ -45,9 +52,15 @@ def render_input_sidebar() -> None:
             sid = st.selectbox("Chọn ảnh mẫu", sample_ids, key="sample_id", format_func=lambda i: titles[i])
             sample = next(s for s in samples if s["id"] == sid)
             path = DATA_DIR / sample["file"]
-            data, name = path.read_bytes(), path.name
-            if sample["ground_truth"]:
-                gt_bytes = (DATA_DIR / sample["ground_truth"]).read_bytes()
+            try:
+                data, name = path.read_bytes(), path.name
+                if sample["ground_truth"]:
+                    gt_bytes = (DATA_DIR / sample["ground_truth"]).read_bytes()
+            except OSError as exc:
+                message = f"Không đọc được dữ liệu ảnh mẫu: {exc}. Hãy kiểm tra thư mục data/ hoặc tải tệp lên."
+                set_context(None, message)
+                st.error(message)
+                return
         else:
             uploaded = st.file_uploader("Ảnh PNG/JPG/BMP hoặc ma trận CSV", type=["png", "jpg", "jpeg", "bmp", "csv"],
                                         key="uploader")

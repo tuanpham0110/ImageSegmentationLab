@@ -88,8 +88,10 @@ def show_images(items: list[tuple[np.ndarray, str]]) -> None:
 
 
 def show_figure(fig) -> None:
-    st.pyplot(fig, width="stretch")
-    viz.close(fig)
+    try:
+        st.pyplot(fig, width="stretch")
+    finally:
+        viz.close(fig)
 
 
 def compact_number(x: float) -> str:

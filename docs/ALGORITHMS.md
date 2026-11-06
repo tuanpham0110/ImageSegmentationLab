@@ -52,8 +52,8 @@ Vào: X (N×D), K, max_iter, tol, seed, init
      b) Z_k  = trung bình các xᵢ có c(i) = k     (cập nhật)
         nếu cụm k rỗng: Z_k = điểm xa tâm của nó nhất (không trùng tâm khác)
      c) nếu max_k ‖Z_k(mới) − Z_k(cũ)‖ ≤ tol và không có cụm rỗng: dừng (hội tụ)
-3. Gán nhãn lần cuối theo Z cuối; tính SSE và số pixel mỗi cụm
-4. Sắp xếp cụm theo độ sáng tâm (cụm 0 tối nhất)
+3. Sắp xếp cụm theo độ sáng tâm (cụm 0 tối nhất)
+4. Gán nhãn lần cuối theo Z đã sắp xếp; hoà thì chọn chỉ số nhỏ nhất; tính SSE và số pixel mỗi cụm
 Ra: nhãn (H×W), tâm, SSE, số vòng, cờ hội tụ, lịch sử SSE/độ dịch tâm
 ```
 
@@ -65,13 +65,13 @@ Kiểm thử `test_sse_is_non_increasing` xác nhận SSE không tăng.
 
 | Vấn đề | Cách xử lý |
 |---|---|
-| Khoảng cách | ‖x − c‖² = ‖x‖² − 2x·c + ‖c‖², tính bằng phép nhân ma trận NumPy, **theo khối 262 144 điểm**. Riêng một ma trận khoảng cách khoảng 16 MB với K = 8; tổng RAM còn gồm ảnh, nhãn, dữ liệu phân biệt và các mảng tạm khác |
+| Khoảng cách | Tính trực tiếp Σ_d(x_d − c_d)² theo từng tâm và **khối 262 144 điểm**, tránh triệt tiêu số do khai triển bình phương khi dữ liệu có độ lệch lớn. Bộ nhớ tạm O(B·D), không tạo ma trận N×K×D; tổng RAM còn gồm ảnh, nhãn, dữ liệu phân biệt và các mảng tạm khác |
 | Khởi tạo K-means++ **[bổ sung]** | Arthur & Vassilvitskii (2007), *k-means++: The Advantages of Careful Seeding*, SODA. Tâm đầu ngẫu nhiên; tâm tiếp theo chọn với xác suất ∝ w(x)·D(x)², D(x) = khoảng cách tới tâm gần nhất đã chọn |
 | Khởi tạo ngẫu nhiên | Chọn K giá trị **phân biệt** (tránh hai tâm trùng nhau ngay từ đầu) |
 | K > số giá trị phân biệt | Giảm K về số giá trị phân biệt, ghi cảnh báo (ví dụ ảnh một màu ⇒ K = 1) |
 | Cụm rỗng | Đặt lại tâm tại điểm xa tâm hiện tại của nó nhất, không trùng tâm khác; không được tính là hội tụ ở vòng đó. Nếu dừng sớm rồi gán nhãn cuối sinh cụm rỗng: báo chưa hội tụ và cảnh báo, không vượt max_iter |
 | Tái lập | `numpy.random.default_rng(seed)` |
-| Nhất quán | Sau vòng lặp gán nhãn lại theo tâm cuối ⇒ nhãn, số pixel, SSE khớp với tâm báo cáo (`test_labels_consistent_with_centers_and_sse`) |
+| Nhất quán | Sắp tâm trước rồi gán nhãn cuối ⇒ quy tắc hoà theo chỉ số nhỏ nhất, nhãn, số pixel và SSE khớp tâm báo cáo, kể cả khi dừng sớm (`test_final_labels_use_sorted_center_order_to_break_distance_ties`) |
 | Thứ tự cụm | Sắp theo độ chói tâm để chuẩn hoá tên nhãn; không bảo đảm cùng nghiệm giữa các seed |
 | **Tăng tốc có trọng số** | Ảnh `uint8` có nhiều pixel trùng giá trị. `segment_image_kmeans` gom pixel thành U giá trị phân biệt với trọng số w = số pixel, chạy K-means **có trọng số** J = Σ wᵢ‖xᵢ − Z‖², Z_k = Σwᵢxᵢ / Σwᵢ, rồi trả nhãn về từng pixel. Đây là **cùng một bài toán** với K-means trên mọi pixel (pixel trùng giá trị luôn cùng nhãn). Ảnh xám còn ≤ 256 điểm. Kiểm thử `test_weighted_equals_expanded_data` và `test_image_result_is_exact_kmeans_on_all_pixels` chứng minh |
 
@@ -84,7 +84,7 @@ phủ viền). Heuristic này sai khi đối tượng chạm viền hoặc nền
 ### 3.5 Độ phức tạp
 
 Thời gian O(U·K·D·T) với U ≤ N là số giá trị phân biệt, T là số vòng lặp; cộng O(N log N) cho bước gom pixel.
-Bộ nhớ O(N + U·D + B·K), gồm chỉ số phục hồi/nhãn, dữ liệu phân biệt và khối khoảng cách. Bước gom màu giữ
+Bộ nhớ O(N + U·D + B·D), gồm chỉ số phục hồi/nhãn, dữ liệu phân biệt và hiệu với từng tâm theo khối. Bước gom màu giữ
 pixel uint8 và đóng gói tối đa 24 bit RGB vào int32, tránh ma trận float64/int64 N×D không cần thiết.
 
 ---
@@ -193,3 +193,6 @@ foreground, ảnh tách nền, biểu đồ và mã hoá PNG/CSV/JSON. Bảng m�
 Ảnh gốc chỉ giữ cho đầu vào hiện tại của phiên; cache ảnh đã xử lý giới hạn 4 mục và TTL 300 giây. Một bộ tệp xuất
 được giữ trong payload lần chạy và tạo lại khi foreground/kết quả đổi. Đổi đầu vào giải phóng payload cũ, giữ dấu
 cảnh báo stale; tên tệp cũng thuộc chữ ký để metadata xuất không nhầm ảnh.
+
+Trên trang So sánh, Otsu được giữ trong payload hiện tại và chỉ tính lại khi chạy mới hoặc đổi cực tính.
+Ground truth tải lên gắn với chữ ký đầu vào; khi đổi ảnh/tiền xử lý phải tải lại để tránh đánh giá bằng mask cũ.

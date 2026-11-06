@@ -41,7 +41,26 @@ class InputContext:
 def load_manifest() -> list[dict]:
     if not MANIFEST_PATH.exists():
         return []
-    return json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    try:
+        samples = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise InputError(f"Không đọc được danh mục ảnh mẫu data/samples.json: {exc}.") from exc
+    text_fields = ("id", "title", "kind", "file", "purpose", "expected")
+    if not isinstance(samples, list) or any(
+        not isinstance(s, dict)
+        or any(not isinstance(s.get(key), str) or not s[key] for key in text_fields)
+        or "ground_truth" not in s
+        or (s["ground_truth"] is not None and not isinstance(s["ground_truth"], str))
+        or not isinstance(s.get("suggested"), dict)
+        or type(s["suggested"].get("k")) is not int
+        or not 1 <= s["suggested"]["k"] <= 8
+        or s["suggested"].get("feature") not in ("rgb", "gray")
+        for s in samples
+    ):
+        raise InputError("Danh mục ảnh mẫu data/samples.json sai cấu trúc hoặc thiếu trường bắt buộc.")
+    if len({s["id"] for s in samples}) != len(samples):
+        raise InputError("Danh mục ảnh mẫu data/samples.json có id trùng lặp.")
+    return samples
 
 
 def sample_by_id(sid: str) -> dict | None:

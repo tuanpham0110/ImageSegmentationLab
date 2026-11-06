@@ -58,7 +58,8 @@ def render() -> None:
         st.session_state.setdefault("cmp_otsu_polarity", "Gợi ý theo viền ảnh")
         st.radio("Otsu: đối tượng là", list(POLARITY_OPTIONS), key="cmp_otsu_polarity", help=POLARITY_HELP)
         gt_file = st.file_uploader("Ground-truth mask (tuỳ chọn, PNG trắng = đối tượng)", type=["png", "bmp"],
-                                   key="cmp_gt_upload")
+                                   key=f"cmp_gt_upload_{ctx.signature}",
+                                   help="Mask gắn với ảnh đầu vào hiện tại. Khi đổi ảnh hoặc tiền xử lý, hãy tải lại mask.")
     if params is not None:
         try:
             with st.spinner("Đang chạy K-means…"):
@@ -85,9 +86,14 @@ def render() -> None:
 
 def _render(ctx, run, gt_file) -> None:
     prep, km = ctx.prepared, run["km"]
-    # Chạy trên cùng PreparedInput; cập nhật theo lựa chọn cực tính hiện tại.
+    # Payload đã gắn với chữ ký ảnh. Chỉ tính lại Otsu khi đổi cực tính hoặc chạy mới.
+    polarity = POLARITY_OPTIONS[st.session_state.get("cmp_otsu_polarity", "Gợi ý theo viền ảnh")]
     try:
-        otsu = run_otsu(prep, polarity=POLARITY_OPTIONS[st.session_state.get("cmp_otsu_polarity", "Gợi ý theo viền ảnh")])
+        otsu = run.get("otsu")
+        if otsu is None or otsu.polarity != polarity:
+            run.pop("otsu", None)
+            otsu = run_otsu(prep, polarity=polarity)
+            run["otsu"] = otsu
     except (ValueError, MemoryError) as exc:
         st.error("Không phân ngưỡng được ảnh. Hãy giảm giới hạn cạnh dài hoặc kiểm tra dữ liệu. " + str(exc))
         return
@@ -100,7 +106,11 @@ def _render(ctx, run, gt_file) -> None:
     fg = st.multiselect("Cụm K-means làm đối tượng", list(range(km.core.k_effective)), default=default_foreground(km),
                         format_func=lambda c: f"Cụm {c}", key=f"cmp_fg_{run['run_id']}",
                         help="Mặc định là gợi ý theo viền ảnh; hãy chỉnh cho đúng đối tượng.")
-    out = kmeans_outputs(prep, km, fg)
+    try:
+        out = kmeans_outputs(prep, km, fg)
+    except (ValueError, MemoryError) as exc:
+        st.error("Không tạo ảnh kết quả được. Hãy kiểm tra lựa chọn cụm hoặc giảm giới hạn cạnh dài. " + str(exc))
+        return
 
     st.markdown("##### Kết quả trực tiếp của từng thuật toán")
     ui.show_images([(prep.image, "Ảnh gốc"), (out.segmented, f"K-means: {km.core.k_effective} cụm"),
@@ -123,7 +133,7 @@ def _render(ctx, run, gt_file) -> None:
         try:
             gt = fit_ground_truth(load_mask_bytes(gt_file.getvalue(), gt_file.name), prep)
             gt_source = f"ground truth tải lên ({gt_file.name})"
-        except (InputError, ValueError) as exc:
+        except (InputError, ValueError, MemoryError) as exc:
             st.error(f"Không dùng được ground-truth mask: {exc}")
             gt = None
 

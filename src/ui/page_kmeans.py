@@ -131,7 +131,12 @@ def _render_result(ctx, run: dict) -> None:
         options = list(range(core.k_effective))
         fg = st.multiselect("Cụm làm đối tượng (foreground)", options, default=default_foreground(result),
                             format_func=lambda c: f"Cụm {c}", key=f"km_fg_{run['run_id']}")
-    out = kmeans_outputs(prep, result, fg)
+    try:
+        out = kmeans_outputs(prep, result, fg)
+    except (ValueError, MemoryError) as exc:
+        run.pop("_export_cache", None)
+        st.error("Không tạo ảnh kết quả được. Hãy kiểm tra lựa chọn cụm hoặc giảm giới hạn cạnh dài. " + str(exc))
+        return
 
     with tab_seg:
         ui.show_images([(prep.image, "Ảnh gốc"), (out.segmented, "Ảnh K-means (màu tâm cụm)"),

@@ -41,7 +41,7 @@ pháp này.
 
 ### 1.4 Kết quả cần đạt
 
-Ứng dụng Streamlit 7 trang chạy trên Windows; 11 ảnh mẫu offline có ground truth khi phù hợp; 170 kiểm thử tự động;
+Ứng dụng Streamlit 7 trang chạy trên Windows; 11 ảnh mẫu offline có ground truth khi phù hợp; 249 kiểm thử tự động;
 báo cáo, slide, kịch bản demo và câu hỏi phản biện.
 
 ---
@@ -195,14 +195,14 @@ mã nguồn để bảo đảm (`test_no_opencv_or_library_algorithms_imported`)
 
 ### 4.2 Cấu trúc mã nguồn
 
-Xem README mục 4. Tổng cộng 5 module thuật toán/xử lý, 3 module tiện ích, 10 module giao diện, 2 script, 4 tệp kiểm thử.
+Xem README mục 4. Tổng cộng 5 module thuật toán/xử lý, 3 module tiện ích, 10 module giao diện, 2 script, 6 tệp kiểm thử.
 
 ### 4.3 Cài đặt K-means (`src/algorithms/kmeans.py`)
 
-- `assign_labels`: khoảng cách bình phương theo khai triển ‖x‖² − 2x·c + ‖c‖², tính theo khối 262 144 điểm.
-  Riêng ma trận khoảng cách khoảng 16 MB với K=8; đây không phải giới hạn tổng RAM của ứng dụng.
+- `assign_labels`: tính trực tiếp Σ_d(x_d − c_d)² theo từng tâm và khối 262 144 điểm để tránh triệt tiêu số.
+  Bộ nhớ tạm O(B·D); đây không phải giới hạn tổng RAM của ứng dụng.
 - `kmeans`: Lloyd có trọng số; cập nhật tâm bằng `np.bincount`; xử lý cụm rỗng; giảm K khi thiếu giá trị phân biệt;
-  gán nhãn lần cuối; sắp cụm theo độ sáng; lưu lịch sử SSE, độ dịch tâm và tâm. Kiểm tra K, seed, tol, max_iter,
+  sắp cụm theo độ sáng trước khi gán nhãn cuối (hoà chọn chỉ số nhỏ nhất); lưu lịch sử SSE, độ dịch tâm và tâm. Kiểm tra K, seed, tol, max_iter,
   chunk_size trước xử lý. Nếu gán nhãn cuối còn cụm rỗng thì báo chưa hội tụ, không vượt giới hạn vòng lặp.
 - `segment_image_kmeans`: giữ pixel uint8, đóng gói RGB 24 bit trong int32, gom pixel trùng với số đếm làm trọng số.
   Chạy Lloyd trên U giá trị phân biệt rồi phục hồi nhãn từng pixel, tạo ảnh mỗi pixel mang màu tâm cụm.
@@ -334,7 +334,7 @@ Không có ground truth thì chỉ nhận xét trực quan, không ghi IoU.
   ngưỡng đồng hạng, ảnh một mức xám) bằng NumPy, không dùng OpenCV.
 - Chứng minh và kiểm chứng số liệu: hàm f(g) ở giáo trình mục 3.1.6 là tiêu chí Otsu.
 - Ứng dụng 7 trang: tải/lưu ảnh thật và CSV, xem kết quả trực quan, tách nền, so sánh, tải 7 loại tệp mỗi thuật toán.
-- 11 test case offline, 170 kiểm thử tự động đều đạt, số liệu thực nghiệm sinh tự động.
+- 11 test case offline, 249 kiểm thử tự động đều đạt, số liệu thực nghiệm sinh tự động. Bằng chứng review mới tại [REVIEW_20261106.md](REVIEW_20261106.md).
 
 ### 6.2 Hạn chế
 
