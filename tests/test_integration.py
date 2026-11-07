@@ -956,3 +956,16 @@ def test_memory_error_on_ground_truth_upload_shows_a_reason(monkeypatch):
     at = _compare_with_uploaded_gt()
     assert not at.exception
     assert any(e.value.endswith("không đủ bộ nhớ để xử lý mask") for e in at.error)
+
+
+def test_low_bit_gray_transparent_ground_truth_upload_is_rejected():
+    from tests.test_image_io import _png_low_bit_gray
+
+    at = _app("compare")
+    at.session_state["sample_id"] = "circle_black_on_white"
+    at.run()
+    next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
+    at.file_uploader[0].set_value(("gt4.png", _png_low_bit_gray(4, [0, 1, 15, 15], key=1), "image/png")).run()
+    assert not at.exception
+    assert any("vùng trong suốt" in e.value for e in at.error)
+    assert _iou_rows(at) is None

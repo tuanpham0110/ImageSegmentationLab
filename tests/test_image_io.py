@@ -403,3 +403,58 @@ def test_input_image_transparency_is_still_composited_on_white():
     rgba = np.zeros((1, 2, 4), np.uint8)
     rgba[0, 1] = (10, 20, 30, 255)
     np.testing.assert_array_equal(load_image_bytes(to_png_bytes(rgba), "in.png").array, [[[255, 255, 255], [10, 20, 30]]])
+
+
+# ---------------- Hồi quy: PNG xám 1/2/4 bit có khóa tRNS, CSV một cột có dấu nháy ----------------
+
+def _png_low_bit_gray(bit_depth: int, values: list[int], key: int | None) -> bytes:
+    """Tự mã hoá PNG xám 1/2/4 bit một hàng (Pillow không ghi được 2/4 bit kèm tRNS)."""
+    import struct
+    import zlib
+
+    def chunk(tag: bytes, body: bytes) -> bytes:
+        return struct.pack(">I", len(body)) + tag + body + struct.pack(">I", zlib.crc32(tag + body) & 0xFFFFFFFF)
+
+    bits = "".join(format(v, f"0{bit_depth}b") for v in values)
+    bits += "0" * (-len(bits) % 8)
+    row = b"\x00" + int(bits, 2).to_bytes(len(bits) // 8, "big")
+    out = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", len(values), 1, bit_depth, 0, 0, 0, 0))
+    if key is not None:
+        out += chunk(b"tRNS", struct.pack(">H", key))
+    return out + chunk(b"IDAT", zlib.compress(row)) + chunk(b"IEND", b"")
+
+
+@pytest.mark.parametrize("bit_depth", [1, 2, 4])
+def test_low_bit_gray_png_transparency_key_is_composited_on_white(bit_depth):
+    top = (1 << bit_depth) - 1
+    values = [0, 1, top] if bit_depth > 1 else [0, 1, 0]
+    loaded = load_image_bytes(_png_low_bit_gray(bit_depth, values, key=1), "low.png")
+    # Mức 1 trong suốt -> trắng; các mức còn lại giữ thang 8 bit của Pillow.
+    expected = [[0, 255, 255]] if bit_depth > 1 else [[0, 255, 0]]
+    np.testing.assert_array_equal(loaded.array, expected)
+    assert any("trong suốt" in n for n in loaded.notes)
+
+
+@pytest.mark.parametrize("bit_depth", [1, 2, 4])
+def test_low_bit_gray_ground_truth_with_transparency_key_is_rejected(bit_depth):
+    with pytest.raises(InputError, match="vùng trong suốt"):
+        load_mask_bytes(_png_low_bit_gray(bit_depth, [0, 1], key=1), "gt.png")
+
+
+@pytest.mark.parametrize("bit_depth", [2, 4])
+def test_low_bit_gray_key_matching_no_pixel_keeps_mask(bit_depth):
+    top = (1 << bit_depth) - 1
+    data = _png_low_bit_gray(bit_depth, [0, top], key=1)
+    np.testing.assert_array_equal(load_mask_bytes(data, "gt.png"), [[0, 255]])
+    np.testing.assert_array_equal(load_image_bytes(data, "in.png").array, [[0, 255]])
+
+
+@pytest.mark.parametrize("text,expected", [
+    ('"0"\n"255"\n', [[0], [255]]),
+    ('"0"\n\n255\n', [[0], [255]]),
+    ('"1\n"\n2\n', [[1], [2]]),  # ô trong dấu nháy trải hai dòng
+    ("0\n255\n", [[0], [255]]),
+    ("1 2\n3 4\n", [[1, 2], [3, 4]]),
+])
+def test_single_column_csv_keeps_csv_quoting(text, expected):
+    np.testing.assert_array_equal(parse_csv_matrix(text), expected)

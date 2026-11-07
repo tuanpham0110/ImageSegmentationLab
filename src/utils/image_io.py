@@ -120,6 +120,22 @@ def _png16_alpha_low_bytes_opaque(data: bytes) -> bool | None:
         return None
 
 
+def _scale_low_depth_gray_key(img: Image.Image, png_depth: tuple[int, int] | None) -> None:
+    """Đưa khóa tRNS của PNG xám 2/4 bit về cùng thang 8 bit với pixel.
+
+    Pillow giãn pixel xám 2/4 bit lên 0..255 (×85 / ×17) nhưng giữ khóa trong suốt ở thang
+    gốc, nên pixel trong suốt không được nhận ra (ví dụ 4 bit, khóa 1: pixel thành 17, khóa vẫn 1).
+    PNG 1 bit đã được Pillow quy đổi sẵn. Chỉ giãn khi khóa còn nằm trong thang gốc, để không
+    giãn hai lần nếu phiên bản Pillow sau này tự sửa.
+    """
+    if png_depth is None or png_depth[1] != 0 or png_depth[0] not in (2, 4) or img.mode != "L":
+        return
+    key = img.info.get("transparency")
+    max_raw = (1 << png_depth[0]) - 1
+    if isinstance(key, int) and not isinstance(key, bool) and 0 <= key <= max_raw:
+        img.info["transparency"] = key * (255 // max_raw)
+
+
 def load_image_bytes(data: bytes, name: str = "image") -> LoadedImage:
     """Đọc ảnh PNG/JPG/BMP từ bytes thành mảng uint8.
 
@@ -151,6 +167,7 @@ def _load_image_bytes(data: bytes, name: str, *, normalize_high_depth: bool) -> 
                     f"Ảnh quá lớn ({w} x {h} = {w * h / 1e6:.1f} triệu pixel). Giới hạn {MAX_DECODE_PIXELS / 1e6:.0f} triệu pixel."
                 )
             png_depth = _png_bit_depth(data) if fmt == "PNG" else None
+            _scale_low_depth_gray_key(img, png_depth)
             # PNG màu 16 bit: Pillow chỉ giữ byte cao của mỗi kênh, còn khóa tRNS vẫn ở thang
             # 0–65535 nên không thể so khớp đúng pixel trong suốt -> từ chối thay vì đọc sai âm thầm.
             if png_depth is not None and png_depth[0] == 16 and png_depth[1] in (2, 4, 6):
@@ -279,6 +296,9 @@ def parse_csv_matrix(text: str) -> np.ndarray:
         delim = ";"
     elif "\t" in sample:
         delim = "\t"
+    elif all(len(ln.split()) <= 1 for ln in lines):
+        # Một cột: vẫn đọc theo cú pháp CSV để bỏ dấu nháy ("0") và hỗ trợ ô nhiều dòng.
+        delim = ","
     else:
         delim = None  # khoảng trắng
 
