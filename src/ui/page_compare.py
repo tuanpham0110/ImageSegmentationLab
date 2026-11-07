@@ -56,7 +56,9 @@ def _ground_truth_uploader(ctx) -> tuple[np.ndarray | None, str | None, bool]:
             mask = fit_ground_truth(load_mask_bytes(gt_file.getvalue(), gt_file.name), ctx.prepared)
         except (InputError, ValueError, MemoryError) as exc:
             # Lưu cả trạng thái lỗi: quay lại trang không được lặng lẽ dùng GT mẫu.
-            store_uploaded_gt_error(ctx.signature, gt_file.name, gt_file.file_id, str(exc))
+            reason = str(exc) or ("không đủ bộ nhớ để xử lý mask" if isinstance(exc, MemoryError)
+                                  else type(exc).__name__)
+            store_uploaded_gt_error(ctx.signature, gt_file.name, gt_file.file_id, reason)
         else:
             store_uploaded_gt(ctx.signature, gt_file.name, gt_file.file_id, mask)
         stored = get_uploaded_gt(ctx.signature)

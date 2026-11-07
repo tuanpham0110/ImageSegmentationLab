@@ -89,25 +89,34 @@ def _png_bit_depth(data: bytes) -> tuple[int, int] | None:
     return bit_depth, color_type
 
 
-def _png16_alpha_low_bytes_opaque(data: bytes) -> bool | None:
-    """Kiểm tra byte thấp của kênh alpha PNG RGBA 16 bit ở độ sâu gốc.
+# Rawmode để giải mã lại PNG 16 bit có alpha sao cho kênh thứ 4 là BYTE THẤP của alpha:
+#   RGBA 16 bit (8 byte/pixel): 'RGBA;16L' lấy byte thứ hai của mỗi mẫu big-endian.
+#   LA 16 bit (4 byte/pixel = L_hi L_lo A_hi A_lo): 'RGBA' 8 bit đọc nguyên 4 byte thô.
+# Cả hai giữ nguyên số byte/pixel nên bộ khử lọc PNG (filter Sub/Avg/Paeth) vẫn đúng.
+_PNG16_ALPHA_LOW_RAWMODE = {"RGBA;16B": "RGBA;16L", "LA;16B": "RGBA"}
 
-    Pillow chỉ giữ byte cao (alpha 65280 hoặc 65534 thành 255), nên giải mã lại cùng
-    dữ liệu với rawmode 'RGBA;16L' để lấy byte thấp: alpha = 65535 khi và chỉ khi cả
-    hai byte bằng 255 (byte cao đã được _composite_alpha kiểm tra).
-    Trả True/False nếu kiểm tra được chính xác, None nếu không (ví dụ PNG LA 16 bit
-    hoặc Pillow đổi cách giải mã) -> nơi gọi phải từ chối thay vì đoán.
+
+def _png16_alpha_low_bytes_opaque(data: bytes) -> bool | None:
+    """Kiểm tra byte thấp của kênh alpha PNG RGBA/LA 16 bit ở độ sâu gốc.
+
+    Pillow chỉ giữ byte cao (alpha 65280 hoặc 65534 thành 255). Alpha = 65535 khi và chỉ khi
+    cả hai byte bằng 255; byte cao được _composite_alpha kiểm tra, hàm này kiểm tra byte thấp.
+    Chỉ gọi sau khi ảnh đã giải mã thành công (tệp hỏng đã được báo lỗi riêng).
+    Trả True/False nếu kiểm tra được chính xác; None nếu cách giải mã của Pillow khác dự kiến
+    (dựa vào cấu trúc img.tile nội bộ) -> nơi gọi phải từ chối thay vì đoán.
     """
     try:
         with Image.open(io.BytesIO(data)) as img:
             tiles = list(img.tile)
-            if img.mode != "RGBA" or not tiles or any(t[0] != "zip" or t[3] != "RGBA;16B" for t in tiles):
+            rawmodes = {t[3] for t in tiles} if tiles else set()
+            if (img.mode != "RGBA" or len(rawmodes) != 1 or any(t[0] != "zip" for t in tiles)
+                    or next(iter(rawmodes)) not in _PNG16_ALPHA_LOW_RAWMODE):
                 return None
-            img.tile = [t._replace(args="RGBA;16L") if hasattr(t, "_replace") else (*t[:3], "RGBA;16L")
-                        for t in tiles]
+            low = _PNG16_ALPHA_LOW_RAWMODE[next(iter(rawmodes))]
+            img.tile = [t._replace(args=low) if hasattr(t, "_replace") else (*t[:3], low) for t in tiles]
             img.load()
             return bool(np.all(np.asarray(img)[..., 3] == 255))
-    except (OSError, ValueError, SyntaxError, IndexError, TypeError):
+    except (OSError, ValueError, SyntaxError, IndexError, TypeError, AttributeError):
         return None
 
 
@@ -155,10 +164,11 @@ def _load_image_bytes(data: bytes, name: str, *, normalize_high_depth: bool) -> 
                     "tức ⌊v / 256⌋). Không giãn tương phản như ảnh xám 16 bit; "
                     "các mức khác nhau dưới 1/256 thang sáng sẽ bị gộp."
                 )
+            img.load()  # tệp hỏng báo lỗi tại đây, trước bước kiểm tra alpha 16 bit
             if (not normalize_high_depth and png_depth is not None and png_depth[0] == 16
                     and png_depth[1] in (4, 6)):
                 # Mask có kênh alpha 16 bit: kiểm tra độ trong suốt ở độ sâu gốc.
-                opaque = _png16_alpha_low_bytes_opaque(data) if png_depth[1] == 6 else None
+                opaque = _png16_alpha_low_bytes_opaque(data)
                 if opaque is None:
                     raise InputError(
                         f"Mask PNG {_PNG_COLOR_TYPES[png_depth[1]]} 16 bit có kênh alpha: chưa kiểm tra chính xác "
@@ -166,7 +176,6 @@ def _load_image_bytes(data: bytes, name: str, *, normalize_high_depth: bool) -> 
                     )
                 if not opaque:
                     raise InputError(MASK_TRANSPARENCY_ERROR)
-            img.load()
             arr, mode = _decoded_array(img, notes, normalize_high_depth)
     except InputError:
         raise

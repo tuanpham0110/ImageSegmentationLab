@@ -350,6 +350,17 @@ def test_converged_centers_are_means_of_returned_labels_with_equidistant_points(
 def test_reported_convergence_implies_centers_match_label_means(seed, init):
     data = np.random.default_rng(seed).integers(0, 8, 40).astype(float) * 40  # nhiều điểm cách đều
     result = kmeans(data, 3, seed=seed, init=init)
-    if result.converged:
-        for j in range(result.k_effective):
-            assert result.centers[j, 0] == pytest.approx(data[result.labels == j].mean(), abs=1e-4)
+    assert result.converged  # dữ liệu nhỏ, max_iter = 100: phải hội tụ thật
+    for j in range(result.k_effective):
+        assert result.centers[j, 0] == pytest.approx(data[result.labels == j].mean(), abs=1e-4)
+
+
+def test_tol_stop_with_label_flip_keeps_iterating_instead_of_giving_up():
+    # Vòng 2 dịch tâm 1.5 <= tol nhưng phép gán tiếp theo còn đổi nhãn: không được dừng/báo hội tụ ở đó.
+    data = np.array([15.0, 19.0, 5.0, 4.0, 15.0, 16.0])
+    result = kmeans(data, 2, tol=2.0, init="random", seed=10)
+    assert result.shift_history[1] <= 2.0
+    assert result.converged and result.n_iter == 4
+    np.testing.assert_array_equal(result.labels, [1, 1, 0, 0, 1, 1])
+    np.testing.assert_allclose(result.centers.ravel(), [4.5, 16.25])
+    assert not any("Chưa hội tụ" in w for w in result.warnings)

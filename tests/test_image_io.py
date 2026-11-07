@@ -361,11 +361,37 @@ def test_fully_opaque_16bit_rgba_ground_truth_is_accepted():
     np.testing.assert_array_equal(load_mask_bytes(_png16(pixels, 6), "gt16.png"), [[255, 0]])
 
 
-@pytest.mark.parametrize("alpha", [65535, 65280])
-def test_16bit_la_ground_truth_is_rejected_because_alpha_cannot_be_checked_exactly(alpha):
+@pytest.mark.parametrize("alpha", [65280, 65534, 255, 0])
+def test_16bit_la_ground_truth_checks_alpha_at_native_depth(alpha):
     pixels = np.array([[[65535, 65535], [0, alpha]]])
-    with pytest.raises(InputError, match="chưa kiểm tra chính xác"):
+    with pytest.raises(InputError, match="vùng trong suốt"):
         load_mask_bytes(_png16(pixels, 4), "gt16.png")
+
+
+def test_fully_opaque_16bit_la_ground_truth_is_accepted():
+    pixels = np.array([[[65535, 65535], [0, 65535], [40000, 65535]]])
+    np.testing.assert_array_equal(load_mask_bytes(_png16(pixels, 4), "gt16.png"), [[255, 0, 255]])
+
+
+@pytest.mark.parametrize("color_type,pixels", [
+    (6, [[[65535, 65535, 65535, 65535], [0, 0, 0, 65535]]] * 8),
+    (4, [[[65535, 65535], [0, 65535]]] * 8),
+])
+def test_corrupt_16bit_alpha_ground_truth_is_reported_as_corrupt(color_type, pixels):
+    data = _png16(np.array(pixels), color_type)
+    idat = data.index(b"IDAT")
+    truncated = data[:idat + 10] + data[idat + 10:-12][:3]  # cắt cụt luồng nén
+    with pytest.raises(InputError, match="tệp hỏng"):
+        load_mask_bytes(truncated, "gt16.png")
+
+
+def test_16bit_alpha_ground_truth_is_rejected_if_exact_check_is_unavailable(monkeypatch):
+    import src.utils.image_io as image_io
+
+    monkeypatch.setattr(image_io, "_png16_alpha_low_bytes_opaque", lambda data: None)
+    pixels = np.array([[[65535, 65535, 65535, 65535], [0, 0, 0, 65535]]])
+    with pytest.raises(InputError, match="chưa kiểm tra chính xác"):
+        load_mask_bytes(_png16(pixels, 6), "gt16.png")
 
 
 def test_16bit_rgba_input_image_is_still_loaded():

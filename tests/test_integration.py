@@ -944,3 +944,15 @@ def test_failed_ground_truth_is_cleared_when_input_changes():
     at = _compare_with_transparent_gt()
     at.selectbox(key="sample_id").set_value("noisy_circle").run()
     assert "cmp_uploaded_gt" not in at.session_state
+
+
+def test_memory_error_on_ground_truth_upload_shows_a_reason(monkeypatch):
+    from src.ui import page_compare
+
+    def boom(*args, **kwargs):
+        raise MemoryError()
+
+    monkeypatch.setattr(page_compare, "fit_ground_truth", boom)
+    at = _compare_with_uploaded_gt()
+    assert not at.exception
+    assert any(e.value.endswith("không đủ bộ nhớ để xử lý mask") for e in at.error)

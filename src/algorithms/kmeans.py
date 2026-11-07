@@ -203,6 +203,33 @@ def _init_kmeans_pp(data: np.ndarray, weights: np.ndarray, k: int, rng: np.rando
     return centers
 
 
+def _weighted_means(x: np.ndarray, labels: np.ndarray, w: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
+    """(trung bình có trọng số mỗi cụm (k, D), tổng trọng số mỗi cụm (k,)); cụm rỗng cho NaN."""
+    counts = np.bincount(labels, weights=w, minlength=k)
+    means = np.empty((k, x.shape[1]), dtype=np.float64)
+    for d in range(x.shape[1]):
+        sums = np.bincount(labels, weights=w * x[:, d], minlength=k)
+        if not np.all(np.isfinite(sums)):
+            raise ValueError(NUMERIC_RANGE_ERROR)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            means[:, d] = sums / counts
+    return means, counts
+
+
+def _assign_by_brightness(x: np.ndarray, centers: np.ndarray, chunk_size: int):
+    """Gán nhãn, phá hoà khoảng cách theo thứ tự độ sáng của tâm (quy tắc của kết quả báo cáo).
+
+    Trả về (nhãn theo chỉ số tâm nội bộ, nhãn theo thứ tự độ sáng, khoảng cách bình phương).
+    """
+    rank = _relabel_by_brightness(centers)
+    sorted_labels, min_sq = _assign_labels(x, centers[rank], chunk_size)
+    return rank.astype(np.int32)[sorted_labels], sorted_labels, min_sq
+
+
+def _max_shift(a: np.ndarray, b: np.ndarray) -> float:
+    return float(np.max(np.sqrt(np.sum((a - b) ** 2, axis=1))))
+
+
 def _relabel_by_brightness(centers: np.ndarray) -> np.ndarray:
     """Thứ tự cụm tăng dần theo độ sáng của tâm — để kết quả ổn định và dễ đọc.
 
@@ -293,25 +320,19 @@ def kmeans(
     n_iter = 0
     n_empty_events = 0
 
+    pending = None  # phép gán đã tính ở bước kiểm tra hội tụ, dùng lại cho vòng sau / kết quả cuối
+    final_sorted = None
     for it in range(1, max_iter + 1):
         n_iter = it
         # Bước 1: gán nhãn theo tâm gần nhất. Hoà khoảng cách được phá theo thứ tự độ sáng
         # của tâm — đúng quy tắc của bước gán nhãn cuối — nên tâm tính ra ở vòng này khớp
         # với nhãn trả về. Chỉ số tâm nội bộ không đổi để lịch sử tâm theo dõi đúng từng cụm.
-        rank = _relabel_by_brightness(centers)
-        sorted_labels, min_sq = _assign_labels(x, centers[rank], chunk_size)
-        labels = rank.astype(np.int32)[sorted_labels]
+        labels, _, min_sq = pending if pending is not None else _assign_by_brightness(x, centers, chunk_size)
+        pending = None
         sse_history.append(_weighted_sse(w, min_sq))
 
         # Bước 2: cập nhật tâm = trung bình (có trọng số) các điểm trong cụm, dùng np.bincount theo từng chiều
-        counts = np.bincount(labels, weights=w, minlength=k_eff)
-        new_centers = np.empty_like(centers)
-        for d in range(x.shape[1]):
-            sums = np.bincount(labels, weights=w * x[:, d], minlength=k_eff)
-            if not np.all(np.isfinite(sums)):
-                raise ValueError(NUMERIC_RANGE_ERROR)
-            with np.errstate(invalid="ignore", divide="ignore"):
-                new_centers[:, d] = sums / counts
+        new_centers, counts = _weighted_means(x, labels, w, k_eff)
 
         # Xử lý cụm rỗng: đặt tâm vào điểm xa tâm hiện tại của nó nhất (điểm "khó" nhất).
         empty = np.flatnonzero(counts == 0)
@@ -332,13 +353,19 @@ def kmeans(
 
         if not np.all(np.isfinite(new_centers)):
             raise ValueError(NUMERIC_RANGE_ERROR)
-        shift = float(np.max(np.sqrt(np.sum((new_centers - centers) ** 2, axis=1))))
+        shift = _max_shift(new_centers, centers)
         shift_history.append(shift)
         centers = new_centers
         centers_history.append(centers.copy())
         if shift <= tol and empty.size == 0:
-            converged = True
-            break
+            # Chỉ dừng khi tâm đúng là trung bình cụm theo phép gán nhãn trả về (với tol > 0, điểm
+            # sát biên có thể còn đổi cụm). Nếu chưa, lặp tiếp; phép gán này được dùng lại ở vòng sau.
+            pending = _assign_by_brightness(x, centers, chunk_size)
+            means, check_counts = _weighted_means(x, pending[0], w, k_eff)
+            if np.all(check_counts > 0) and _max_shift(means, centers) <= tol:
+                converged = True
+                final_sorted = pending[1:]
+                break
 
     if n_empty_events:
         warnings.append(f"Đã xử lý {n_empty_events} lần cụm rỗng (khởi tạo lại tâm tại điểm xa nhất).")
@@ -350,7 +377,8 @@ def kmeans(
     order = _relabel_by_brightness(centers)
     centers = centers[order]
     centers_history = [c[order] for c in centers_history]
-    labels, min_sq = _assign_labels(x, centers, chunk_size)
+    # Khi hội tụ, phép gán ở bước kiểm tra đã dùng đúng thứ tự này: dùng lại thay vì tính lần nữa.
+    labels, min_sq = final_sorted if final_sorted is not None else _assign_labels(x, centers, chunk_size)
     counts_f = np.bincount(labels, weights=w, minlength=k_eff)
     fits_integer_counts = (np.all(w == np.rint(w)) and total_weight < 2**63
                            and np.all(counts_f < 2**63))
@@ -361,16 +389,6 @@ def kmeans(
         converged = False
         warnings.append(f"Kết quả cuối còn {np.count_nonzero(counts_f == 0)} cụm rỗng sau bước gán nhãn; "
                         "chưa hội tụ. Hãy tăng max_iter hoặc giảm tol.")
-    elif converged:
-        # Bảo đảm "hội tụ" nghĩa là tâm báo cáo đúng là trung bình của các cụm theo nhãn trả về.
-        final_means = np.empty_like(centers)
-        for d in range(x.shape[1]):
-            final_means[:, d] = np.bincount(labels, weights=w * x[:, d], minlength=k_eff) / counts_f
-        gap = float(np.max(np.sqrt(np.sum((final_means - centers) ** 2, axis=1))))
-        if not gap <= tol:
-            converged = False
-            warnings.append(f"Tâm cuối lệch {gap:.4g} so với trung bình cụm theo nhãn cuối (> tol); "
-                            "chưa hội tụ. Hãy tăng max_iter hoặc giảm tol.")
 
     return KMeansResult(
         labels=labels,

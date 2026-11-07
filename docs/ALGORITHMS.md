@@ -51,10 +51,12 @@ Vào: X (N×D), K, max_iter, tol, seed, init
      a) c(i) = argmin_k ‖xᵢ − Z_k‖²              (gán nhãn; hoà thì chọn tâm tối hơn — cùng quy tắc với bước 4)
      b) Z_k  = trung bình các xᵢ có c(i) = k     (cập nhật)
         nếu cụm k rỗng: Z_k = điểm xa tâm của nó nhất (không trùng tâm khác)
-     c) nếu max_k ‖Z_k(mới) − Z_k(cũ)‖ ≤ tol và không có cụm rỗng: dừng (hội tụ)
+     c) nếu max_k ‖Z_k(mới) − Z_k(cũ)‖ ≤ tol và không có cụm rỗng: gán nhãn thử theo Z mới;
+        dừng (hội tụ) chỉ khi không cụm nào rỗng và Z lệch trung bình cụm theo nhãn đó ≤ tol,
+        nếu không thì lặp tiếp (phép gán thử được dùng lại cho vòng sau)
 3. Sắp xếp cụm theo độ sáng tâm (cụm 0 tối nhất)
-4. Gán nhãn lần cuối theo Z đã sắp xếp; hoà thì chọn chỉ số nhỏ nhất; tính SSE và số pixel mỗi cụm.
-   Chỉ báo hội tụ nếu Z lệch trung bình cụm theo nhãn cuối không quá tol
+4. Gán nhãn lần cuối theo Z đã sắp xếp; hoà thì chọn chỉ số nhỏ nhất; tính SSE và số pixel mỗi cụm
+   (khi hội tụ, dùng lại phép gán thử ở bước c — cùng thứ tự nên cùng kết quả)
 Ra: nhãn (H×W), tâm, SSE, số vòng, cờ hội tụ, lịch sử SSE/độ dịch tâm
 ```
 
