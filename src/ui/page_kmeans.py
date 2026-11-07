@@ -14,6 +14,7 @@ from src.processing.pipeline import (
     kmeans_outputs,
     run_kmeans,
 )
+from src.processing.postprocessing import cluster_palette_hex
 from src.ui import components as ui
 from src.ui.state import (
     get_result,
@@ -30,7 +31,9 @@ from src.utils.metrics import compare_masks
 RESULT_KEY = "km_result"
 DEFAULTS = {"km_k": 3, "km_feature": "RGB (3 kênh)", "km_init": "K-means++", "km_max_iter": 100,
             "km_tol": 1e-4, "km_seed": 0}
-FEATURE_OPTIONS = {"RGB (3 kênh)": "rgb", "Mức xám (1 kênh)": "gray"}
+FEATURE_OPTIONS = {"RGB (3 kênh)": "rgb", "CIE L*a*b* (3 kênh, theo cảm nhận)": "lab", "Mức xám (1 kênh)": "gray"}
+FEATURE_NAMES = {"rgb": "RGB", "lab": "CIE L*a*b*", "gray": "mức xám"}
+UI_MAX_K = 16  # giới hạn thanh trượt cho tiện dùng; thuật toán không giới hạn K
 INIT_OPTIONS = {"K-means++": "kmeans++", "Ngẫu nhiên (random)": "random"}
 
 DOWNLOAD_LABELS = {
@@ -56,12 +59,15 @@ def params_form(is_color: bool, key_prefix: str = "km") -> KMeansParams | None:
         restore_widget(key, v)
     with st.form(f"{key_prefix}_form", border=True):
         st.markdown("**Tham số K-means**")
-        k = st.slider("Số cụm K", 2, 8, key=f"{key_prefix}_k",
-                      help="Số nhóm màu/mức xám cần chia. K-means không tự xác định K.")
+        k = st.slider("Số cụm K", 2, UI_MAX_K, key=f"{key_prefix}_k",
+                      help="Số nhóm màu/mức xám cần chia. K-means không tự xác định K. "
+                           "Bảng màu bản đồ nhãn tự mở rộng theo K.")
         feature_label = st.radio(
             "Vector đặc trưng của pixel", list(FEATURE_OPTIONS), key=f"{key_prefix}_feature",
             disabled=not is_color,
-            help="Ảnh xám luôn dùng 1 kênh mức xám." if not is_color else "RGB: 3 chiều (R,G,B); mức xám: 1 chiều.",
+            help="Ảnh xám luôn dùng 1 kênh mức xám." if not is_color else
+            ("RGB: 3 chiều (R,G,B). CIE L*a*b*: khoảng cách Euclid = độ lệch màu ΔE*ab theo cảm nhận thị giác "
+             "(RGB không đồng nhất về cảm nhận). Mức xám: 1 chiều."),
         )
         init_label = st.selectbox("Khởi tạo tâm", list(INIT_OPTIONS), key=f"{key_prefix}_init")
         c1, c2 = st.columns(2)
@@ -126,7 +132,7 @@ def _render_result(ctx, run: dict) -> None:
     m[2].metric("Hội tụ", "Có" if core.converged else "Chưa")
     m[3].metric("SSE (inertia)", ui.compact_number(core.sse), help=f"SSE = {core.sse:,.2f}")
     m[4].metric("Thời gian", f"{core.elapsed_seconds * 1000:.0f} ms", help=TIMING_SCOPE)
-    st.caption(f"Đặc trưng: {'RGB' if result.feature == 'rgb' else 'mức xám'} · khởi tạo {params.init} · "
+    st.caption(f"Đặc trưng: {FEATURE_NAMES[result.feature]} · khởi tạo {params.init} · "
                f"seed {params.seed} · tối đa {params.max_iter} vòng · tol {params.tol:g}")
     for w in core.warnings:
         st.warning(w)
@@ -137,7 +143,7 @@ def _render_result(ctx, run: dict) -> None:
         st.markdown(
             "K-means chỉ chia pixel thành các **cụm** — thuật toán **không biết** cụm nào là đối tượng. "
             "Hãy chọn một hoặc nhiều cụm làm đối tượng (foreground). Lựa chọn mặc định chỉ là **gợi ý**: "
-            "cụm chiếm nhiều pixel ở viền ảnh nhất được coi là nền."
+            "cụm xuất hiện ở viền ảnh nhiều hơn ở vùng trung tâm được coi là nền."
         )
         options = list(range(core.k_effective))
         fg_key = f"km_fg_{run['run_id']}"
@@ -145,8 +151,9 @@ def _render_result(ctx, run: dict) -> None:
         fg = st.multiselect("Cụm làm đối tượng (foreground)", options,
                             format_func=lambda c: f"Cụm {c}", key=fg_key)
         save_foreground(run, fg)
+        post = ui.morphology_controls("km")
     try:
-        out = kmeans_outputs(prep, result, fg)
+        out = kmeans_outputs(prep, result, fg, post)
     except (ValueError, MemoryError) as exc:
         run.pop("_export_cache", None)
         st.error("Không tạo ảnh kết quả được. Hãy kiểm tra lựa chọn cụm hoặc giảm giới hạn cạnh dài. " + str(exc))
@@ -157,15 +164,20 @@ def _render_result(ctx, run: dict) -> None:
                         (out.label_color, "Bản đồ nhãn cụm")])
         legend = " ".join(
             f"<span class='isl-chip'><span class='isl-swatch' style='background:{c}'></span>Cụm {i}</span>"
-            for i, c in enumerate(viz.CLUSTER_PALETTE_HEX[: core.k_effective])
+            for i, c in enumerate(cluster_palette_hex(core.k_effective))
         )
         st.markdown("Chú giải bản đồ nhãn: " + legend, unsafe_allow_html=True)
 
     with tab_fg:
         if not fg:
             st.info("Chưa chọn cụm nào: mask rỗng (toàn nền).")
-        ui.show_images([(out.mask, "Mask nhị phân (trắng = đối tượng)"), (out.cutout_preview, "Ảnh tách nền (nền trắng)"),
-                        (out.overlay, "Đối tượng tô màu trên ảnh gốc")])
+        if post.operation != "none":
+            ui.show_images([(out.raw_mask, "Mask trước hình thái học"), (out.mask, "Mask sau hình thái học"),
+                            (out.overlay, "Đối tượng tô màu trên ảnh gốc")])
+            ui.show_image(out.cutout_preview, "Ảnh tách nền (nền trắng)")
+        else:
+            ui.show_images([(out.mask, "Mask nhị phân (trắng = đối tượng)"), (out.cutout_preview, "Ảnh tách nền (nền trắng)"),
+                            (out.overlay, "Đối tượng tô màu trên ảnh gốc")])
         ratio = out.mask.mean() / 255 * 100
         st.caption(f"Đối tượng chiếm {ratio:.2f}% pixel · nền {100 - ratio:.2f}%.")
         if ctx.ground_truth is not None:
@@ -189,6 +201,7 @@ def _render_result(ctx, run: dict) -> None:
 
     with tab_dl:
         st.caption("Các tệp được tạo từ đúng kết quả đang hiển thị (cùng ảnh, tham số và cụm đối tượng đã chọn).")
-        files = ui.cached_export_files(run, tuple(sorted(fg)), lambda: kmeans_export_files(prep, params, result, out))
+        files = ui.cached_export_files(run, (tuple(sorted(fg)), post),
+                                       lambda: kmeans_export_files(prep, params, result, out))
         if files is not None:
             ui.download_buttons(files, DOWNLOAD_LABELS, "km_dl")

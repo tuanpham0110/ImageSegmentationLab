@@ -302,10 +302,10 @@ def parse_csv_matrix(text: str) -> np.ndarray:
     else:
         delim = None  # khoảng trắng
 
-    rows: list[list[int]] = []
+    # Mỗi hàng hợp lệ được giữ dưới dạng chuỗi "v1,v2,..." rồi NumPy phân tích một lần ở cuối.
+    rows: list[str] = []
     n_cols = None
     first_line = line_numbers[0]
-    number = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)$")
     for r_idx, raw_row in _csv_rows(lines, line_numbers, delim):
         cells = [c.strip() for c in raw_row]
         if delim and cells and cells[-1] == "":  # cho phép dấu phân cách thừa cuối dòng
@@ -316,26 +316,40 @@ def parse_csv_matrix(text: str) -> np.ndarray:
             raise InputError(f"Dòng {r_idx} có {len(cells)} cột, khác với {n_cols} cột của dòng {first_line}.")
         if (len(rows) + 1) * n_cols > MAX_CSV_CELLS:
             raise InputError(f"CSV quá lớn (vượt {MAX_CSV_CELLS:,} phần tử).")
-        row: list[int] = []
-        for c_idx, cell in enumerate(cells, start=1):
-            if cell == "":
-                raise InputError(f"Ô trống tại dòng {r_idx}, cột {c_idx}.")
-            if not number.match(cell):
-                raise InputError(f"Giá trị không phải số tại dòng {r_idx}, cột {c_idx}: '{cell[:20]}'.")
-            shown = cell if len(cell) <= 40 else cell[:37] + "..."
-            try:
-                value = Decimal(cell)
-            except InvalidOperation as exc:
-                raise InputError(f"Giá trị không phải số tại dòng {r_idx}, cột {c_idx}: '{shown}'.") from exc
-            if not 0 <= value <= 255:
-                raise InputError(f"Giá trị {shown} tại dòng {r_idx}, cột {c_idx} nằm ngoài khoảng [0, 255].")
-            if value != value.to_integral_value():
-                raise InputError(f"Giá trị không phải số nguyên tại dòng {r_idx}, cột {c_idx}: {shown}.")
-            row.append(int(value))
-        rows.append(row)
+        joined = ",".join(cells)
+        # Đường nhanh: cả hàng chỉ gồm số nguyên 0..255 viết thường (một phép so regex ở tầng C cho cả hàng).
+        # Hàng khác (dấu +/-, phần thập phân, giá trị lỗi) đi đường kiểm tra từng ô để báo lỗi đúng vị trí.
+        rows.append(joined if _FAST_CSV_ROW.fullmatch(joined) else _parse_csv_row_slow(cells, r_idx))
     if not n_cols:
         raise InputError("CSV không có cột dữ liệu.")
-    return np.array(rows, dtype=np.uint8)
+    values = np.array(",".join(rows).split(","), dtype=np.int64)
+    return values.reshape(len(rows), n_cols).astype(np.uint8)
+
+
+_CSV_BYTE = r"(?:[01]?\d?\d|2[0-4]\d|25[0-5])"  # 0..255, cho phép số 0 đứng đầu ("007")
+_FAST_CSV_ROW = re.compile(rf"{_CSV_BYTE}(?:,{_CSV_BYTE})*")
+_CSV_NUMBER = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)$")
+
+
+def _parse_csv_row_slow(cells: list[str], r_idx: int) -> str:
+    """Kiểm tra từng ô bằng Decimal (chính xác, không làm tròn số thực) và báo lỗi tại ô đầu tiên sai."""
+    row: list[str] = []
+    for c_idx, cell in enumerate(cells, start=1):
+        if cell == "":
+            raise InputError(f"Ô trống tại dòng {r_idx}, cột {c_idx}.")
+        if not _CSV_NUMBER.match(cell):
+            raise InputError(f"Giá trị không phải số tại dòng {r_idx}, cột {c_idx}: '{cell[:20]}'.")
+        shown = cell if len(cell) <= 40 else cell[:37] + "..."
+        try:
+            value = Decimal(cell)
+        except InvalidOperation as exc:
+            raise InputError(f"Giá trị không phải số tại dòng {r_idx}, cột {c_idx}: '{shown}'.") from exc
+        if not 0 <= value <= 255:
+            raise InputError(f"Giá trị {shown} tại dòng {r_idx}, cột {c_idx} nằm ngoài khoảng [0, 255].")
+        if value != value.to_integral_value():
+            raise InputError(f"Giá trị không phải số nguyên tại dòng {r_idx}, cột {c_idx}: {shown}.")
+        row.append(str(int(value)))
+    return ",".join(row)
 
 
 def load_csv_bytes(data: bytes, name: str = "matrix.csv") -> LoadedImage:

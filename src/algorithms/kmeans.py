@@ -16,12 +16,19 @@ from functools import wraps
 
 import numpy as np
 
+from src.utils.color_space import lab_to_rgb, rgb_to_lab
+
 # Số điểm xử lý mỗi lần khi tính ma trận khoảng cách, để bộ nhớ tạm luôn nhỏ:
 # Mỗi khối chỉ giữ hiệu N×D và khoảng cách tới một tâm, không tạo N×K×D.
 DEFAULT_CHUNK_SIZE = 262_144
 
+# K-means tổng quát chạy với mọi K >= 1 (K thực tế bị chặn bởi số giá trị phân biệt của dữ liệu).
+# Không có chặn trên trong thuật toán; giao diện tự đặt giới hạn thanh trượt cho tiện dùng.
 MIN_K = 1
-MAX_K = 8
+FEATURES = ("gray", "rgb", "lab")
+# Trọng số "độ sáng" để sắp thứ tự cụm: BT.601 cho RGB, chỉ kênh L* cho Lab.
+LUMA_ORDER = np.array([0.299, 0.587, 0.114])
+LIGHTNESS_ORDER = np.array([1.0, 0.0, 0.0])
 NUMERIC_RANGE_ERROR = "Dữ liệu hoặc trọng số vượt phạm vi tính toán an toàn của float64. Hãy giảm biên độ hoặc trọng số."
 
 
@@ -72,8 +79,8 @@ def _validate_chunk_size(chunk_size: int) -> None:
 
 def _validate_params(k: int, max_iter: int, tol: float, init: str,
                      chunk_size: int = DEFAULT_CHUNK_SIZE, seed: int | None = 0) -> None:
-    if isinstance(k, (bool, np.bool_)) or not isinstance(k, (int, np.integer)) or not MIN_K <= int(k) <= MAX_K:
-        raise ValueError(f"K phải là số nguyên trong khoảng [{MIN_K}, {MAX_K}], nhận được {k!r}.")
+    if isinstance(k, (bool, np.bool_)) or not isinstance(k, (int, np.integer)) or int(k) < MIN_K:
+        raise ValueError(f"K phải là số nguyên >= {MIN_K}, nhận được {k!r}.")
     if isinstance(max_iter, (bool, np.bool_)) or not isinstance(max_iter, (int, np.integer)) or int(max_iter) < 1:
         raise ValueError(f"Số vòng lặp tối đa phải là số nguyên >= 1, nhận được {max_iter!r}.")
     if (isinstance(tol, (bool, np.bool_)) or not isinstance(tol, (int, float, np.integer, np.floating))
@@ -216,12 +223,12 @@ def _weighted_means(x: np.ndarray, labels: np.ndarray, w: np.ndarray, k: int) ->
     return means, counts
 
 
-def _assign_by_brightness(x: np.ndarray, centers: np.ndarray, chunk_size: int):
+def _assign_by_brightness(x: np.ndarray, centers: np.ndarray, chunk_size: int, order_weights=None):
     """Gán nhãn, phá hoà khoảng cách theo thứ tự độ sáng của tâm (quy tắc của kết quả báo cáo).
 
     Trả về (nhãn theo chỉ số tâm nội bộ, nhãn theo thứ tự độ sáng, khoảng cách bình phương).
     """
-    rank = _relabel_by_brightness(centers)
+    rank = _relabel_by_brightness(centers, order_weights)
     sorted_labels, min_sq = _assign_labels(x, centers[rank], chunk_size)
     return rank.astype(np.int32)[sorted_labels], sorted_labels, min_sq
 
@@ -230,13 +237,16 @@ def _max_shift(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.max(np.sqrt(np.sum((a - b) ** 2, axis=1))))
 
 
-def _relabel_by_brightness(centers: np.ndarray) -> np.ndarray:
+def _relabel_by_brightness(centers: np.ndarray, order_weights: np.ndarray | None = None) -> np.ndarray:
     """Thứ tự cụm tăng dần theo độ sáng của tâm — để kết quả ổn định và dễ đọc.
 
-    Với 3 kênh dùng độ chói BT.601 (0.299R + 0.587G + 0.114B); với 1 kênh dùng giá trị.
+    order_weights: trọng số tổ hợp tuyến tính các kênh làm khoá sắp xếp. Mặc định: 3 kênh dùng
+    độ chói BT.601 (0.299R + 0.587G + 0.114B); số kênh khác dùng trung bình. Với Lab truyền (1, 0, 0).
     """
-    if centers.shape[1] == 3:
-        key = centers @ np.array([0.299, 0.587, 0.114])
+    if order_weights is not None:
+        key = centers @ np.asarray(order_weights, dtype=np.float64)
+    elif centers.shape[1] == 3:
+        key = centers @ LUMA_ORDER
     else:
         key = centers.mean(axis=1)
     return np.argsort(key, kind="stable")
@@ -252,6 +262,7 @@ def kmeans(
     init: str = "kmeans++",
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     weights: np.ndarray | None = None,
+    order_weights: np.ndarray | None = None,
 ) -> KMeansResult:
     """Phân cụm K-means (thuật toán Lloyd) cho dữ liệu (N, D).
 
@@ -263,13 +274,15 @@ def kmeans(
     Args:
         data: mảng (N, D) hoặc (N,) các vector đặc trưng.
         weights: (N,) trọng số dương; None = mọi điểm trọng số 1.
-        k: số cụm yêu cầu (1..8). Nếu dữ liệu có ít giá trị phân biệt hơn k,
+        k: số cụm yêu cầu (>= 1). Nếu dữ liệu có ít giá trị phân biệt hơn k,
            k được giảm xuống bằng số giá trị phân biệt (có cảnh báo).
         max_iter: số vòng lặp tối đa.
         tol: ngưỡng hội tụ — dừng khi độ dịch chuyển lớn nhất của tâm (chuẩn Euclid) <= tol.
         seed: hạt giống ngẫu nhiên để tái lập kết quả.
         init: 'kmeans++' hoặc 'random'.
         chunk_size: số điểm mỗi khối khi tính khoảng cách.
+        order_weights: (D,) trọng số tạo khoá "độ sáng" để đánh số cụm; None = mặc định
+            (BT.601 với 3 kênh, trung bình với số kênh khác).
 
     Returns:
         KMeansResult — nhãn được sắp xếp sao cho cụm 0 có tâm tối nhất.
@@ -299,6 +312,10 @@ def kmeans(
     total_weight = float(w.sum())
     if not np.isfinite(total_weight):
         raise ValueError(NUMERIC_RANGE_ERROR)
+    if order_weights is not None:
+        order_weights = np.asarray(order_weights, dtype=np.float64)
+        if order_weights.shape != (x.shape[1],) or not np.all(np.isfinite(order_weights)):
+            raise ValueError("order_weights phải là mảng (D,) các số hữu hạn.")
 
     t0 = time.perf_counter()
     rng = np.random.default_rng(seed)
@@ -327,7 +344,7 @@ def kmeans(
         # Bước 1: gán nhãn theo tâm gần nhất. Hoà khoảng cách được phá theo thứ tự độ sáng
         # của tâm — đúng quy tắc của bước gán nhãn cuối — nên tâm tính ra ở vòng này khớp
         # với nhãn trả về. Chỉ số tâm nội bộ không đổi để lịch sử tâm theo dõi đúng từng cụm.
-        labels, _, min_sq = pending if pending is not None else _assign_by_brightness(x, centers, chunk_size)
+        labels, _, min_sq = pending if pending is not None else _assign_by_brightness(x, centers, chunk_size, order_weights)
         pending = None
         sse_history.append(_weighted_sse(w, min_sq))
 
@@ -360,7 +377,7 @@ def kmeans(
         if shift <= tol and empty.size == 0:
             # Chỉ dừng khi tâm đúng là trung bình cụm theo phép gán nhãn trả về (với tol > 0, điểm
             # sát biên có thể còn đổi cụm). Nếu chưa, lặp tiếp; phép gán này được dùng lại ở vòng sau.
-            pending = _assign_by_brightness(x, centers, chunk_size)
+            pending = _assign_by_brightness(x, centers, chunk_size, order_weights)
             means, check_counts = _weighted_means(x, pending[0], w, k_eff)
             if np.all(check_counts > 0) and _max_shift(means, centers) <= tol:
                 converged = True
@@ -374,7 +391,7 @@ def kmeans(
 
     # Sắp xếp TRƯỚC khi gán nhãn cuối để quy tắc hoà (chỉ số nhỏ nhất) dùng
     # đúng thứ tự tâm được báo cáo, kể cả khi dừng sớm do max_iter/tol.
-    order = _relabel_by_brightness(centers)
+    order = _relabel_by_brightness(centers, order_weights)
     centers = centers[order]
     centers_history = [c[order] for c in centers_history]
     # Khi hội tụ, phép gán ở bước kiểm tra đã dùng đúng thứ tự này: dùng lại thay vì tính lần nữa.
@@ -415,15 +432,17 @@ class ImageKMeansResult:
 
     labels: np.ndarray  # (H, W) int32
     segmented: np.ndarray  # (H, W) hoặc (H, W, 3) uint8 — mỗi pixel thay bằng màu tâm cụm
-    centers: np.ndarray  # (k, D) float64 trong thang 0..255
-    feature: str  # 'gray' hoặc 'rgb'
+    centers: np.ndarray  # (k, D) float64 trong không gian đặc trưng (mức xám/RGB 0..255, hoặc L*a*b*)
+    feature: str  # 'gray', 'rgb' hoặc 'lab'
     core: KMeansResult
+    centers_rgb: np.ndarray | None = None  # (k, 3) màu hiển thị của tâm (thang 0..255); None với ảnh xám
 
 
 def image_to_features(image: np.ndarray, feature: str, *, dtype=np.float64) -> np.ndarray:
     """Chuyển ảnh thành ma trận đặc trưng (H*W, D).
 
-    feature='gray': D = 1 (mức xám); feature='rgb': D = 3 (R, G, B).
+    feature='gray': D = 1 (mức xám); feature='rgb': D = 3 (R, G, B);
+    feature='lab': D = 3 (L*, a*, b* — CIE 1976, D65; luôn float64).
     Ảnh 2 chiều chỉ cho phép 'gray'. dtype mặc định float64; đường xử lý ảnh
     giữ uint8 ở bước gom màu để tránh bản sao float64 trên toàn bộ pixel.
     """
@@ -432,11 +451,12 @@ def image_to_features(image: np.ndarray, feature: str, *, dtype=np.float64) -> n
         if img.ndim != 2:
             raise ValueError("Đặc trưng 'gray' yêu cầu ảnh xám 2 chiều; ảnh màu cần được chuyển xám trước.")
         return img.reshape(-1, 1).astype(dtype, copy=False)
-    if feature == "rgb":
+    if feature in ("rgb", "lab"):
         if img.ndim != 3 or img.shape[2] != 3:
-            raise ValueError("Đặc trưng 'rgb' yêu cầu ảnh 3 kênh (H, W, 3).")
-        return img.reshape(-1, 3).astype(dtype, copy=False)
-    raise ValueError(f"Loại đặc trưng không hợp lệ: {feature!r}.")
+            raise ValueError(f"Đặc trưng '{feature}' yêu cầu ảnh 3 kênh (H, W, 3).")
+        rgb = img.reshape(-1, 3)
+        return rgb.astype(dtype, copy=False) if feature == "rgb" else rgb_to_lab(rgb)
+    raise ValueError(f"Loại đặc trưng không hợp lệ: {feature!r} (chỉ hỗ trợ {', '.join(FEATURES)}).")
 
 
 def unique_pixels(features: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -467,6 +487,8 @@ def unique_pixels(features: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndar
     return values, inverse.ravel(), counts
 
 
+
+
 def segment_image_kmeans(
     image: np.ndarray,
     k: int,
@@ -476,7 +498,12 @@ def segment_image_kmeans(
     seed: int | None = 0,
     init: str = "kmeans++",
 ) -> ImageKMeansResult:
-    """Phân đoạn ảnh bằng K-means: mỗi pixel là một vector đặc trưng."""
+    """Phân đoạn ảnh bằng K-means: mỗi pixel là một vector đặc trưng.
+
+    Với feature='lab': gom các màu RGB phân biệt trước (mỗi màu RGB ứng với đúng một điểm Lab),
+    đổi các màu phân biệt sang Lab rồi chạy K-means có trọng số trong Lab — khoảng cách
+    Euclid là ΔE*ab. Tâm cụm ở thang Lab, được đổi ngược về sRGB để tô ảnh phân đoạn.
+    """
     img = np.asarray(image)
     if img.ndim not in (2, 3):
         raise ValueError("Ảnh phải có dạng (H, W) hoặc (H, W, 3).")
@@ -485,17 +512,27 @@ def segment_image_kmeans(
     h, w = img.shape[:2]
     if h == 0 or w == 0:
         raise ValueError("Ảnh rỗng: chiều rộng và chiều cao phải >= 1.")
+    if feature not in FEATURES:
+        raise ValueError(f"Loại đặc trưng không hợp lệ: {feature!r} (chỉ hỗ trợ {', '.join(FEATURES)}).")
     _validate_params(k, max_iter, tol, init, seed=seed)
     t0 = time.perf_counter()
-    values, inverse, counts = unique_pixels(image_to_features(img, feature, dtype=np.uint8))
+    pixel_feature = "rgb" if feature == "lab" else feature
+    values, inverse, counts = unique_pixels(image_to_features(img, pixel_feature, dtype=np.uint8))
+    order_weights = None
+    if feature == "lab":
+        values = rgb_to_lab(values)
+        order_weights = LIGHTNESS_ORDER
     # K-means có trọng số trên các giá trị phân biệt == K-means trên toàn bộ pixel
-    core = kmeans(values, k, max_iter=max_iter, tol=tol, seed=seed, init=init, weights=counts)
+    core = kmeans(values, k, max_iter=max_iter, tol=tol, seed=seed, init=init, weights=counts,
+                  order_weights=order_weights)
     core.labels = core.labels[inverse]  # trả nhãn về cho từng pixel
     labels = core.labels.reshape(h, w)
-    palette = np.clip(np.round(core.centers), 0, 255).astype(np.uint8)
+    display = lab_to_rgb(core.centers) if feature == "lab" else core.centers
+    palette = np.clip(np.round(display), 0, 255).astype(np.uint8)
     segmented = palette[labels]
     if feature == "gray":
         segmented = segmented[..., 0]
     # Đo tới kết quả trực tiếp của thuật toán, gồm cả phục hồi nhãn và ảnh tâm.
     core.elapsed_seconds = time.perf_counter() - t0
-    return ImageKMeansResult(labels=labels, segmented=segmented, centers=core.centers, feature=feature, core=core)
+    return ImageKMeansResult(labels=labels, segmented=segmented, centers=core.centers, feature=feature, core=core,
+                             centers_rgb=None if feature == "gray" else np.asarray(display, dtype=np.float64))

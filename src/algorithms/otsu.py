@@ -221,3 +221,147 @@ def segment_image_otsu(gray: np.ndarray, manual_threshold: int | None = None) ->
     binary = apply_threshold(gray, threshold)
     result.elapsed_seconds = time.perf_counter() - t0
     return result, binary
+
+
+# ----------------------------- Multi-Otsu (3 lớp) -----------------------------
+# Mở rộng tự nhiên của Otsu (Liao, Chen & Chung 2001, "A Fast Algorithm for Multilevel
+# Thresholding"): với hai ngưỡng t1 < t2 chia histogram thành C0 = [0, t1], C1 = (t1, t2],
+# C2 = (t2, 255]. Phương sai giữa các lớp
+#     sigma_B^2(t1, t2) = sum_k w_k (mu_k - mu_T)^2 = (1/N) * sum_k M_k^2 / c_k - mu_T^2
+# (c_k: số pixel, M_k: tổng mức xám của lớp k). Vì mu_T cố định, cực đại sigma_B^2 tương đương
+# cực đại sum_k M_k^2 / c_k. Tìm kiếm vét cạn trên mọi cặp (t1, t2) bằng tổng tích luỹ:
+# mỗi cặp O(1), tổng O(256^2) = 65 536 phép tính — vài mili giây, không phụ thuộc kích thước ảnh.
+
+MULTI_OTSU_CLASSES = 3
+
+
+@dataclass
+class MultiOtsuResult:
+    thresholds: tuple[int, int]  # (t1, t2): C0 = {I <= t1}, C1 = {t1 < I <= t2}, C2 = {I > t2}
+    valid: bool  # False nếu ảnh có ít hơn 3 mức xám (không thể chia 3 lớp khác rỗng)
+    histogram: np.ndarray  # (256,) int64
+    between_class_variance: np.ndarray  # (256, 256) float64 theo [t1, t2]; NaN tại cặp không hợp lệ
+    max_variance: float
+    total_variance: float
+    separability: float  # eta = sigma_B^2 / sigma_T^2
+    class_weights: list[float]
+    class_means: list[float]
+    class_counts: list[int]
+    n_tied: int = 1
+    elapsed_seconds: float = 0.0
+    warnings: list[str] = field(default_factory=list)
+
+    @property
+    def n_classes(self) -> int:
+        return MULTI_OTSU_CLASSES
+
+
+def _closest_to_floor_mean(values: np.ndarray) -> int:
+    mid = int(np.floor(values.mean()))
+    return int(values[np.argmin(np.abs(values - mid))])
+
+
+def multi_otsu_from_histogram(hist: np.ndarray) -> MultiOtsuResult:
+    """Hai ngưỡng Otsu (3 lớp) từ histogram 256 mức, vét cạn O(256^2)."""
+    t0 = time.perf_counter()
+    base = otsu_from_histogram(hist)  # dùng lại toàn bộ kiểm tra đầu vào của Otsu 2 lớp
+    counts = base.histogram
+    n = int(counts.sum())
+    levels = np.arange(N_LEVELS, dtype=np.int64)
+    c = np.cumsum(counts)
+    m = np.cumsum(levels * counts)
+    total_moment = int(m[-1])
+    mu_t = total_moment / n
+
+    t1 = np.arange(N_LEVELS)[:, None]
+    t2 = np.arange(N_LEVELS)[None, :]
+    c0, m0 = c[t1], m[t1]
+    c1, m1 = c[t2] - c[t1], m[t2] - m[t1]
+    c2, m2 = n - c[t2], total_moment - m[t2]
+    valid = (t1 < t2) & (c0 > 0) & (c1 > 0) & (c2 > 0)
+    score = np.full((N_LEVELS, N_LEVELS), -np.inf)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        s = (m0.astype(np.float64) ** 2 / c0 + m1.astype(np.float64) ** 2 / c1
+             + m2.astype(np.float64) ** 2 / c2)
+    score[valid] = s[valid]
+    sigma_b = np.where(valid, score / n - mu_t ** 2, np.nan)
+    total_var = base.total_variance
+    warnings: list[str] = []
+
+    if not valid.any():
+        distinct = int(np.count_nonzero(counts))
+        t = base.threshold
+        warnings.append(f"Ảnh chỉ có {distinct} mức xám nên không chia được 3 lớp khác rỗng; "
+                        f"dùng hai ngưỡng trùng nhau t1 = t2 = {t} (lớp C1 rỗng).")
+        lo, hi = int(counts[: t + 1].sum()), int(counts[t + 1 :].sum())
+        return MultiOtsuResult(
+            thresholds=(t, t), valid=False, histogram=counts, between_class_variance=sigma_b,
+            max_variance=base.max_variance, total_variance=total_var, separability=base.separability,
+            class_weights=[lo / n, 0.0, hi / n],
+            class_means=[base.mean0, float("nan"), base.mean1],
+            class_counts=[lo, 0, hi], elapsed_seconds=time.perf_counter() - t0, warnings=warnings,
+        )
+
+    # Xác định cực đại chính xác bằng số hữu tỉ trên các ứng viên gần cực đại float (như Otsu 2 lớp).
+    # Các cặp trong cùng khoảng trống histogram có cùng (c0, c0 + c1) nên chỉ tính một lần mỗi cặp số đếm.
+    float_max = float(score[valid].max())
+    cand = np.argwhere(valid & (score >= float_max * (1 - 1e-9)))
+    keys = np.stack([c[cand[:, 0]], c[cand[:, 1]]], axis=1)
+    distinct, first, inverse = np.unique(keys, axis=0, return_index=True, return_inverse=True)
+
+    def exact(i: int, j: int) -> Fraction:
+        a, b, ma, mb = int(c[i]), int(c[j]), int(m[i]), int(m[j])
+        return (Fraction(ma * ma, a) + Fraction((mb - ma) ** 2, b - a)
+                + Fraction((total_moment - mb) ** 2, n - b))
+
+    values = [exact(int(cand[f, 0]), int(cand[f, 1])) for f in first]
+    best = max(values)
+    best_ids = [i for i, v in enumerate(values) if v == best]
+    tied = cand[np.isin(inverse.ravel(), best_ids)]
+    # Phá hoà: t1 gần floor(trung bình các t1 đồng hạng) nhất, rồi t2 tương tự trong các cặp có t1 đó.
+    th1 = _closest_to_floor_mean(tied[:, 0])
+    th2 = _closest_to_floor_mean(tied[tied[:, 0] == th1, 1])
+    if len(tied) > 1:
+        warnings.append(f"Có {len(tied)} cặp ngưỡng cùng đạt cực đại; chọn (t1, t2) = ({th1}, {th2}) "
+                        "gần trung bình các cặp đồng hạng nhất.")
+    max_var = float(best / n - Fraction(total_moment, n) ** 2)
+    cls_counts = [int(c[th1]), int(c[th2] - c[th1]), int(n - c[th2])]
+    cls_moments = [int(m[th1]), int(m[th2] - m[th1]), int(total_moment - m[th2])]
+    return MultiOtsuResult(
+        thresholds=(th1, th2),
+        valid=True,
+        histogram=counts,
+        between_class_variance=sigma_b,
+        max_variance=max_var,
+        total_variance=total_var,
+        separability=float(min(max(max_var / total_var if total_var > 0 else 0.0, 0.0), 1.0)),
+        class_weights=[k / n for k in cls_counts],
+        class_means=[mk / k for mk, k in zip(cls_moments, cls_counts)],
+        class_counts=cls_counts,
+        n_tied=int(len(tied)),
+        elapsed_seconds=time.perf_counter() - t0,
+        warnings=warnings,
+    )
+
+
+def apply_multi_threshold(gray: np.ndarray, thresholds: tuple[int, int]) -> np.ndarray:
+    """Ảnh nhãn 3 lớp (H, W) uint8: 0 nếu I <= t1, 1 nếu t1 < I <= t2, 2 nếu I > t2."""
+    if len(thresholds) != 2:
+        raise ValueError("Cần đúng hai ngưỡng (t1, t2).")
+    for t in thresholds:
+        if isinstance(t, (bool, np.bool_)) or not isinstance(t, (int, np.integer)) or not 0 <= int(t) <= 255:
+            raise ValueError("Ngưỡng phải là số nguyên trong [0, 255].")
+    t1, t2 = int(thresholds[0]), int(thresholds[1])
+    if t1 > t2:
+        raise ValueError("Ngưỡng phải thoả t1 <= t2.")
+    g = _validate_gray(gray)
+    return (g > t1).astype(np.uint8) + (g > t2).astype(np.uint8)
+
+
+def segment_image_multi_otsu(gray: np.ndarray) -> tuple[MultiOtsuResult, np.ndarray]:
+    """Histogram + hai ngưỡng Otsu + ảnh nhãn 3 lớp; cùng phạm vi đo thời gian với Otsu 2 lớp."""
+    t0 = time.perf_counter()
+    result = multi_otsu_from_histogram(compute_histogram(gray))
+    labels = apply_multi_threshold(gray, result.thresholds)
+    result.elapsed_seconds = time.perf_counter() - t0
+    return result, labels

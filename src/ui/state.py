@@ -1,7 +1,7 @@
 """Quản lý ảnh đầu vào dùng chung giữa các trang và bộ nhớ đệm kết quả.
 
 Mỗi lần chạy thuật toán, kết quả được lưu trong st.session_state kèm "chữ ký" của đầu vào
-(hash nội dung tệp + tên tệp + giới hạn kích thước + cách chuyển xám). Khi đầu vào đổi, chữ ký đổi
+(hash nội dung tệp + tên tệp + giới hạn kích thước + cách chuyển xám + lọc trung vị). Khi đầu vào đổi, chữ ký đổi
 và kết quả cũ không được hiển thị/tải xuống nữa.
 """
 
@@ -25,6 +25,7 @@ MANIFEST_PATH = DATA_DIR / "samples.json"
 
 MAX_SIDE_OPTIONS = [128, 256, 400, 600, 800, 1024, 1600, 2048]
 DEFAULT_MAX_SIDE = 800
+MEDIAN_OPTIONS = {1: "Không lọc", 3: "Trung vị 3×3", 5: "Trung vị 5×5", 7: "Trung vị 7×7"}
 RESULT_KEYS = ("km_result", "otsu_result", "cmp_result")
 # Ground truth người dùng tải lên ở trang So sánh. Lưu ngoài widget upload vì Streamlit
 # xoá state của widget khi chuyển trang; gắn với chữ ký đầu vào để không dùng nhầm ảnh khác.
@@ -56,8 +57,8 @@ def load_manifest() -> list[dict]:
         or (s["ground_truth"] is not None and not isinstance(s["ground_truth"], str))
         or not isinstance(s.get("suggested"), dict)
         or type(s["suggested"].get("k")) is not int
-        or not 1 <= s["suggested"]["k"] <= 8
-        or s["suggested"].get("feature") not in ("rgb", "gray")
+        or s["suggested"]["k"] < 1
+        or s["suggested"].get("feature") not in ("rgb", "lab", "gray")
         for s in samples
     ):
         raise InputError("Danh mục ảnh mẫu data/samples.json sai cấu trúc hoặc thiếu trường bắt buộc.")
@@ -77,11 +78,11 @@ def _load(data: bytes, name: str) -> LoadedImage:
 
 
 @st.cache_data(show_spinner=False, max_entries=4, ttl=300)
-def _prepare(data: bytes, name: str, max_side: int, gray_method: str,
+def _prepare(data: bytes, name: str, max_side: int, gray_method: str, median_size: int = 1,
              _loaded: LoadedImage | None = None) -> PreparedInput:
     # _loaded không tham gia hash: bytes + tên tệp đã định danh đầy đủ đầu vào.
     # Truyền ảnh vừa đọc để cache miss không phải giải mã thêm một lần.
-    return prepare_input(_load(data, name) if _loaded is None else _loaded, max_side, gray_method)
+    return prepare_input(_load(data, name) if _loaded is None else _loaded, max_side, gray_method, median_size)
 
 
 @st.cache_data(show_spinner=False, max_entries=32)
@@ -94,7 +95,7 @@ def thumbnail(path: str, size: int = 220) -> np.ndarray:
 
 
 def build_context(data: bytes, name: str, max_side: int, gray_method: str, sample: dict | None,
-                  gt_bytes: bytes | None = None) -> InputContext:
+                  gt_bytes: bytes | None = None, median_size: int = 1) -> InputContext:
     """Đọc + chuẩn bị đầu vào. Ném InputError nếu dữ liệu không hợp lệ."""
     digest = hashlib.sha1(data).hexdigest()[:16]
     current = get_context()
@@ -102,8 +103,8 @@ def build_context(data: bytes, name: str, max_side: int, gray_method: str, sampl
         loaded = current.loaded
     else:
         loaded = _load(data, name)
-    prepared = _prepare(data, name, max_side, gray_method, _loaded=loaded)
-    signature = f"{digest}|{max_side}|{gray_method}|{name}"
+    prepared = _prepare(data, name, max_side, gray_method, median_size, _loaded=loaded)
+    signature = f"{digest}|{max_side}|{gray_method}|m{median_size}|{name}"
     gt = None
     if gt_bytes is not None:
         gt = fit_ground_truth(load_mask_bytes(gt_bytes, "gt.png"), prepared)
@@ -212,7 +213,7 @@ def clear_uploaded_gt() -> None:
 
 
 __all__ = [
-    "InputContext", "InputError", "MAX_SIDE_OPTIONS", "DEFAULT_MAX_SIDE", "DATA_DIR",
+    "InputContext", "InputError", "MAX_SIDE_OPTIONS", "DEFAULT_MAX_SIDE", "MEDIAN_OPTIONS", "DATA_DIR",
     "load_manifest", "sample_by_id", "thumbnail", "build_context", "set_context", "get_context",
     "get_input_error", "store_result", "get_result", "has_stale_result",
     "restore_widget", "remember_widget", "persistent_foreground", "save_foreground",

@@ -1,4 +1,4 @@
-"""Thanh bên: chọn nguồn ảnh (mẫu / tải lên), giới hạn kích thước xử lý, cách chuyển xám."""
+"""Thanh bên: chọn nguồn ảnh (mẫu / tải lên), giới hạn kích thước xử lý, cách chuyển xám, lọc trung vị."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from src.ui.state import (
     DATA_DIR,
     DEFAULT_MAX_SIDE,
     MAX_SIDE_OPTIONS,
+    MEDIAN_OPTIONS,
     InputError,
     build_context,
     load_manifest,
@@ -30,6 +31,7 @@ def render_input_sidebar() -> None:
     st.session_state.setdefault("input_source", SOURCES[0])
     st.session_state.setdefault("max_side", DEFAULT_MAX_SIDE)
     st.session_state.setdefault("gray_method", "luminance")
+    st.session_state.setdefault("median_size", 1)
     if sample_ids:
         default_sample = "multi_shapes_color" if "multi_shapes_color" in sample_ids else sample_ids[0]
         if st.session_state.get("sample_id") not in sample_ids:
@@ -74,6 +76,10 @@ def render_input_sidebar() -> None:
                          help="Ảnh lớn hơn được thu nhỏ (giữ tỉ lệ) trước khi xử lý để tránh treo máy.")
         st.selectbox("Chuyển ảnh màu sang xám", list(GRAY_METHODS), key="gray_method",
                      format_func=lambda m: GRAY_METHODS[m])
+        st.selectbox("Tiền xử lý: lọc trung vị khử nhiễu", list(MEDIAN_OPTIONS), key="median_size",
+                     format_func=lambda k: MEDIAN_OPTIONS[k],
+                     help="Lọc phi tuyến (giáo trình Chương 4): thay mỗi pixel bằng trung vị cửa sổ k×k. "
+                          "Khử nhiễu hạt trước Otsu/K-means — hai thuật toán theo từng điểm, không dùng pixel lân cận.")
 
         if data is None:
             set_context(None, None)
@@ -81,7 +87,7 @@ def render_input_sidebar() -> None:
             return
         try:
             ctx = build_context(data, name, int(st.session_state["max_side"]), st.session_state["gray_method"],
-                                sample, gt_bytes)
+                                sample, gt_bytes, median_size=int(st.session_state["median_size"]))
         except MemoryError:
             message = "Không đủ bộ nhớ để đọc ảnh. Hãy thu nhỏ ảnh trước khi tải lên hoặc giải phóng RAM rồi thử lại."
             set_context(None, message)

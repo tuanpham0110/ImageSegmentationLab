@@ -8,6 +8,8 @@ import numpy as np
 import streamlit as st
 from PIL import Image
 
+from src.processing.filters import MORPH_LABELS
+from src.processing.pipeline import MaskPostprocess
 from src.utils import visualization as viz
 
 MIN_DISPLAY_SIDE = 256  # ảnh nhỏ hơn được phóng to (nearest) khi HIỂN THỊ để nhìn rõ từng pixel
@@ -162,6 +164,27 @@ def cached_export_files(run: dict, key: tuple, build: Callable[[], dict[str, tup
         return None
     run["_export_cache"] = {"key": key, "files": files}
     return files
+
+
+MORPH_SIZES = (3, 5, 7, 9)
+
+
+def morphology_controls(key_prefix: str) -> MaskPostprocess:
+    """Chọn phép hình thái học hậu xử lý mask (giáo trình Chương 7). Giá trị giữ qua điều hướng trang."""
+    from src.ui.state import remember_widget, restore_widget
+
+    op_key, size_key = f"{key_prefix}_morph", f"{key_prefix}_morph_size"
+    restore_widget(op_key, "none")
+    restore_widget(size_key, 3)
+    c1, c2 = st.columns([2, 1])
+    op = c1.selectbox("Hậu xử lý mask (hình thái học)", list(MORPH_LABELS), key=op_key,
+                      format_func=lambda o: MORPH_LABELS[o],
+                      help="Mở = co rồi giãn: xoá đốm nhiễu nhỏ hơn phần tử cấu trúc. "
+                           "Đóng = giãn rồi co: lấp lỗ thủng/khe hở nhỏ. Phần tử cấu trúc vuông k×k.")
+    size = c2.selectbox("Kích thước k", MORPH_SIZES, key=size_key, format_func=lambda k: f"{k}×{k}")
+    remember_widget(op_key)
+    remember_widget(size_key)
+    return MaskPostprocess(op, int(size))
 
 
 def download_buttons(files: dict[str, tuple[bytes, str]], labels: dict[str, str], key_prefix: str) -> None:

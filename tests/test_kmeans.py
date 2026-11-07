@@ -188,10 +188,19 @@ def test_invalid_weights_rejected():
         kmeans(np.arange(4.0), 2, weights=np.ones(3))
 
 
-@pytest.mark.parametrize("bad_k", [0, 9, 2.5, -1, True, np.bool_(True)])
+@pytest.mark.parametrize("bad_k", [0, 2.5, -1, True, np.bool_(True), "3"])
 def test_invalid_k_rejected(bad_k):
     with pytest.raises(ValueError):
         kmeans(np.arange(10.0), bad_k)
+
+
+def test_k_has_no_artificial_upper_bound():
+    # K-means tổng quát: K > 8 hợp lệ; K thực tế chỉ bị chặn bởi số giá trị phân biệt.
+    data = np.arange(40.0)
+    res = kmeans(data, 12, seed=0)
+    assert res.k_effective == 12 and np.unique(res.labels).size == 12
+    res = kmeans(np.arange(5.0), 12, seed=0)
+    assert res.k_effective == 5 and res.warnings
 
 
 def test_invalid_params_rejected():

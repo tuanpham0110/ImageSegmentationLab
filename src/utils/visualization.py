@@ -8,7 +8,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-from src.processing.postprocessing import CLUSTER_PALETTE_HEX  # noqa: E402
+from src.processing.postprocessing import cluster_palette_hex  # noqa: E402
 
 TEXT_PRIMARY = "#1f2328"
 TEXT_SECONDARY = "#57606a"
@@ -58,6 +58,29 @@ def histogram_figure(
     return fig
 
 
+def multi_histogram_figure(hist: np.ndarray, thresholds: tuple[int, int], title: str = "Histogram 256 mức xám — 3 lớp"):
+    """Histogram tô theo 3 lớp của Multi-Otsu, với hai đường ngưỡng t1, t2."""
+    fig, ax = plt.subplots(figsize=(7.2, 3.2), dpi=120)
+    levels = np.arange(256)
+    h = np.asarray(hist)
+    t1, t2 = int(thresholds[0]), int(thresholds[1])
+    colors = cluster_palette_hex(3)
+    parts = [(slice(0, t1 + 1), f"Lớp 0 (≤ {t1})"), (slice(t1 + 1, t2 + 1), f"Lớp 1 ({t1} < g ≤ {t2})"),
+             (slice(t2 + 1, 256), f"Lớp 2 (> {t2})")]
+    for (sl, label), color in zip(parts, colors):
+        if levels[sl].size:
+            ax.bar(levels[sl], h[sl], width=1.0, color=color, label=label)
+    for t, name in ((t1, "t1"), (t2, "t2")):
+        ax.axvline(t + 0.5, color=ACCENT, linewidth=2)
+        ax.annotate(f"{name} = {t}", (t + 0.5, 1), xycoords=("data", "axes fraction"), xytext=(4, -12),
+                    textcoords="offset points", fontsize=9, color=TEXT_PRIMARY)
+    ax.set_xlim(-1, 256)
+    _style(ax, title, "Mức xám g", "Số pixel h(g)")
+    ax.legend(fontsize=8, frameon=True, facecolor="white", edgecolor=GRID, framealpha=0.95, loc="best")
+    fig.tight_layout()
+    return fig
+
+
 def variance_figure(sigma_b: np.ndarray, valid: np.ndarray, threshold: int | None):
     """Đồ thị phương sai giữa hai lớp sigma_B^2(t) theo ngưỡng t."""
     fig, ax = plt.subplots(figsize=(7.2, 2.8), dpi=120)
@@ -82,7 +105,7 @@ def cluster_share_figure(counts: np.ndarray, centers: np.ndarray):
     share = counts / counts.sum() * 100
     fig, ax = plt.subplots(figsize=(4.6, 0.45 * k + 1.1), dpi=130)
     ypos = np.arange(k)
-    ax.barh(ypos, share, color=[CLUSTER_PALETTE_HEX[i] for i in range(k)], height=0.6)
+    ax.barh(ypos, share, color=cluster_palette_hex(k), height=0.6)
     labels = []
     for i in range(k):
         c = centers[i]

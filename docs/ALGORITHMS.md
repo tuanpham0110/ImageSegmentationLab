@@ -71,7 +71,9 @@ Kiểm thử `test_sse_is_non_increasing` xác nhận SSE không tăng.
 | Khoảng cách | Tính trực tiếp Σ_d(x_d − c_d)² theo từng tâm và **khối 262 144 điểm**, tránh triệt tiêu số do khai triển bình phương khi dữ liệu có độ lệch lớn. Bộ nhớ tạm O(B·D), không tạo ma trận N×K×D; tổng RAM còn gồm ảnh, nhãn, dữ liệu phân biệt và các mảng tạm khác |
 | Khởi tạo K-means++ **[bổ sung]** | Arthur & Vassilvitskii (2007), *k-means++: The Advantages of Careful Seeding*, SODA. Tâm đầu ngẫu nhiên; tâm tiếp theo chọn với xác suất ∝ w(x)·D(x)², D(x) = khoảng cách tới tâm gần nhất đã chọn |
 | Khởi tạo ngẫu nhiên | Chọn K giá trị **phân biệt** (tránh hai tâm trùng nhau ngay từ đầu) |
+| Giới hạn K | Thuật toán nhận mọi K ≥ 1 (không có chặn trên). Bản đồ nhãn dùng 8 màu cố định, từ cụm thứ 9 sinh màu bằng bước góc pha tỉ lệ vàng trong HSV (`cluster_palette_hex`). Giao diện đặt thanh trượt 2–16 cho tiện thao tác |
 | K > số giá trị phân biệt | Giảm K về số giá trị phân biệt, ghi cảnh báo (ví dụ ảnh một màu ⇒ K = 1) |
+| Không gian CIE L\*a\*b\* **[bổ sung — CIE 15:2004; IEC 61966-2-1]** | `feature="lab"`: sRGB → tuyến tính (gamma) → XYZ (D65) → L\*a\*b\* (`src/utils/color_space.py`). Khoảng cách Euclid trong Lab là ΔE\*ab (CIE76), gần với khác biệt màu cảm nhận hơn RGB. Gom màu RGB phân biệt trước (song ánh RGB ↔ Lab) rồi đổi U màu sang Lab, nên vẫn là K-means có trọng số chính xác. Cụm được đánh số theo L\*; tâm đổi ngược về sRGB để tô ảnh phân đoạn |
 | Cụm rỗng | Đặt lại tâm tại điểm xa tâm hiện tại của nó nhất, không trùng tâm khác; không được tính là hội tụ ở vòng đó. Nếu dừng sớm rồi gán nhãn cuối sinh cụm rỗng: báo chưa hội tụ và cảnh báo, không vượt max_iter |
 | Tái lập | `numpy.random.default_rng(seed)` |
 | Nhất quán | Sắp tâm trước rồi gán nhãn cuối ⇒ quy tắc hoà theo chỉ số nhỏ nhất, nhãn, số pixel và SSE khớp tâm báo cáo, kể cả khi dừng sớm (`test_final_labels_use_sorted_center_order_to_break_distance_ties`) |
@@ -81,8 +83,12 @@ Kiểm thử `test_sse_is_non_increasing` xác nhận SSE không tăng.
 ### 3.4 Chọn đối tượng
 
 K-means **không biết** cụm nào là đối tượng. Người dùng chọn một hoặc nhiều cụm làm foreground. Lựa chọn mặc định
-là **gợi ý heuristic**: cụm chiếm nhiều pixel viền ảnh nhất được coi là nền (giả định đối tượng nằm trong ảnh, không
-phủ viền). Heuristic này sai khi đối tượng chạm viền hoặc nền nhiều màu — người dùng phải chỉnh tay.
+là **gợi ý heuristic**: một cụm là **nền** nếu tỷ lệ của nó trên viền ảnh lớn hơn tỷ lệ của nó trong vùng trung tâm
+(nửa giữa theo mỗi chiều). Vì tổng tỷ lệ ở viền và ở trung tâm đều bằng 1 nên luôn có ít nhất một cụm nền và một cụm
+đối tượng; nếu mọi cụm có hai tỷ lệ bằng nhau thì quay về quy tắc "cụm chiếm viền nhiều nhất là nền".
+So với quy tắc cũ (chỉ xét viền), cách so sánh tương đối xử lý đúng ảnh cận cảnh (đối tượng tràn viền nhưng phủ kín
+trung tâm) và nền nhiều màu (trời + cỏ đều trội ở viền ⇒ đều là nền) — xem `test_closeup_object_touching_all_borders_stays_foreground`,
+`test_multi_colored_background_is_all_background`. Vẫn sai khi đối tượng lệch hẳn ra mép, không chạm vùng trung tâm.
 
 ### 3.5 Độ phức tạp
 
@@ -146,7 +152,7 @@ giáo trình ghi 1.66 do làm tròn m(g) trước khi tính.
 | Ảnh một mức xám | Không có t hợp lệ ⇒ `valid = False`, cảnh báo, t = mức xám đó; mask tự động luôn rỗng dù chọn lớp sáng/tối. Chế độ thủ công vẫn cho chọn lớp có chủ đích |
 | Nhiều t cùng cực đại | Tập cực đại được xác định **chính xác bằng số hữu tỉ** (σ²_B = (N·m₀ − M·c₀)² / (N²·c₀·c₁) với số nguyên), không so `==` số thực: ví dụ ảnh [0, 1, 1, 2] có t = 0 và t = 1 cùng σ²_B = 1/3. Chọn **phần tử trong tập cực đại gần floor(trung bình) nhất**, hoà chọn phần tử nhỏ hơn. Với một đoạn liên tục, kết quả vẫn là floor(trung bình). Không lấy trung bình bên ngoài tập cực đại |
 | Quy ước nhị phân | pixel > t ⇒ 255 (C₁), ngược lại 0 (giống công thức 3.1.3 với θ = t + 1) |
-| Lớp nào là đối tượng | Lựa chọn: lớp sáng, lớp tối, hoặc **gợi ý theo viền ảnh** (lớp chiếm đa số viền là nền) — heuristic, cùng giả định như K-means |
+| Lớp nào là đối tượng | Lựa chọn: lớp sáng, lớp tối, hoặc **gợi ý theo viền ảnh** (lớp trội ở viền hơn ở trung tâm là nền) — cùng heuristic với K-means (mục 3.4) |
 | Ngưỡng thủ công | Dùng `apply_threshold` với T người dùng chọn; t* vẫn được tính và vẽ để đối chiếu |
 
 Kiểm chứng: so với cài đặt duyệt trực tiếp từng ngưỡng theo định nghĩa ω₀ω₁(μ₀ − μ₁)² trên 5 ảnh ngẫu nhiên
@@ -215,3 +221,43 @@ Ground truth tải lên gắn với chữ ký đầu vào; khi đổi ảnh/ti�
 - K-means giữ counts int64 cho số pixel thông thường. Trọng số lẻ hoặc tổng ngoài miền int64 trả counts float64;
   phép tính vượt khả năng biểu diễn float64 được báo ValueError, không trả kết quả NaN/Inf.
 - PNG/CSV/JSON xuất được kiểm tra trước chuyển đổi; JSON không chứa NaN/Infinity và lưu cách chuyển xám của K-means.
+
+---
+
+## 9. Bổ sung sau phản biện lượt ba (07/11/2026)
+
+### 9.1 Multi-Otsu 3 lớp **[bổ sung — Liao, Chen & Chung, "A Fast Algorithm for Multilevel Thresholding", J. Inf. Sci. Eng., 2001]**
+
+Hai ngưỡng t₁ < t₂ chia histogram thành C₀ = [0, t₁], C₁ = (t₁, t₂], C₂ = (t₂, 255]. Với cₖ là số pixel và Mₖ là
+tổng mức xám của lớp k: σ²_B(t₁, t₂) = Σₖ ωₖ(μₖ − μ_T)² = (1/N)·Σₖ Mₖ²/cₖ − μ_T². μ_T cố định nên chỉ cần cực đại
+Σₖ Mₖ²/cₖ. Mỗi cặp tính O(1) từ tổng tích luỹ ⇒ vét cạn 256² cặp, vài mili giây, không phụ thuộc kích thước ảnh.
+Đồng hạng được xác định chính xác bằng số hữu tỉ như Otsu 2 lớp; chọn t₁ gần floor(trung bình các t₁ đồng hạng) nhất,
+rồi t₂ tương tự. Ảnh có < 3 mức xám ⇒ `valid = False`, t₁ = t₂ = ngưỡng Otsu 2 lớp, có cảnh báo.
+Kiểm chứng: `test_multi_otsu_matches_brute_force`. Trên `gray_levels_objects` (nền 35, ba khối 90/150/215), Otsu 2 lớp
+cho IoU 0.667 (khối 90 bị gộp vào nền); Multi-Otsu cho (t₁, t₂) = (62, 182) và IoU 1.000.
+
+### 9.2 Lọc không gian (`src/processing/filters.py`)
+
+| Phép | Vị trí trong pipeline | Cài đặt |
+|---|---|---|
+| Lọc trung vị k×k (giáo trình Chương 4) | Tiền xử lý, sau thu nhỏ, trước cả hai thuật toán (`prepare_input(..., median_size)`) | `sliding_window_view` + `np.partition` lấy phần tử thứ k²//2, xử lý theo khối 128 hàng để giới hạn bộ nhớ tạm |
+| Co / giãn / mở / đóng (giáo trình Chương 7) | Hậu xử lý mask (`MaskPostprocess`) cho K-means, Otsu, Multi-Otsu | Phần tử cấu trúc vuông k×k là tách được ⇒ min/max theo hàng rồi theo cột, O(N·k) |
+
+Biên ảnh dùng padding lặp pixel mép, nên đối tượng chạm mép không bị co lẹm từ viền. Kiểm chứng bằng cài đặt
+duyệt trực tiếp (`test_median_filter_matches_brute_force`, `test_erode_and_dilate_match_brute_force`).
+Trên `noisy_circle` (Otsu, gợi ý viền): IoU 0.840 → 0.952 với mở-rồi-đóng 5×5; → 0.998 với lọc trung vị 3×3.
+
+### 9.3 Đọc CSV
+
+Hàng chỉ gồm số nguyên 0..255 viết thường được kiểm tra bằng **một** regex cho cả hàng rồi NumPy phân tích một lần ở
+cuối; hàng có dấu, phần thập phân hoặc giá trị lỗi mới đi đường kiểm tra từng ô bằng `Decimal` để báo đúng dòng/cột.
+CSV 1000×1000: 1.36 s → 0.34 s.
+
+### 9.4 Về bước gom màu `unique_pixels` trên ảnh chụp thật
+
+Đã đo, không thay đổi. Ảnh 1600×1200 tổng hợp có gradient + nhiễu Gauss σ = 4 (mô phỏng ảnh chụp): U = 41% N,
+`np.unique` mất 0.155 s, trong khi toàn bộ K-means mất 4.66 s. Bước gom màu chiếm ~3% thời gian và vẫn giảm 59% số
+điểm cho mọi vòng Lloyd (O(U·K·D) mỗi vòng), nên không phải nút cổ chai. Mảng chỉ số ngược N phần tử có cùng cỡ với mảng
+nhãn bắt buộc phải trả về. Giới hạn cạnh dài 800 px tồn tại vì chi phí O(N·K·T) của chính các vòng Lloyd và việc hiển thị
+ảnh trên trình duyệt, không phải vì `np.unique`; người dùng có thể nâng lên 2048 px ở thanh bên.
+

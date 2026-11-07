@@ -63,8 +63,8 @@ python scripts\run_experiments.py --skip-figures
 | Trang | Nội dung |
 |---|---|
 | **Tổng quan** | Giới thiệu đề tài, quy trình xử lý, cách bắt đầu |
-| **K-means** | Chọn K (2–8), đặc trưng RGB/mức xám, khởi tạo K-means++/ngẫu nhiên, số vòng lặp, ngưỡng hội tụ, seed. Xem ảnh phân cụm, bản đồ nhãn, **chọn cụm làm đối tượng** để tạo mask và ảnh tách nền, bảng tâm cụm/số pixel/tỷ lệ, biểu đồ tỷ lệ cụm và SSE theo vòng lặp |
-| **Otsu Thresholding** | Histogram 256 mức với đường ngưỡng t\*, đồ thị σ²_B(t), ảnh xám, ảnh nhị phân, mask, ảnh tách nền; chế độ ngưỡng thủ công để đối chiếu; chọn đối tượng là lớp sáng/tối/gợi ý theo viền ảnh |
+| **K-means** | Chọn K (thanh trượt 2–16; thuật toán không giới hạn K, bảng màu nhãn tự mở rộng), đặc trưng RGB / **CIE L\*a\*b\*** / mức xám, khởi tạo K-means++/ngẫu nhiên, số vòng lặp, ngưỡng hội tụ, seed. Xem ảnh phân cụm, bản đồ nhãn, **chọn cụm làm đối tượng** để tạo mask và ảnh tách nền, bảng tâm cụm/số pixel/tỷ lệ, biểu đồ tỷ lệ cụm và SSE theo vòng lặp; hậu xử lý mask bằng hình thái học (mở/đóng/co/giãn) |
+| **Otsu Thresholding** | Histogram 256 mức với đường ngưỡng t\*, đồ thị σ²_B(t), ảnh xám, ảnh nhị phân, mask, ảnh tách nền; chế độ ngưỡng thủ công để đối chiếu; chọn đối tượng là lớp sáng/tối/gợi ý theo viền ảnh; **Multi-Otsu 3 lớp** (2 ngưỡng, vét cạn O(256²)) cho ảnh nhiều mức xám; hậu xử lý mask bằng hình thái học |
 | **So sánh thuật toán** | Cùng một ảnh: ảnh gốc / K-means / Otsu; so sánh hai mask, bản đồ khác biệt; IoU/Dice **chỉ khi có ground truth** (GT tải lên phải là ảnh đục, được giữ khi chuyển trang cho tới khi bỏ tệp hoặc đổi ảnh); bảng so sánh bản chất, tham số, thời gian, ưu nhược điểm |
 | **Thư viện ảnh mẫu** | 11 tình huống kiểm thử tổng hợp chạy offline, có ground truth khi phù hợp |
 | **Kiến thức thuật toán** | Công thức, giả mã, chứng minh f(g) ở giáo trình mục 3.1.6 chính là σ²_B của Otsu, minh hoạ từng vòng lặp K-means trên ảnh 10×10, đối chiếu ví dụ giáo trình |
@@ -73,6 +73,7 @@ python scripts\run_experiments.py --skip-figures
 **Đầu vào được xử lý:** ảnh xám, RGB, có kênh alpha (ghép lên nền trắng), có thẻ EXIF hướng chụp (xoay đúng chiều),
 PNG xám 16-bit (chuẩn hoá tuyến tính về 0–255), PNG màu 16-bit/kênh (giảm về 8 bit bằng byte cao, không giãn tương phản; loại có khoá trong suốt tRNS bị từ chối kèm thông báo), ảnh RGB có R=G=B (xử lý như ảnh xám). Giới hạn: tệp ≤ 30 MB, ≤ 40 triệu pixel;
 ảnh lớn được thu nhỏ theo **“Giới hạn cạnh dài khi xử lý”** (mặc định 800 px) và kích thước thật được ghi rõ trên trang.
+Thanh bên có tuỳ chọn **lọc trung vị** 3×3/5×5/7×7 (tự cài đặt) để khử nhiễu trước khi chạy thuật toán.
 
 **Tải xuống:** ảnh phân đoạn, bản đồ nhãn, mask nhị phân, ảnh tách nền RGBA (nền trong suốt) dạng PNG; ma trận nhãn
 cụm, ma trận mask 0/1, bảng thống kê cụm, histogram dạng CSV; thông số và kết quả dạng JSON. Tệp được tạo từ đúng kết

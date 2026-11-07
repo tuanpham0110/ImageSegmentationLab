@@ -92,15 +92,18 @@ def _agreement_map(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 QUALITATIVE = [
     ("Bản chất", "Phân cụm không giám sát: tối thiểu tổng bình phương khoảng cách tới tâm cụm (SSE).",
      "Phân ngưỡng toàn cục: chọn t làm cực đại phương sai giữa hai lớp trên histogram."),
-    ("Dữ liệu đầu vào", "Vector đặc trưng mỗi pixel: mức xám (1D) hoặc RGB (3D).", "Chỉ ảnh xám (histogram 256 mức)."),
+    ("Dữ liệu đầu vào", "Vector đặc trưng mỗi pixel: mức xám (1D), RGB hoặc CIE L*a*b* (3D).",
+     "Chỉ ảnh xám (histogram 256 mức)."),
     ("Số vùng đầu ra", "K cụm (người dùng chọn K); cần chọn cụm nào là đối tượng.",
-     "Hai lớp sáng/tối nếu có ngưỡng hợp lệ; cần chọn lớp đối tượng."),
+     "Hai lớp sáng/tối (trang Otsu có thêm Multi-Otsu 3 lớp); cần chọn lớp đối tượng."),
     ("Tham số", "K, khởi tạo, seed, số vòng lặp, ngưỡng hội tụ.", "Không có tham số (chỉ chọn lớp sáng/tối là đối tượng)."),
     ("Phụ thuộc tham số", "Cao: K và khởi tạo ảnh hưởng kết quả; có thể rơi vào cực tiểu địa phương.",
      "Thấp: kết quả xác định duy nhất từ histogram."),
     ("Ưu điểm", "Dùng được màu sắc; tách được nhiều vùng; tổng quát.", "Rất nhanh O(N + 256); tối ưu toàn cục; không cần tham số."),
-    ("Hạn chế", "Phải chọn K; chậm hơn O(N·K·D·số vòng); không dùng thông tin không gian.",
-     "Chỉ 2 lớp; kém khi histogram không hai đỉnh, đối tượng nhỏ, chiếu sáng không đều; không dùng màu."),
+    ("Hạn chế", "Phải chọn K; chậm hơn O(N·K·D·số vòng); bản thân thuật toán không dùng thông tin không gian "
+                "(bù bằng lọc trung vị trước và hình thái học sau).",
+     "Kém khi histogram không có đỉnh rõ, đối tượng nhỏ, chiếu sáng không đều; không dùng màu; "
+     "không dùng thông tin không gian."),
     ("Phù hợp khi", "Ảnh màu, nhiều vùng màu khác nhau, cần lượng tử hoá màu.",
      "Ảnh xám hai đỉnh rõ: văn bản quét, đối tượng tương phản với nền."),
 ]
