@@ -1,0 +1,44 @@
+name: Python checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      PYTHONUTF8: '1'
+      MPLBACKEND: Agg
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: .python-version
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m pip check
+      - run: python -m ruff check app.py src scripts tests
+      - run: python -m pytest -q --junitxml=outputs/pytest.xml
+      - run: python scripts/benchmark_kmeans.py --sizes 128 --ks 4 --repeats 1 --max-iter 2 --output outputs/benchmark-smoke.json
+      - name: Reject tracked virtual environments
+        shell: python
+        run: |
+          import subprocess
+          paths = subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0')
+          bad = [p for p in paths if any(part.startswith('.venv') or part in ('venv', '__pycache__') for part in p.split('/'))]
+          assert not bad, f'Generated environment files tracked: {bad[:10]}'

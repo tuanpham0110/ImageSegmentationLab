@@ -1,9 +1,14 @@
 .venv/
+.venv-*/
+venv/
 __pycache__/
-*.pyc
+*.py[cod]
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
 .streamlit/secrets.toml
 *.egg-info/
 .idea/
 .vscode/
 outputs/
+data/external/

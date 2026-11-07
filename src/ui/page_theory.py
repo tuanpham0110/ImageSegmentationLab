@@ -76,7 +76,7 @@ Ra: nhãn (H×W), tâm cụm, SSE, số vòng lặp""", language="text")
     rows = []
     for i, c in enumerate(res.core.centers_history):
         rows.append({"Vòng": i, "Tâm Z0": round(float(c[0, 0]), 3), "Tâm Z1": round(float(c[1, 0]), 3),
-                     "SSE (sau gán nhãn)": round(res.core.sse_history[i], 2) if i < len(res.core.sse_history) else None,
+                     "SSE (sau gán nhãn)": round(res.core.initial_sse if i == 0 else res.core.sse_history[i - 1], 2),
                      "Độ dịch tâm": round(res.core.shift_history[i - 1], 4) if i > 0 else None})
     with c2:
         st.caption("Khởi tạo ngẫu nhiên (để thấy tâm thay đổi qua các vòng), K = 2, tol = 0. Vòng 0 là tâm khởi tạo.")

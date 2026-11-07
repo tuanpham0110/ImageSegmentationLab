@@ -46,3 +46,16 @@ def compare_masks(pred: np.ndarray, reference: np.ndarray) -> MaskScores:
 def foreground_ratio(mask: np.ndarray) -> float:
     m = _as_bool(mask)
     return float(np.count_nonzero(m) / m.size)
+
+
+def compare_trimap(pred: np.ndarray, reference: np.ndarray) -> MaskScores:
+    """Oxford iSeg: 0 nền, 255 đối tượng; bỏ qua biên không chắc chắn (128)."""
+    a, truth = _as_bool(pred), np.asarray(reference)
+    if truth.ndim != 2 or a.shape != truth.shape:
+        raise ValueError("Trimap và mask dự đoán phải là ảnh 2 chiều cùng kích thước.")
+    if not np.all(np.isin(truth, (0, 128, 255))):
+        raise ValueError("Trimap chỉ được chứa 0, 128 hoặc 255.")
+    valid = truth != 128
+    if not valid.any():
+        raise ValueError("Trimap không có pixel chắc chắn để đánh giá.")
+    return compare_masks(a[valid].reshape(1, -1), (truth[valid] == 255).reshape(1, -1))

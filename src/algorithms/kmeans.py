@@ -70,6 +70,7 @@ class KMeansResult:
     init: str = "kmeans++"
     seed: int | None = None
     warnings: list[str] = field(default_factory=list)
+    initial_sse: float = 0.0  # SSE với tâm khởi tạo; lịch sử lưu SSE SAU từng vòng Lloyd
 
 
 def _validate_chunk_size(chunk_size: int) -> None:
@@ -102,17 +103,19 @@ def unique_rows(data: np.ndarray) -> np.ndarray:
     """
     if data.shape[0] == 0:
         return data.copy()
-    is_byte_valued = (
-        data.shape[1] <= 3
-        and np.all(data >= 0)
-        and np.all(data <= 255)
-        and np.all(data == np.round(data))
-    )
+    is_byte_valued = data.shape[1] <= 3
     if is_byte_valued:
-        ints = data.astype(np.int64)
-        packed = np.zeros(ints.shape[0], dtype=np.int64)
-        for c in range(ints.shape[1]):
-            packed = packed * 256 + ints[:, c]
+        # Không tạo ma trận round/int64 N×D chỉ để nhận diện dữ liệu ảnh.
+        for start in range(0, data.shape[0], DEFAULT_CHUNK_SIZE):
+            block = data[start:start + DEFAULT_CHUNK_SIZE]
+            if np.any(block < 0) or np.any(block > 255) or not np.array_equal(block, np.round(block)):
+                is_byte_valued = False
+                break
+    if is_byte_valued:
+        packed = np.zeros(data.shape[0], dtype=np.int32)
+        for c in range(data.shape[1]):
+            packed *= 256
+            np.add(packed, data[:, c], out=packed, casting="unsafe")
         uniq = np.unique(packed)
         out = np.empty((uniq.size, data.shape[1]), dtype=np.float64)
         for c in range(data.shape[1] - 1, -1, -1):
@@ -196,7 +199,8 @@ def _init_kmeans_pp(data: np.ndarray, weights: np.ndarray, k: int, rng: np.rando
     """
     centers = np.empty((k, data.shape[1]), dtype=np.float64)
     centers[0] = data[_sample_index(weights, rng)]
-    closest = np.einsum("nd,nd->n", data - centers[0], data - centers[0])
+    diff = data - centers[0]
+    closest = np.einsum("nd,nd->n", diff, diff)
     for j in range(1, k):
         mass = weights * closest
         total_mass = mass.sum()
@@ -329,6 +333,7 @@ def kmeans(
         )
 
     centers = _init_kmeans_pp(x, w, k_eff, rng) if init == "kmeans++" else _init_random(distinct, k_eff, rng)
+    del distinct  # Chỉ cần các giá trị phân biệt để chặn K và khởi tạo.
 
     sse_history: list[float] = []
     shift_history: list[float] = []
@@ -339,6 +344,7 @@ def kmeans(
 
     pending = None  # phép gán đã tính ở bước kiểm tra hội tụ, dùng lại cho vòng sau / kết quả cuối
     final_sorted = None
+    initial_sse = 0.0
     for it in range(1, max_iter + 1):
         n_iter = it
         # Bước 1: gán nhãn theo tâm gần nhất. Hoà khoảng cách được phá theo thứ tự độ sáng
@@ -346,7 +352,8 @@ def kmeans(
         # với nhãn trả về. Chỉ số tâm nội bộ không đổi để lịch sử tâm theo dõi đúng từng cụm.
         labels, _, min_sq = pending if pending is not None else _assign_by_brightness(x, centers, chunk_size, order_weights)
         pending = None
-        sse_history.append(_weighted_sse(w, min_sq))
+        if it == 1:
+            initial_sse = _weighted_sse(w, min_sq)
 
         # Bước 2: cập nhật tâm = trung bình (có trọng số) các điểm trong cụm, dùng np.bincount theo từng chiều
         new_centers, counts = _weighted_means(x, labels, w, k_eff)
@@ -374,10 +381,14 @@ def kmeans(
         shift_history.append(shift)
         centers = new_centers
         centers_history.append(centers.copy())
+        # SSE của vòng i ứng với tâm ĐÃ cập nhật và nhãn gần nhất theo tâm đó.
+        # Dùng lại phép gán này ở vòng sau và khi trả kết quả; không tính hai lần.
+        pending = _assign_by_brightness(x, centers, chunk_size, order_weights)
+        sse_history.append(_weighted_sse(w, pending[2]))
+        final_sorted = pending[1:]
         if shift <= tol and empty.size == 0:
             # Chỉ dừng khi tâm đúng là trung bình cụm theo phép gán nhãn trả về (với tol > 0, điểm
             # sát biên có thể còn đổi cụm). Nếu chưa, lặp tiếp; phép gán này được dùng lại ở vòng sau.
-            pending = _assign_by_brightness(x, centers, chunk_size, order_weights)
             means, check_counts = _weighted_means(x, pending[0], w, k_eff)
             if np.all(check_counts > 0) and _max_shift(means, centers) <= tol:
                 converged = True
@@ -423,6 +434,7 @@ def kmeans(
         init=init,
         seed=seed,
         warnings=warnings,
+        initial_sse=initial_sse,
     )
 
 

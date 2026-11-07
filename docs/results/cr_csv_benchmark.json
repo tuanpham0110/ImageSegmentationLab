@@ -1,0 +1,27 @@
+{
+  "median_seconds": 1.509152599988738,
+  "memory_scope": "Whole worker, including CSV generation",
+  "runs": [
+    {
+      "seconds": 1.505904699995881,
+      "elements": 4000000,
+      "input_bytes": 14281030,
+      "peak_rss_bytes": 399077376,
+      "peak_private_bytes": 630231040
+    },
+    {
+      "seconds": 1.509152599988738,
+      "elements": 4000000,
+      "input_bytes": 14281030,
+      "peak_rss_bytes": 397246464,
+      "peak_private_bytes": 628477952
+    },
+    {
+      "seconds": 1.7503296000068076,
+      "elements": 4000000,
+      "input_bytes": 14281030,
+      "peak_rss_bytes": 397135872,
+      "peak_private_bytes": 628211712
+    }
+  ]
+}

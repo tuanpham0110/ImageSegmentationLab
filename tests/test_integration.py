@@ -344,7 +344,7 @@ def test_active_dependencies_are_compatible_and_do_not_require_opencv():
     from packaging.requirements import Requirement
     from packaging.utils import canonicalize_name
 
-    roots = [Requirement(line.split("#", 1)[0].strip()) for line in (ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines()
+    roots = [Requirement(line.split("#", 1)[0].strip()) for line in (ROOT / "requirements.in").read_text(encoding="utf-8").splitlines()
              if line.split("#", 1)[0].strip()]
     for requirement in roots:
         assert metadata.version(requirement.name) in requirement.specifier

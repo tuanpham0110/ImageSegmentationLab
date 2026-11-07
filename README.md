@@ -8,17 +8,20 @@
 
 - **Không dùng OpenCV**, không dùng `sklearn.cluster.KMeans` hay `skimage.filters.threshold_otsu`.
 - K-means và Otsu nằm trong [src/algorithms/](src/algorithms/), tách biệt hoàn toàn với giao diện.
-- 330 kiểm thử tự động (Pytest), gồm kiểm thử hồi quy và giao diện bằng Streamlit `AppTest`.
+- Kiểm thử tự động (Pytest), gồm kiểm thử hồi quy và giao diện bằng Streamlit `AppTest`; CI kiểm tra mỗi push/PR.
 - Không cần Internet, không có API, không có cơ sở dữ liệu.
 
 ---
 
 ## 1. Cài đặt và chạy (Windows PowerShell)
 
-Yêu cầu: **Python 3.10 – 3.12** (đã kiểm thử với Python 3.11.7 trên Windows 10). Mở PowerShell tại thư mục dự án:
+Môi trường chuẩn: **Python 3.11** (`.python-version`; đã kiểm tra trên Windows với Python 3.11.7).
+`requirements.in` liệt kê dependency trực tiếp; `requirements.txt` khóa toàn bộ dependency runtime.
+`requirements-dev.txt` khóa thêm Pytest, Ruff và pip-tools. Các phiên bản Python khác chưa được chứng nhận với lockfile này.
+Mở PowerShell tại thư mục dự án:
 
 ```powershell
-py -m venv .venv
+py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 python -m streamlit run app.py
@@ -30,7 +33,7 @@ Trình duyệt tự mở `http://localhost:8501`. Dừng ứng dụng bằng `Ct
 Python trong `.venv`:
 
 ```powershell
-py -m venv .venv
+py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m streamlit run app.py
 ```
@@ -40,10 +43,41 @@ Hoặc chỉ cho phép trong cửa sổ hiện tại: `Set-ExecutionPolicy -Scop
 ### Chạy kiểm thử
 
 ```powershell
+python -m pip install -r requirements-dev.txt
+python -m pip check
+python -m ruff check app.py src scripts tests
 python -m pytest -v
 # hoặc, không kích hoạt môi trường:
 .\.venv\Scripts\python.exe -m pytest -v
 ```
+
+Tạo lại lockfile khi chủ động cập nhật dependency (bằng Python 3.11):
+
+```powershell
+python -m piptools compile --output-file requirements.txt requirements.in
+python -m piptools compile --allow-unsafe --output-file requirements-dev.txt requirements-dev.in
+```
+
+CI trong `.github/workflows/ci.yml` chạy trên Windows và Ubuntu, kiểm tra dependency, Ruff, Pytest,
+benchmark smoke và ngăn đưa môi trường ảo vào Git. Trạng thái CI thực tế cần xem sau khi push.
+
+### Benchmark và ảnh chụp thật
+
+```powershell
+python scripts/benchmark_kmeans.py --sizes 800 1600 2048 --ks 4 16 --repeats 3
+python scripts/benchmark_csv.py
+python scripts/evaluate_real_images.py --fetch --samples 30 --repeats 3
+python scripts/render_real_examples.py
+```
+
+Ảnh/mask nghiên cứu lấy từ [Oxford VGG iSeg](https://www.robots.ox.ac.uk/~vgg/data/iseg/),
+kiểm tra SHA-256 rồi lưu ở `data/external/` (không đưa vào Git). Báo cáo lưu tại `docs/results/cr_real_images.md`.
+GT có ba mức: 0=nền, 255=đối tượng, 128=biên không chắc chắn và được bỏ qua khi tính chỉ số.
+Chia 6 ảnh dev/24 ảnh test bằng hash tên tệp; giữ K=5 và foreground tự động, không chỉnh theo GT.
+Biến thể giảm sáng 0,5 không đại diện cho ảnh chụp thiếu sáng độc lập.
+
+Benchmark không đặt ngưỡng thời gian chung cho mọi máy; kết quả đầy đủ và giới hạn xem
+[báo cáo xử lý CR-01–CR-10](docs/CODE_REVIEW_20261108.md).
 
 ### Sinh lại dữ liệu mẫu và chạy lại thực nghiệm (tuỳ chọn)
 

@@ -51,6 +51,8 @@ def _reset_defaults() -> None:
     for k, v in DEFAULTS.items():
         st.session_state[k] = v
     ui.reset_morphology("km")
+    st.session_state["km_invert_foreground"] = False
+    remember_widget("km_invert_foreground")
 
 
 def params_form(is_color: bool, key_prefix: str = "km") -> KMeansParams | None:
@@ -154,6 +156,12 @@ def _render_result(ctx, run: dict) -> None:
         fg = st.multiselect("Cụm làm đối tượng (foreground)", options,
                             format_func=lambda c: f"Cụm {c}", key=fg_key)
         save_foreground(run, fg)
+        restore_widget("km_invert_foreground", False)
+        invert_foreground = st.checkbox("Đảo vùng đối tượng", key="km_invert_foreground",
+                                       help="Dùng các cụm còn lại làm đối tượng. Không thay đổi kết quả phân cụm.")
+        remember_widget("km_invert_foreground")
+        if invert_foreground:
+            fg = sorted(set(options) - set(fg))
         post = ui.morphology_controls("km")
     try:
         out = kmeans_outputs(prep, result, fg, post)
@@ -193,7 +201,8 @@ def _render_result(ctx, run: dict) -> None:
         st.dataframe(pd.DataFrame(cluster_table(result)), hide_index=True, width="stretch")
         ui.show_figure(viz.cluster_share_figure(core.counts, core.centers))
         ui.show_figure(viz.sse_figure(core.sse_history))
-        st.caption("SSE = Σ‖x − tâm cụm của x‖², tính sau bước gán nhãn của mỗi vòng. "
+        st.caption("SSE = Σ‖x − tâm cụm của x‖², tính sau cập nhật tâm và gán lại nhãn của mỗi vòng Lloyd. "
+                   "Điểm cuối trên biểu đồ bằng SSE của kết quả trả về. "
                    "Theo lý thuyết, SSE không tăng qua các vòng lặp.")
         hist = pd.DataFrame({"Vòng lặp": range(1, core.n_iter + 1), "SSE": core.sse_history,
                              "Độ dịch tâm lớn nhất": core.shift_history})

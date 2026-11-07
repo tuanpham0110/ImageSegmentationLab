@@ -130,7 +130,7 @@ def cluster_share_figure(counts: np.ndarray, centers: np.ndarray):
 
 
 def sse_figure(sse_history: list[float]):
-    """SSE (inertia) sau bước gán nhãn ở mỗi vòng lặp — phải không tăng."""
+    """SSE sau cập nhật tâm và gán lại nhãn của từng vòng Lloyd."""
     fig, ax = plt.subplots(figsize=(4.6, 2.6), dpi=130)
     it = np.arange(1, len(sse_history) + 1)
     ax.plot(it, sse_history, color=SERIES_MAIN, linewidth=2, marker="o", markersize=5)

@@ -1,0 +1,268 @@
+{
+  "environment": {
+    "python": "3.11.7",
+    "platform": "Windows-10-10.0.19045-SP0",
+    "processor": "Intel64 Family 6 Model 165 Stepping 2, GenuineIntel",
+    "cpu_count": 8,
+    "seed": 0,
+    "max_iter": 20,
+    "repeats": 3,
+    "threads": 1,
+    "memory_scope": "Peak whole worker process, includes imports and input image",
+    "baseline_sha256": "8c76f8f8f65621beede93d713687b545ab138161ff3d5b86a191b9c774b3ae21"
+  },
+  "measurements": [
+    {
+      "variant": "baseline",
+      "side": 800,
+      "k": 4,
+      "median_seconds": 0.5306549999950221,
+      "max_peak_rss_bytes": 67444736,
+      "runs": [
+        {
+          "seconds": 0.5306549999950221,
+          "peak_rss_bytes": 66985984,
+          "peak_private_bytes": 92508160,
+          "output_sha256": "caa76dc36f1ad5a5db2161d4e5f50d5d74eba642660ced81f89fc66cc186ca94",
+          "unique_colors": 164997,
+          "iterations": 20,
+          "converged": false,
+          "sse": 826017215.4824554,
+          "input_kind": "photograph_resized_to_square_for_stress_test"
+        },
+        {
+          "seconds": 0.538673100003507,
+          "peak_rss_bytes": 67444736,
+          "peak_private_bytes": 92450816,
+          "output_sha256": "caa76dc36f1ad5a5db2161d4e5f50d5d74eba642660ced81f89fc66cc186ca94",
+          "unique_colors": 164997,
+          "iterations": 20,
+          "converged": false,
+          "sse": 826017215.4824554,
+          "input_kind": "photograph_resized_to_square_for_stress_test"
+        },
+        {
+          "seconds": 0.5200747000053525,
+          "peak_rss_bytes": 66949120,
+          "peak_private_bytes": 92749824,
+          "output_sha256": "caa76dc36f1ad5a5db2161d4e5f50d5d74eba642660ced81f89fc66cc186ca94",
+          "unique_colors": 164997,
+          "iterations": 20,
+          "converged": false,
+          "sse": 826017215.4824554,
+          "input_kind": "photograph_resized_to_square_for_stress_test"
+        }
+      ]
+    },
+    {
+      "variant": "current",
+      "side": 800,
+      "k": 4,
+      "median_seconds": 0.5216126999875996,
+      "max_peak_rss_bytes": 63377408,
+      "runs": [
+        {
+          "seconds": 0.5216126999875996,
+          "peak_rss_bytes": 63254528,
+          "peak_private_bytes": 88535040,
+          "output_sha256": "caa76dc36f1ad5a5db2161d4e5f50d5d74eba642660ced81f89fc66cc186ca94",
+          "unique_colors": 164997,
+          "iterations": 20,
+          "converged": false,
+          "sse": 826017215.4824554,
+          "input_kind": "photograph_resized_to_square_for_stress_test"
+        },
+        {
+          "seconds": 0.5137384999979986,
+          "peak_rss_bytes": 63377408,
+          "peak_private_bytes": 88797184,
+          "output_sha256": "caa76dc36f1ad5a5db2161d4e5f50d5d74eba642660ced81f89fc66cc186ca94",
+          "unique_colors": 164997,
+          "iterations": 20,
+          "converged": false,
+          "sse": 826017215.4824554,
+          "input_kind": "photograph_resized_to_square_for_stress_test"
+        },
+        {
+          "seconds": 0.53764000000956,
+          "peak_rss_bytes": 62976000,
+          "peak_private_bytes": 87867392,
+          "output_sha256": "caa76dc36f1ad5a5db2161d4e5f50d5d74eba642660ced81f89fc66cc186ca94",
+          "unique_colors": 164997,
+          "iterations": 20,
+          "converged": false,
+          "sse": 826017215.4824554,
+          "input_kind": "photograph_resized_to_square_for_stress_test"
+        }
+      ]
+    },
+    {
+      "variant": "baseline",
+      "side": 1600,
+      "k": 4,
+      "median_seconds": 1.28839099999459,
+      "max_peak_rss_bytes": 141316096,
+      "runs": [
+        {
+          "seconds": 1.4998967999999877,
+          "peak_rss_bytes": 141217792,
+          "peak_private_bytes": 166567936,
+          "output_sha256": "aaad17caed02e017a2175f5423a42692400d365af87b90e8470c163a9e06a21f",
+          "unique_colors": 360621,
+          "iterations": 20,
+          "converged": false,
+          "sse": 3305599158.2043033,
+          "input_kind": "photograph_resized_to_square_for_stress_test"
+        },
+        {
+          "seconds": 1.2823007999977563,
+          "peak_rss_bytes": 141258752,
+          "peak_private_bytes": 166551552,
+          "output_sha256": "aaad17caed02e017a2175f5423a42692400d365af87b90e8470c163a9e06a21f",
+          "unique_colors": 360621,
+          "iterations": 20,
+          "converged": false,
+          "sse": 3305599158.2043033,
+          "input_kind": "photograph_resized_to_square_for_stress_test"
+        },
+        {
+          "seconds": 1.28839099999459,
+          "peak_rss_bytes": 141316096,
+          "peak_private_bytes": 166629376,
+          "output_sha256": "aaad17caed02e017a2175f5423a42692400d365af87b90e8470c163a9e06a21f",
+          "unique_colors": 360621,
+          "iterations": 20,
+          "converged": false,
+          "sse": 3305599158.2043033,
+          "input_kind": "photograph_resized_to_square_for_stress_test"
+        }
+      ]
+    },
+    {
+      "variant": "current",
+      "side": 1600,
+      "k": 4,
+      "median_seconds": 1.32499700000335,
+      "max_peak_rss_bytes": 141221888,
+      "runs": [
+        {
+          "seconds": 1.3479710999963572,
+          "peak_rss_bytes": 141221888,
+          "peak_private_bytes": 166453248,
+          "output_sha256": "aaad17caed02e017a2175f5423a42692400d365af87b90e8470c163a9e06a21f",
+          "unique_colors": 360621,
+          "iterations": 20,
+          "converged": false,
+          "sse": 3305599158.2043033,
+          "input_kind": "photograph_resized_to_square_for_stress_test"
+        },
+        {
+          "seconds": 1.32499700000335,
+          "peak_rss_bytes": 140980224,
+          "peak_private_bytes": 166248448,
+          "output_sha256": "aaad17caed02e017a2175f5423a42692400d365af87b90e8470c163a9e06a21f",
+          "unique_colors": 360621,
+          "iterations": 20,
+          "converged": false,
+          "sse": 3305599158.2043033,
+          "input_kind": "photograph_resized_to_square_for_stress_test"
+        },
+        {
+          "seconds": 1.2480804999941029,
+          "peak_rss_bytes": 141053952,
+          "peak_private_bytes": 167292928,
+          "output_sha256": "aaad17caed02e017a2175f5423a42692400d365af87b90e8470c163a9e06a21f",
+          "unique_colors": 360621,
+          "iterations": 20,
+          "converged": false,
+          "sse": 3305599158.2043033,
+          "input_kind": "photograph_resized_to_square_for_stress_test"
+        }
+      ]
+    },
+    {
+      "variant": "baseline",
+      "side": 2048,
+      "k": 4,
+      "median_seconds": 1.7931487999885576,
+      "max_peak_rss_bytes": 208859136,
+      "runs": [
+        {
+          "seconds": 1.82070319999184,
+          "peak_rss_bytes": 208465920,
+          "peak_private_bytes": 234373120,
+          "output_sha256": "19ccb514b172eafcb3b8ee24cf66a6f6fea1637ebdd4d743b12dfbdb608e0d66",
+          "unique_colors": 459938,
+          "iterations": 20,
+          "converged": false,
+          "sse": 5415433316.739502,
+          "input_kind": "photograph_resized_to_square_for_stress_test"
+        },
+        {
+          "seconds": 1.7859186999994563,
+          "peak_rss_bytes": 208859136,
+          "peak_private_bytes": 234389504,
+          "output_sha256": "19ccb514b172eafcb3b8ee24cf66a6f6fea1637ebdd4d743b12dfbdb608e0d66",
+          "unique_colors": 459938,
+          "iterations": 20,
+          "converged": false,
+          "sse": 5415433316.739502,
+          "input_kind": "photograph_resized_to_square_for_stress_test"
+        },
+        {
+          "seconds": 1.7931487999885576,
+          "peak_rss_bytes": 208429056,
+          "peak_private_bytes": 234008576,
+          "output_sha256": "19ccb514b172eafcb3b8ee24cf66a6f6fea1637ebdd4d743b12dfbdb608e0d66",
+          "unique_colors": 459938,
+          "iterations": 20,
+          "converged": false,
+          "sse": 5415433316.739502,
+          "input_kind": "photograph_resized_to_square_for_stress_test"
+        }
+      ]
+    },
+    {
+      "variant": "current",
+      "side": 2048,
+      "k": 4,
+      "median_seconds": 2.280738899993594,
+      "max_peak_rss_bytes": 208908288,
+      "runs": [
+        {
+          "seconds": 2.0712163999996847,
+          "peak_rss_bytes": 208805888,
+          "peak_private_bytes": 234389504,
+          "output_sha256": "19ccb514b172eafcb3b8ee24cf66a6f6fea1637ebdd4d743b12dfbdb608e0d66",
+          "unique_colors": 459938,
+          "iterations": 20,
+          "converged": false,
+          "sse": 5415433316.739502,
+          "input_kind": "photograph_resized_to_square_for_stress_test"
+        },
+        {
+          "seconds": 2.7004958000034094,
+          "peak_rss_bytes": 208445440,
+          "peak_private_bytes": 234029056,
+          "output_sha256": "19ccb514b172eafcb3b8ee24cf66a6f6fea1637ebdd4d743b12dfbdb608e0d66",
+          "unique_colors": 459938,
+          "iterations": 20,
+          "converged": false,
+          "sse": 5415433316.739502,
+          "input_kind": "photograph_resized_to_square_for_stress_test"
+        },
+        {
+          "seconds": 2.280738899993594,
+          "peak_rss_bytes": 208908288,
+          "peak_private_bytes": 234414080,
+          "output_sha256": "19ccb514b172eafcb3b8ee24cf66a6f6fea1637ebdd4d743b12dfbdb608e0d66",
+          "unique_colors": 459938,
+          "iterations": 20,
+          "converged": false,
+          "sse": 5415433316.739502,
+          "input_kind": "photograph_resized_to_square_for_stress_test"
+        }
+      ]
+    }
+  ]
+}

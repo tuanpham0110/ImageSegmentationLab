@@ -1,0 +1,520 @@
+{
+  "environment": {
+    "python": "3.11.7",
+    "platform": "Windows-10-10.0.19045-SP0",
+    "processor": "Intel64 Family 6 Model 165 Stepping 2, GenuineIntel",
+    "cpu_count": 8,
+    "seed": 0,
+    "max_iter": 20,
+    "repeats": 3,
+    "threads": 1,
+    "memory_scope": "Peak whole worker process, includes imports and input image",
+    "baseline_sha256": "8c76f8f8f65621beede93d713687b545ab138161ff3d5b86a191b9c774b3ae21"
+  },
+  "measurements": [
+    {
+      "variant": "baseline",
+      "side": 800,
+      "k": 4,
+      "median_seconds": 2.05471640000178,
+      "max_peak_rss_bytes": 133230592,
+      "runs": [
+        {
+          "seconds": 2.05471640000178,
+          "peak_rss_bytes": 133230592,
+          "peak_private_bytes": 157601792,
+          "output_sha256": "63312c9d9c756964e94c704257a5396e68b5cabe288c975b3968be0b8b59f840",
+          "unique_colors": 627781,
+          "iterations": 20,
+          "converged": false,
+          "sse": 5007403859.196612,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 2.138132599997334,
+          "peak_rss_bytes": 133206016,
+          "peak_private_bytes": 157753344,
+          "output_sha256": "63312c9d9c756964e94c704257a5396e68b5cabe288c975b3968be0b8b59f840",
+          "unique_colors": 627781,
+          "iterations": 20,
+          "converged": false,
+          "sse": 5007403859.196612,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 2.0399820000020554,
+          "peak_rss_bytes": 132935680,
+          "peak_private_bytes": 157470720,
+          "output_sha256": "63312c9d9c756964e94c704257a5396e68b5cabe288c975b3968be0b8b59f840",
+          "unique_colors": 627781,
+          "iterations": 20,
+          "converged": false,
+          "sse": 5007403859.196612,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        }
+      ]
+    },
+    {
+      "variant": "current",
+      "side": 800,
+      "k": 4,
+      "median_seconds": 1.9699577999999747,
+      "max_peak_rss_bytes": 121233408,
+      "runs": [
+        {
+          "seconds": 2.0054940999980317,
+          "peak_rss_bytes": 121233408,
+          "peak_private_bytes": 144461824,
+          "output_sha256": "63312c9d9c756964e94c704257a5396e68b5cabe288c975b3968be0b8b59f840",
+          "unique_colors": 627781,
+          "iterations": 20,
+          "converged": false,
+          "sse": 5007403859.196612,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 1.9699577999999747,
+          "peak_rss_bytes": 121233408,
+          "peak_private_bytes": 144662528,
+          "output_sha256": "63312c9d9c756964e94c704257a5396e68b5cabe288c975b3968be0b8b59f840",
+          "unique_colors": 627781,
+          "iterations": 20,
+          "converged": false,
+          "sse": 5007403859.196612,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 1.9497217999887653,
+          "peak_rss_bytes": 121229312,
+          "peak_private_bytes": 144838656,
+          "output_sha256": "63312c9d9c756964e94c704257a5396e68b5cabe288c975b3968be0b8b59f840",
+          "unique_colors": 627781,
+          "iterations": 20,
+          "converged": false,
+          "sse": 5007403859.196612,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        }
+      ]
+    },
+    {
+      "variant": "baseline",
+      "side": 800,
+      "k": 16,
+      "median_seconds": 6.238495800003875,
+      "max_peak_rss_bytes": 133070848,
+      "runs": [
+        {
+          "seconds": 5.536202099989168,
+          "peak_rss_bytes": 132902912,
+          "peak_private_bytes": 157462528,
+          "output_sha256": "11b35600dcc1f53b61a1d8932e25961d66b09904d253e8afbbfb55d2d1fe5f31",
+          "unique_colors": 627781,
+          "iterations": 20,
+          "converged": false,
+          "sse": 1760001122.3961165,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 6.696756600009394,
+          "peak_rss_bytes": 132628480,
+          "peak_private_bytes": 157134848,
+          "output_sha256": "11b35600dcc1f53b61a1d8932e25961d66b09904d253e8afbbfb55d2d1fe5f31",
+          "unique_colors": 627781,
+          "iterations": 20,
+          "converged": false,
+          "sse": 1760001122.3961165,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 6.238495800003875,
+          "peak_rss_bytes": 133070848,
+          "peak_private_bytes": 157614080,
+          "output_sha256": "11b35600dcc1f53b61a1d8932e25961d66b09904d253e8afbbfb55d2d1fe5f31",
+          "unique_colors": 627781,
+          "iterations": 20,
+          "converged": false,
+          "sse": 1760001122.3961165,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        }
+      ]
+    },
+    {
+      "variant": "current",
+      "side": 800,
+      "k": 16,
+      "median_seconds": 5.979254399993806,
+      "max_peak_rss_bytes": 121548800,
+      "runs": [
+        {
+          "seconds": 5.507525199995143,
+          "peak_rss_bytes": 121249792,
+          "peak_private_bytes": 145203200,
+          "output_sha256": "11b35600dcc1f53b61a1d8932e25961d66b09904d253e8afbbfb55d2d1fe5f31",
+          "unique_colors": 627781,
+          "iterations": 20,
+          "converged": false,
+          "sse": 1760001122.3961165,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 5.979254399993806,
+          "peak_rss_bytes": 121548800,
+          "peak_private_bytes": 145235968,
+          "output_sha256": "11b35600dcc1f53b61a1d8932e25961d66b09904d253e8afbbfb55d2d1fe5f31",
+          "unique_colors": 627781,
+          "iterations": 20,
+          "converged": false,
+          "sse": 1760001122.3961165,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 6.024423299997579,
+          "peak_rss_bytes": 121257984,
+          "peak_private_bytes": 144531456,
+          "output_sha256": "11b35600dcc1f53b61a1d8932e25961d66b09904d253e8afbbfb55d2d1fe5f31",
+          "unique_colors": 627781,
+          "iterations": 20,
+          "converged": false,
+          "sse": 1760001122.3961165,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        }
+      ]
+    },
+    {
+      "variant": "baseline",
+      "side": 1600,
+      "k": 4,
+      "median_seconds": 8.538453100001789,
+      "max_peak_rss_bytes": 414388224,
+      "runs": [
+        {
+          "seconds": 9.46041260000493,
+          "peak_rss_bytes": 414375936,
+          "peak_private_bytes": 447909888,
+          "output_sha256": "82ca8604a51b53392d7f4d1cebfe0a81fba6cdc5066159e071763b51edf938fe",
+          "unique_colors": 2374761,
+          "iterations": 20,
+          "converged": false,
+          "sse": 20044489968.383312,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 8.538453100001789,
+          "peak_rss_bytes": 414388224,
+          "peak_private_bytes": 447967232,
+          "output_sha256": "82ca8604a51b53392d7f4d1cebfe0a81fba6cdc5066159e071763b51edf938fe",
+          "unique_colors": 2374761,
+          "iterations": 20,
+          "converged": false,
+          "sse": 20044489968.383312,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 8.360161500007962,
+          "peak_rss_bytes": 414363648,
+          "peak_private_bytes": 448065536,
+          "output_sha256": "82ca8604a51b53392d7f4d1cebfe0a81fba6cdc5066159e071763b51edf938fe",
+          "unique_colors": 2374761,
+          "iterations": 20,
+          "converged": false,
+          "sse": 20044489968.383312,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        }
+      ]
+    },
+    {
+      "variant": "current",
+      "side": 1600,
+      "k": 4,
+      "median_seconds": 8.132354900008067,
+      "max_peak_rss_bytes": 366399488,
+      "runs": [
+        {
+          "seconds": 7.9370684000023175,
+          "peak_rss_bytes": 366399488,
+          "peak_private_bytes": 390606848,
+          "output_sha256": "82ca8604a51b53392d7f4d1cebfe0a81fba6cdc5066159e071763b51edf938fe",
+          "unique_colors": 2374761,
+          "iterations": 20,
+          "converged": false,
+          "sse": 20044489968.383312,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 8.20909049999318,
+          "peak_rss_bytes": 366362624,
+          "peak_private_bytes": 390561792,
+          "output_sha256": "82ca8604a51b53392d7f4d1cebfe0a81fba6cdc5066159e071763b51edf938fe",
+          "unique_colors": 2374761,
+          "iterations": 20,
+          "converged": false,
+          "sse": 20044489968.383312,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 8.132354900008067,
+          "peak_rss_bytes": 366116864,
+          "peak_private_bytes": 389746688,
+          "output_sha256": "82ca8604a51b53392d7f4d1cebfe0a81fba6cdc5066159e071763b51edf938fe",
+          "unique_colors": 2374761,
+          "iterations": 20,
+          "converged": false,
+          "sse": 20044489968.383312,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        }
+      ]
+    },
+    {
+      "variant": "baseline",
+      "side": 1600,
+      "k": 16,
+      "median_seconds": 21.166167300005327,
+      "max_peak_rss_bytes": 414633984,
+      "runs": [
+        {
+          "seconds": 22.954662100004498,
+          "peak_rss_bytes": 414633984,
+          "peak_private_bytes": 448372736,
+          "output_sha256": "a783f475070e9099240ec0815b3997932896aac1a20a26d7e6e2f580c72e3605",
+          "unique_colors": 2374761,
+          "iterations": 20,
+          "converged": false,
+          "sse": 7050958277.799286,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 21.166167300005327,
+          "peak_rss_bytes": 414437376,
+          "peak_private_bytes": 448090112,
+          "output_sha256": "a783f475070e9099240ec0815b3997932896aac1a20a26d7e6e2f580c72e3605",
+          "unique_colors": 2374761,
+          "iterations": 20,
+          "converged": false,
+          "sse": 7050958277.799286,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 20.706984799995553,
+          "peak_rss_bytes": 414314496,
+          "peak_private_bytes": 447762432,
+          "output_sha256": "a783f475070e9099240ec0815b3997932896aac1a20a26d7e6e2f580c72e3605",
+          "unique_colors": 2374761,
+          "iterations": 20,
+          "converged": false,
+          "sse": 7050958277.799286,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        }
+      ]
+    },
+    {
+      "variant": "current",
+      "side": 1600,
+      "k": 16,
+      "median_seconds": 21.395331299994723,
+      "max_peak_rss_bytes": 366891008,
+      "runs": [
+        {
+          "seconds": 21.91635050000332,
+          "peak_rss_bytes": 366346240,
+          "peak_private_bytes": 390246400,
+          "output_sha256": "a783f475070e9099240ec0815b3997932896aac1a20a26d7e6e2f580c72e3605",
+          "unique_colors": 2374761,
+          "iterations": 20,
+          "converged": false,
+          "sse": 7050958277.799286,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 20.682286700000986,
+          "peak_rss_bytes": 366891008,
+          "peak_private_bytes": 391098368,
+          "output_sha256": "a783f475070e9099240ec0815b3997932896aac1a20a26d7e6e2f580c72e3605",
+          "unique_colors": 2374761,
+          "iterations": 20,
+          "converged": false,
+          "sse": 7050958277.799286,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 21.395331299994723,
+          "peak_rss_bytes": 366104576,
+          "peak_private_bytes": 389988352,
+          "output_sha256": "a783f475070e9099240ec0815b3997932896aac1a20a26d7e6e2f580c72e3605",
+          "unique_colors": 2374761,
+          "iterations": 20,
+          "converged": false,
+          "sse": 7050958277.799286,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        }
+      ]
+    },
+    {
+      "variant": "baseline",
+      "side": 2048,
+      "k": 4,
+      "median_seconds": 14.288716199996998,
+      "max_peak_rss_bytes": 593166336,
+      "runs": [
+        {
+          "seconds": 12.767551600001752,
+          "peak_rss_bytes": 593166336,
+          "peak_private_bytes": 624992256,
+          "output_sha256": "4ec38dafac78ea9c2617143da97986966ccacac532f96a41e71a990b7b8b7ce4",
+          "unique_colors": 3712084,
+          "iterations": 20,
+          "converged": false,
+          "sse": 32766742110.001133,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 14.288716199996998,
+          "peak_rss_bytes": 593006592,
+          "peak_private_bytes": 624603136,
+          "output_sha256": "4ec38dafac78ea9c2617143da97986966ccacac532f96a41e71a990b7b8b7ce4",
+          "unique_colors": 3712084,
+          "iterations": 20,
+          "converged": false,
+          "sse": 32766742110.001133,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 15.168534199998248,
+          "peak_rss_bytes": 592949248,
+          "peak_private_bytes": 624562176,
+          "output_sha256": "4ec38dafac78ea9c2617143da97986966ccacac532f96a41e71a990b7b8b7ce4",
+          "unique_colors": 3712084,
+          "iterations": 20,
+          "converged": false,
+          "sse": 32766742110.001133,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        }
+      ]
+    },
+    {
+      "variant": "current",
+      "side": 2048,
+      "k": 4,
+      "median_seconds": 14.071855499991216,
+      "max_peak_rss_bytes": 555671552,
+      "runs": [
+        {
+          "seconds": 13.458406799996737,
+          "peak_rss_bytes": 555319296,
+          "peak_private_bytes": 579776512,
+          "output_sha256": "4ec38dafac78ea9c2617143da97986966ccacac532f96a41e71a990b7b8b7ce4",
+          "unique_colors": 3712084,
+          "iterations": 20,
+          "converged": false,
+          "sse": 32766742110.001133,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 14.071855499991216,
+          "peak_rss_bytes": 555556864,
+          "peak_private_bytes": 579805184,
+          "output_sha256": "4ec38dafac78ea9c2617143da97986966ccacac532f96a41e71a990b7b8b7ce4",
+          "unique_colors": 3712084,
+          "iterations": 20,
+          "converged": false,
+          "sse": 32766742110.001133,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 14.246358400007011,
+          "peak_rss_bytes": 555671552,
+          "peak_private_bytes": 580005888,
+          "output_sha256": "4ec38dafac78ea9c2617143da97986966ccacac532f96a41e71a990b7b8b7ce4",
+          "unique_colors": 3712084,
+          "iterations": 20,
+          "converged": false,
+          "sse": 32766742110.001133,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        }
+      ]
+    },
+    {
+      "variant": "baseline",
+      "side": 2048,
+      "k": 16,
+      "median_seconds": 36.26938840000366,
+      "max_peak_rss_bytes": 593272832,
+      "runs": [
+        {
+          "seconds": 33.93361009999353,
+          "peak_rss_bytes": 593256448,
+          "peak_private_bytes": 625033216,
+          "output_sha256": "127ec2f3db280d84d6ae697e4a44ae8bb50dfe7ccd9506ccb2489b8ee8cd75b2",
+          "unique_colors": 3712084,
+          "iterations": 20,
+          "converged": false,
+          "sse": 11505611617.738375,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 36.26938840000366,
+          "peak_rss_bytes": 593068032,
+          "peak_private_bytes": 624693248,
+          "output_sha256": "127ec2f3db280d84d6ae697e4a44ae8bb50dfe7ccd9506ccb2489b8ee8cd75b2",
+          "unique_colors": 3712084,
+          "iterations": 20,
+          "converged": false,
+          "sse": 11505611617.738375,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 37.97392289999698,
+          "peak_rss_bytes": 593272832,
+          "peak_private_bytes": 625025024,
+          "output_sha256": "127ec2f3db280d84d6ae697e4a44ae8bb50dfe7ccd9506ccb2489b8ee8cd75b2",
+          "unique_colors": 3712084,
+          "iterations": 20,
+          "converged": false,
+          "sse": 11505611617.738375,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        }
+      ]
+    },
+    {
+      "variant": "current",
+      "side": 2048,
+      "k": 16,
+      "median_seconds": 31.905551299991203,
+      "max_peak_rss_bytes": 556032000,
+      "runs": [
+        {
+          "seconds": 31.905551299991203,
+          "peak_rss_bytes": 555851776,
+          "peak_private_bytes": 580526080,
+          "output_sha256": "127ec2f3db280d84d6ae697e4a44ae8bb50dfe7ccd9506ccb2489b8ee8cd75b2",
+          "unique_colors": 3712084,
+          "iterations": 20,
+          "converged": false,
+          "sse": 11505611617.738375,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 35.54040259998874,
+          "peak_rss_bytes": 556032000,
+          "peak_private_bytes": 580472832,
+          "output_sha256": "127ec2f3db280d84d6ae697e4a44ae8bb50dfe7ccd9506ccb2489b8ee8cd75b2",
+          "unique_colors": 3712084,
+          "iterations": 20,
+          "converged": false,
+          "sse": 11505611617.738375,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        },
+        {
+          "seconds": 31.66178100000252,
+          "peak_rss_bytes": 555888640,
+          "peak_private_bytes": 580464640,
+          "output_sha256": "127ec2f3db280d84d6ae697e4a44ae8bb50dfe7ccd9506ccb2489b8ee8cd75b2",
+          "unique_colors": 3712084,
+          "iterations": 20,
+          "converged": false,
+          "sse": 11505611617.738375,
+          "input_kind": "synthetic_high_color_stress_not_a_photograph"
+        }
+      ]
+    }
+  ]
+}
