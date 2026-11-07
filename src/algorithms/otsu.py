@@ -284,7 +284,15 @@ def multi_otsu_from_histogram(hist: np.ndarray) -> MultiOtsuResult:
         s = (m0.astype(np.float64) ** 2 / c0 + m1.astype(np.float64) ** 2 / c1
              + m2.astype(np.float64) ** 2 / c2)
     score[valid] = s[valid]
-    sigma_b = np.where(valid, score / n - mu_t ** 2, np.nan)
+    # Ma trận phương sai giữa lớp (để vẽ/xuất) tính theo dạng tổng Σ ω_k (μ_k − μ_T)², không theo
+    # Σ M_k²/c_k / N − μ_T²: dạng hiệu hai số lớn gần bằng nhau bị triệt tiêu số với histogram cực lệch.
+    # Việc chọn ngưỡng vẫn dựa trên score (đơn điệu với σ²_B) và được xác định chính xác bằng Fraction.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        sb = sum((ck / n) * (mk / ck - mu_t) ** 2
+                 for ck, mk in ((c0.astype(np.float64), m0.astype(np.float64)),
+                                (c1.astype(np.float64), m1.astype(np.float64)),
+                                (c2.astype(np.float64), m2.astype(np.float64))))
+    sigma_b = np.where(valid, sb, np.nan)
     total_var = base.total_variance
     warnings: list[str] = []
 

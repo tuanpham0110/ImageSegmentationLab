@@ -318,8 +318,11 @@ def parse_csv_matrix(text: str) -> np.ndarray:
             raise InputError(f"CSV quá lớn (vượt {MAX_CSV_CELLS:,} phần tử).")
         joined = ",".join(cells)
         # Đường nhanh: cả hàng chỉ gồm số nguyên 0..255 viết thường (một phép so regex ở tầng C cho cả hàng).
+        # Số dấu phẩy phải đúng n_cols - 1: ô trong dấu nháy chứa dấu phẩy ("1,2") làm chuỗi nối có thêm
+        # dấu phẩy, khi đó hàng phải đi đường chậm để báo lỗi đúng ô thay vì bị tách thành nhiều giá trị.
         # Hàng khác (dấu +/-, phần thập phân, giá trị lỗi) đi đường kiểm tra từng ô để báo lỗi đúng vị trí.
-        rows.append(joined if _FAST_CSV_ROW.fullmatch(joined) else _parse_csv_row_slow(cells, r_idx))
+        fast = joined.count(",") == len(cells) - 1 and _FAST_CSV_ROW.fullmatch(joined)
+        rows.append(joined if fast else _parse_csv_row_slow(cells, r_idx))
     if not n_cols:
         raise InputError("CSV không có cột dữ liệu.")
     values = np.array(",".join(rows).split(","), dtype=np.int64)

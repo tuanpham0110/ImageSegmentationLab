@@ -146,7 +146,7 @@ def main() -> int:
 
 
 def _figure(s, prepared, kout, otsu) -> None:
-    panels = [(prepared.image, "Ảnh gốc"), (kout.segmented, "K-means"), (kout.mask, "Mask K-means"),
+    panels = [(prepared.original, "Ảnh gốc"), (kout.segmented, "K-means"), (kout.mask, "Mask K-means"),
               (otsu.binary, f"Otsu (t* = {otsu.result.threshold})"), (otsu.mask, "Mask Otsu")]
     fig, axes = plt.subplots(1, 5, figsize=(13, 2.9), dpi=110)
     for ax, (img, title) in zip(axes, panels):

@@ -232,7 +232,8 @@ Hai ngưỡng t₁ < t₂ chia histogram thành C₀ = [0, t₁], C₁ = (t₁, 
 tổng mức xám của lớp k: σ²_B(t₁, t₂) = Σₖ ωₖ(μₖ − μ_T)² = (1/N)·Σₖ Mₖ²/cₖ − μ_T². μ_T cố định nên chỉ cần cực đại
 Σₖ Mₖ²/cₖ. Mỗi cặp tính O(1) từ tổng tích luỹ ⇒ vét cạn 256² cặp, vài mili giây, không phụ thuộc kích thước ảnh.
 Đồng hạng được xác định chính xác bằng số hữu tỉ như Otsu 2 lớp; chọn t₁ gần floor(trung bình các t₁ đồng hạng) nhất,
-rồi t₂ tương tự. Ảnh có < 3 mức xám ⇒ `valid = False`, t₁ = t₂ = ngưỡng Otsu 2 lớp, có cảnh báo.
+rồi t₂ tương tự. Ma trận σ²_B dùng để vẽ/xuất được tính theo dạng tổng Σ ωₖ(μₖ − μ_T)² (tránh triệt tiêu số của dạng hiệu
+với histogram cực lệch). Ảnh có < 3 mức xám ⇒ `valid = False`, t₁ = t₂ = ngưỡng Otsu 2 lớp, có cảnh báo.
 Kiểm chứng: `test_multi_otsu_matches_brute_force`. Trên `gray_levels_objects` (nền 35, ba khối 90/150/215), Otsu 2 lớp
 cho IoU 0.667 (khối 90 bị gộp vào nền); Multi-Otsu cho (t₁, t₂) = (62, 182) và IoU 1.000.
 
@@ -243,6 +244,8 @@ cho IoU 0.667 (khối 90 bị gộp vào nền); Multi-Otsu cho (t₁, t₂) = (
 | Lọc trung vị k×k (giáo trình Chương 4) | Tiền xử lý, sau thu nhỏ, trước cả hai thuật toán (`prepare_input(..., median_size)`) | `sliding_window_view` + `np.partition` lấy phần tử thứ k²//2, xử lý theo khối 128 hàng để giới hạn bộ nhớ tạm |
 | Co / giãn / mở / đóng (giáo trình Chương 7) | Hậu xử lý mask (`MaskPostprocess`) cho K-means, Otsu, Multi-Otsu | Phần tử cấu trúc vuông k×k là tách được ⇒ min/max theo hàng rồi theo cột, O(N·k) |
 
+Thuật toán nhận ảnh đã lọc, còn ô "Ảnh gốc", ảnh tách nền và overlay dùng ảnh **chưa lọc** (`PreparedInput.original`),
+nên pixel đối tượng trong tệp xuất giữ nguyên màu nguồn; giao diện hiển thị thêm ô "Sau lọc trung vị" để đối chiếu.
 Biên ảnh dùng padding lặp pixel mép, nên đối tượng chạm mép không bị co lẹm từ viền. Kiểm chứng bằng cài đặt
 duyệt trực tiếp (`test_median_filter_matches_brute_force`, `test_erode_and_dilate_match_brute_force`).
 Trên `noisy_circle` (Otsu, gợi ý viền): IoU 0.840 → 0.952 với mở-rồi-đóng 5×5; → 0.998 với lọc trung vị 3×3.
@@ -251,7 +254,8 @@ Trên `noisy_circle` (Otsu, gợi ý viền): IoU 0.840 → 0.952 với mở-r�
 
 Hàng chỉ gồm số nguyên 0..255 viết thường được kiểm tra bằng **một** regex cho cả hàng rồi NumPy phân tích một lần ở
 cuối; hàng có dấu, phần thập phân hoặc giá trị lỗi mới đi đường kiểm tra từng ô bằng `Decimal` để báo đúng dòng/cột.
-CSV 1000×1000: 1.36 s → 0.34 s.
+Đường nhanh còn yêu cầu số dấu phẩy của chuỗi nối đúng bằng số cột − 1, để ô trong dấu nháy chứa dấu phẩy
+(`"1,2",3`) không bị tách thành hai giá trị mà đi đường chậm và báo lỗi đúng dòng/cột. CSV 1000×1000: 1.36 s → 0.34 s.
 
 ### 9.4 Về bước gom màu `unique_pixels` trên ảnh chụp thật
 

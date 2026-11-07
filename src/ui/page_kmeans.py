@@ -50,6 +50,7 @@ DOWNLOAD_LABELS = {
 def _reset_defaults() -> None:
     for k, v in DEFAULTS.items():
         st.session_state[k] = v
+    ui.reset_morphology("km")
 
 
 def params_form(is_color: bool, key_prefix: str = "km") -> KMeansParams | None:
@@ -70,9 +71,8 @@ def params_form(is_color: bool, key_prefix: str = "km") -> KMeansParams | None:
              "(RGB không đồng nhất về cảm nhận). Mức xám: 1 chiều."),
         )
         init_label = st.selectbox("Khởi tạo tâm", list(INIT_OPTIONS), key=f"{key_prefix}_init")
-        c1, c2 = st.columns(2)
-        max_iter = c1.number_input("Vòng lặp tối đa", 1, 1000, step=10, key=f"{key_prefix}_max_iter")
-        seed = c2.number_input("Random seed", 0, 2**31 - 1, step=1, key=f"{key_prefix}_seed")
+        max_iter = st.number_input("Vòng lặp tối đa", 1, 1000, step=10, key=f"{key_prefix}_max_iter")
+        seed = st.number_input("Hạt giống ngẫu nhiên (seed)", 0, 2**31 - 1, step=1, key=f"{key_prefix}_seed")
         tol = st.number_input("Ngưỡng hội tụ (độ dịch tâm)", 0.0, 50.0, step=1e-4, format="%.4f",
                               key=f"{key_prefix}_tol",
                               help="Dừng khi tâm cụm dịch chuyển (chuẩn Euclid, thang 0–255) ≤ ngưỡng này.")
@@ -93,7 +93,7 @@ def render() -> None:
     ui.input_summary(ctx)
     prep = ctx.prepared
 
-    left, right = st.columns([1, 2.6], gap="large")
+    left, right = ui.workspace("kmeans")
     with left:
         params = params_form(prep.is_color)
         st.button("Khôi phục mặc định", on_click=_reset_defaults, width="stretch")
@@ -118,7 +118,7 @@ def render() -> None:
         if run is None:
             if has_stale_result(RESULT_KEY, ctx.signature):
                 st.warning("Ảnh đầu vào đã thay đổi — kết quả cũ đã bị ẩn. Hãy bấm **Chạy K-means** lại.")
-            ui.show_image(prep.image, "Ảnh gốc (chưa chạy thuật toán)")
+            ui.show_images(ui.source_panels(prep))
             return
         _render_result(ctx, run)
 
@@ -126,7 +126,7 @@ def render() -> None:
 def _render_result(ctx, run: dict) -> None:
     prep, params, result = ctx.prepared, run["params"], run["result"]
     core = result.core
-    m = st.columns(5)
+    m = ui.metric_columns(5, "kmeans")
     m[0].metric("Số cụm K", f"{core.k_effective}" + ("" if core.k_effective == core.k_requested else f" (yêu cầu {core.k_requested})"))
     m[1].metric("Số vòng lặp", core.n_iter)
     m[2].metric("Hội tụ", "Có" if core.converged else "Chưa")
@@ -160,7 +160,7 @@ def _render_result(ctx, run: dict) -> None:
         return
 
     with tab_seg:
-        ui.show_images([(prep.image, "Ảnh gốc"), (out.segmented, "Ảnh K-means (màu tâm cụm)"),
+        ui.show_images([*ui.source_panels(prep), (out.segmented, "Ảnh K-means (màu tâm cụm)"),
                         (out.label_color, "Bản đồ nhãn cụm")])
         legend = " ".join(
             f"<span class='isl-chip'><span class='isl-swatch' style='background:{c}'></span>Cụm {i}</span>"
@@ -186,18 +186,15 @@ def _render_result(ctx, run: dict) -> None:
                        f"độ chính xác pixel = {s.pixel_accuracy:.4f}")
 
     with tab_stats:
-        c1, c2 = st.columns([1.1, 1])
-        with c1:
-            st.markdown("**Bảng thống kê cụm**")
-            st.dataframe(pd.DataFrame(cluster_table(result)), hide_index=True, width="stretch")
-            ui.show_figure(viz.cluster_share_figure(core.counts, core.centers))
-        with c2:
-            ui.show_figure(viz.sse_figure(core.sse_history))
-            st.caption("SSE = Σ‖x − tâm cụm của x‖², tính sau bước gán nhãn của mỗi vòng. "
-                       "Theo lý thuyết, SSE không tăng qua các vòng lặp.")
-            hist = pd.DataFrame({"Vòng lặp": range(1, core.n_iter + 1), "SSE": core.sse_history,
-                                 "Độ dịch tâm lớn nhất": core.shift_history})
-            st.dataframe(hist, hide_index=True, width="stretch")
+        st.markdown("**Bảng thống kê cụm**")
+        st.dataframe(pd.DataFrame(cluster_table(result)), hide_index=True, width="stretch")
+        ui.show_figure(viz.cluster_share_figure(core.counts, core.centers))
+        ui.show_figure(viz.sse_figure(core.sse_history))
+        st.caption("SSE = Σ‖x − tâm cụm của x‖², tính sau bước gán nhãn của mỗi vòng. "
+                   "Theo lý thuyết, SSE không tăng qua các vòng lặp.")
+        hist = pd.DataFrame({"Vòng lặp": range(1, core.n_iter + 1), "SSE": core.sse_history,
+                             "Độ dịch tâm lớn nhất": core.shift_history})
+        st.dataframe(hist, hide_index=True, width="stretch")
 
     with tab_dl:
         st.caption("Các tệp được tạo từ đúng kết quả đang hiển thị (cùng ảnh, tham số và cụm đối tượng đã chọn).")

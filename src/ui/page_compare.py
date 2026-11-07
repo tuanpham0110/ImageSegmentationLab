@@ -117,7 +117,7 @@ def render() -> None:
     ui.input_summary(ctx)
     prep = ctx.prepared
 
-    left, right = st.columns([1, 2.6], gap="large")
+    left, right = ui.workspace("compare")
     with left:
         params = params_form(prep.is_color, key_prefix="cmp")
         restore_widget("cmp_otsu_polarity", "Gợi ý theo viền ảnh")
@@ -143,9 +143,10 @@ def render() -> None:
             if has_stale_result(RESULT_KEY, ctx.signature):
                 st.warning("Ảnh đầu vào đã thay đổi — hãy bấm **Chạy K-means** để so sánh lại.")
             st.info("Chọn tham số rồi bấm **Chạy K-means** — Otsu được chạy cùng lúc trên cùng ảnh.")
-            ui.show_image(prep.image, "Ảnh gốc")
+            ui.show_images(ui.source_panels(prep))
             return
         _render(ctx, run, uploaded_gt)
+    _comparison_table(run)
 
 
 def _render(ctx, run, uploaded_gt) -> None:
@@ -181,7 +182,7 @@ def _render(ctx, run, uploaded_gt) -> None:
         return
 
     st.markdown("##### Kết quả trực tiếp của từng thuật toán")
-    ui.show_images([(prep.image, "Ảnh gốc"), (out.segmented, f"K-means: {km.core.k_effective} cụm"),
+    ui.show_images([*ui.source_panels(prep), (out.segmented, f"K-means: {km.core.k_effective} cụm"),
                     (otsu.binary, f"Otsu: nhị phân (t* = {otsu.result.threshold})")])
     st.caption("Lưu ý: K-means cho ảnh nhiều cụm, Otsu cho ảnh 2 lớp — hai ảnh trên không cùng loại nên chỉ so sánh trực quan. "
                "Phép so sánh định lượng dưới đây dùng **mask nhị phân** của cả hai.")
@@ -220,7 +221,13 @@ def _render(ctx, run, uploaded_gt) -> None:
         st.info("Không có ground truth nên **không tính** IoU/Dice/độ chính xác. Có thể tải lên ground-truth mask ở cột trái.")
     st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
 
-    st.markdown("##### Bảng so sánh")
+
+def _comparison_table(run) -> None:
+    """Bảng có nhiều nội dung được đọc trên toàn chiều rộng trang."""
+    km, otsu = run["km"], run.get("otsu")
+    if otsu is None:
+        return
+    st.markdown("#### Đặc điểm và kết quả của hai phương pháp")
     qual = [("Tham số lần chạy này",
              f"K = {km.core.k_effective}, đặc trưng {km.feature}, {run['params'].init}, seed {run['params'].seed}, "
              f"{km.core.n_iter} vòng ({'hội tụ' if km.core.converged else 'chưa hội tụ'})",

@@ -3,66 +3,41 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from html import escape
+from pathlib import Path
 
 import numpy as np
 import streamlit as st
 from PIL import Image
 
 from src.processing.filters import MORPH_LABELS
-from src.processing.pipeline import MaskPostprocess
+from src.processing.pipeline import MaskPostprocess, PreparedInput
 from src.utils import visualization as viz
 
 MIN_DISPLAY_SIDE = 256  # ảnh nhỏ hơn được phóng to (nearest) khi HIỂN THỊ để nhìn rõ từng pixel
 
-CSS = """
-<style>
-:root {
-  --isl-ink: #1f2328; --isl-ink-2: #57606a; --isl-line: #d8dee4;
-  --isl-surface: #ffffff; --isl-soft: #f4f7fb; --isl-accent: #2a78d6;
-}
-.block-container { padding-top: 2.2rem; max-width: 1280px; }
-.isl-hero {
-  border-radius: 16px; padding: 1.5rem 1.75rem; margin-bottom: 1.25rem;
-  background: linear-gradient(120deg, #0f3d75 0%, #2a78d6 60%, #1baf7a 140%); color: #fff;
-}
-.isl-hero h1 { color: #fff; margin: 0; font-size: 1.9rem; letter-spacing: .02em; }
-.isl-hero p { margin: .35rem 0 0 0; opacity: .92; font-size: 1.02rem; }
-.isl-page-title { margin: 0 0 .2rem 0; }
-.isl-subtitle { color: var(--isl-ink-2); margin-bottom: 1rem; }
-.isl-card {
-  border: 1px solid var(--isl-line); border-radius: 12px; padding: .9rem 1rem;
-  background: var(--isl-surface); height: 100%;
-}
-.isl-card h4 { margin: 0 0 .35rem 0; font-size: 1rem; }
-.isl-card p, .isl-card li { color: var(--isl-ink-2); font-size: .92rem; margin: 0; }
-.isl-step {
-  border: 1px solid var(--isl-line); border-radius: 12px; padding: .75rem .9rem; background: var(--isl-soft);
-  min-height: 110px;
-}
-.isl-step b { display: block; color: var(--isl-accent); font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; }
-.isl-chip {
-  display: inline-block; padding: .1rem .55rem; border-radius: 999px; font-size: .78rem;
-  border: 1px solid var(--isl-line); background: var(--isl-soft); color: var(--isl-ink); margin: 0 .25rem .25rem 0;
-}
-[data-testid="stImageCaption"], .stImage figcaption { font-size: .85rem; }
-div[data-testid="stMetric"] { background: var(--isl-soft); border-radius: 10px; padding: .55rem .8rem; }
-div[data-testid="stMetricValue"] p { font-size: 1.3rem !important; font-weight: 600; line-height: 1.3; }
-div[data-testid="stMetricValue"] .stMarkdownEllipsis, div[data-testid="stMetricValue"] p {
-  white-space: normal !important; overflow: visible !important; text-overflow: clip !important; overflow-wrap: anywhere;
-}
-div[data-testid="stMetricLabel"] p { font-size: .82rem; color: var(--isl-ink-2); }
-.isl-swatch { display: inline-block; width: .8rem; height: .8rem; border-radius: 3px; vertical-align: -1px; margin-right: .3rem; }
-</style>
-"""
+CSS = "<style>" + Path(__file__).with_name("styles.css").read_text(encoding="utf-8") + "</style>"
 
 
 def inject_css() -> None:
-    st.markdown(CSS, unsafe_allow_html=True)
+    st.html(CSS)
 
 
 def page_header(title: str, subtitle: str) -> None:
-    st.markdown(f"<h2 class='isl-page-title'>{title}</h2><div class='isl-subtitle'>{subtitle}</div>",
-                unsafe_allow_html=True)
+    st.html(f"<header class='isl-page-header'><div class='isl-eyebrow'>PHÒNG THỰC HÀNH XỬ LÝ ẢNH</div>"
+            f"<h1 class='isl-page-title'>{escape(title)}</h1><p class='isl-subtitle'>{escape(subtitle)}</p></header>")
+
+
+def metric_columns(count: int, key: str):
+    """Các thẻ tự xuống hàng theo chiều rộng còn lại, không ép năm cột hẹp."""
+    with st.container(horizontal=True, gap="xsmall", key=f"metrics-{key}"):
+        return [st.container(width=160) for _ in range(count)]
+
+
+def workspace(key: str):
+    """Giữ đủ chỗ cho tham số; xếp dọc khi vùng nội dung không còn đủ rộng."""
+    with st.container(key=f"workspace-{key}"):
+        return st.columns([1.05, 2], gap="medium")
 
 
 def _for_display(arr: np.ndarray) -> tuple[np.ndarray, bool]:
@@ -79,14 +54,29 @@ def show_image(arr: np.ndarray, caption: str) -> None:
     disp, scaled = _for_display(arr)
     h, w = np.asarray(arr).shape[:2]
     cap = f"{caption} · {w}×{h}" + (" (phóng to để hiển thị)" if scaled else "")
-    st.image(disp, caption=cap, width="stretch")
+    with st.container(border=True, key=None):
+        st.image(disp, caption=cap, width="stretch", alt=caption)
+
+
+def source_panels(prep: PreparedInput, with_gray: bool = False) -> list[tuple[np.ndarray, str]]:
+    """Ô "Ảnh gốc" (chưa lọc) và, nếu có lọc trung vị, thêm ô ảnh đã lọc mà thuật toán thực sự nhận."""
+    k = prep.median_size
+    items = [(prep.original, "Ảnh gốc")]
+    if prep.is_filtered:
+        items.append((prep.image, f"Sau lọc trung vị {k}×{k} (đầu vào thuật toán)"))
+    if with_gray:
+        items.append((prep.gray, "Ảnh xám" + (" (sau lọc)" if prep.is_filtered else "")))
+    return items
 
 
 def show_images(items: list[tuple[np.ndarray, str]]) -> None:
-    cols = st.columns(len(items))
-    for col, (arr, cap) in zip(cols, items):
-        with col:
-            show_image(arr, cap)
+    # Hai ảnh mỗi hàng vẫn đọc rõ khi nằm trong cột kết quả.
+    for start in range(0, len(items), 2):
+        row = items[start:start + 2]
+        cols = st.columns(min(2, len(items)), gap="small")
+        for col, (arr, cap) in zip(cols, row):
+            with col:
+                show_image(arr, cap)
 
 
 def show_figure(fig) -> None:
@@ -119,13 +109,12 @@ def input_summary(ctx) -> None:
     ow, oh = prep.resize.original_size
     pw, ph = prep.resize.processed_size
     chans = "3 (RGB)" if loaded.is_color else "1 (mức xám)"
-    cols = st.columns([1.4, 1, 1, 1, 1])
-    cols[0].metric("Tệp", loaded.source_name if len(loaded.source_name) <= 20 else loaded.source_name[:17] + "…",
-                   help=loaded.source_name)
-    cols[1].metric("Định dạng", loaded.file_format)
-    cols[2].metric("Kích thước gốc", f"{ow}×{oh}")
-    cols[3].metric("Số kênh", chans)
-    cols[4].metric("Dung lượng", human_bytes(loaded.file_bytes))
+    st.html(f"<p class='isl-file-summary'>Ảnh đầu vào <strong>{escape(loaded.source_name)}</strong></p>")
+    cols = metric_columns(4, "input")
+    cols[0].metric("Định dạng", loaded.file_format)
+    cols[1].metric("Kích thước gốc", f"{ow}×{oh}")
+    cols[2].metric("Số kênh", chans)
+    cols[3].metric("Dung lượng", human_bytes(loaded.file_bytes))
     if prep.resize.resized:
         st.info(f"Ảnh được thu nhỏ để xử lý: **{ow}×{oh} → {pw}×{ph}** (giới hạn cạnh dài trong thanh bên). "
                 f"Mọi kết quả và tệp tải xuống có kích thước {pw}×{ph}.")
@@ -176,24 +165,32 @@ def morphology_controls(key_prefix: str) -> MaskPostprocess:
     op_key, size_key = f"{key_prefix}_morph", f"{key_prefix}_morph_size"
     restore_widget(op_key, "none")
     restore_widget(size_key, 3)
-    c1, c2 = st.columns([2, 1])
-    op = c1.selectbox("Hậu xử lý mask (hình thái học)", list(MORPH_LABELS), key=op_key,
+    op = st.selectbox("Hậu xử lý mask (hình thái học)", list(MORPH_LABELS), key=op_key,
                       format_func=lambda o: MORPH_LABELS[o],
                       help="Mở = co rồi giãn: xoá đốm nhiễu nhỏ hơn phần tử cấu trúc. "
                            "Đóng = giãn rồi co: lấp lỗ thủng/khe hở nhỏ. Phần tử cấu trúc vuông k×k.")
-    size = c2.selectbox("Kích thước k", MORPH_SIZES, key=size_key, format_func=lambda k: f"{k}×{k}")
+    size = st.selectbox("Kích thước k", MORPH_SIZES, key=size_key, format_func=lambda k: f"{k}×{k}")
     remember_widget(op_key)
     remember_widget(size_key)
     return MaskPostprocess(op, int(size))
 
 
+def reset_morphology(key_prefix: str) -> None:
+    """Đặt lại hậu xử lý mask về "không" (cả giá trị widget lẫn bản sao bền giữ qua điều hướng)."""
+    from src.ui.state import remember_widget
+
+    for key, value in ((f"{key_prefix}_morph", "none"), (f"{key_prefix}_morph_size", 3)):
+        st.session_state[key] = value
+        remember_widget(key)
+
+
 def download_buttons(files: dict[str, tuple[bytes, str]], labels: dict[str, str], key_prefix: str) -> None:
-    """Hiển thị các nút tải xuống theo lưới 3 cột."""
+    """Hiển thị các nút tải xuống theo lưới 2 cột, đủ chỗ cho tên tệp."""
     st.caption("Trình duyệt xử lý vị trí lưu và xác nhận ghi đè tệp.")
     names = list(files.keys())
-    for row_start in range(0, len(names), 3):
-        cols = st.columns(3)
-        for col, name in zip(cols, names[row_start : row_start + 3]):
+    for row_start in range(0, len(names), 2):
+        cols = st.columns(2)
+        for col, name in zip(cols, names[row_start : row_start + 2]):
             data, mime = files[name]
             with col:
                 requested = st.download_button(

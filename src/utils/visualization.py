@@ -10,10 +10,16 @@ import numpy as np  # noqa: E402
 
 from src.processing.postprocessing import cluster_palette_hex  # noqa: E402
 
-TEXT_PRIMARY = "#1f2328"
-TEXT_SECONDARY = "#57606a"
-GRID = "#d8dee4"
-SERIES_MAIN = "#2a78d6"
+matplotlib.rcParams.update({
+    "font.family": "serif",
+    "font.serif": ["Times New Roman", "Liberation Serif", "DejaVu Serif"],
+    "mathtext.fontset": "stix",
+})
+
+TEXT_PRIMARY = "#292723"
+TEXT_SECONDARY = "#655f58"
+GRID = "#ded8cf"
+SERIES_MAIN = "#8f293e"
 ACCENT = "#e34948"
 NEUTRAL = "#8c959f"
 

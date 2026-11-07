@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from html import escape
+
 import streamlit as st
 
 from src.processing.preprocessing import GRAY_METHODS
@@ -38,11 +40,9 @@ def render_input_sidebar() -> None:
             st.session_state["sample_id"] = default_sample
 
     with st.sidebar:
-        st.markdown("### 🧩 Image Segmentation Lab")
-        st.caption("K-means & Otsu · Đề tài 3 · Xử lý ảnh PTIT")
         if manifest_error:
             st.error(manifest_error)
-        st.markdown("**Ảnh đầu vào**")
+        st.html("<div class='isl-sidebar-label'>Ảnh đầu vào</div>")
         source = st.radio("Nguồn dữ liệu", SOURCES, key="input_source", horizontal=True, label_visibility="collapsed")
 
         data = name = sample = gt_bytes = None
@@ -72,11 +72,12 @@ def render_input_sidebar() -> None:
             elif injected is not None:
                 name, data = injected
 
-        st.select_slider("Giới hạn cạnh dài khi xử lý (pixel)", MAX_SIDE_OPTIONS, key="max_side",
+        st.html("<div class='isl-sidebar-label'>Chuẩn bị dữ liệu</div>")
+        st.select_slider("Cạnh dài tối đa (pixel)", MAX_SIDE_OPTIONS, key="max_side",
                          help="Ảnh lớn hơn được thu nhỏ (giữ tỉ lệ) trước khi xử lý để tránh treo máy.")
         st.selectbox("Chuyển ảnh màu sang xám", list(GRAY_METHODS), key="gray_method",
                      format_func=lambda m: GRAY_METHODS[m])
-        st.selectbox("Tiền xử lý: lọc trung vị khử nhiễu", list(MEDIAN_OPTIONS), key="median_size",
+        st.selectbox("Lọc trung vị khử nhiễu", list(MEDIAN_OPTIONS), key="median_size",
                      format_func=lambda k: MEDIAN_OPTIONS[k],
                      help="Lọc phi tuyến (giáo trình Chương 4): thay mỗi pixel bằng trung vị cửa sổ k×k. "
                           "Khử nhiễu hạt trước Otsu/K-means — hai thuật toán theo từng điểm, không dùng pixel lân cận.")
@@ -99,4 +100,5 @@ def render_input_sidebar() -> None:
             return
         set_context(ctx)
         w, h = ctx.prepared.resize.processed_size
-        st.success(f"Đang dùng: **{name}** · xử lý ở {w}×{h}")
+        st.html("<div class='isl-input-status'><span class='isl-status-dot'></span>"
+                f"<div><strong>{escape(name)}</strong><p>Sẵn sàng xử lý · {w} × {h} pixel</p></div></div>")

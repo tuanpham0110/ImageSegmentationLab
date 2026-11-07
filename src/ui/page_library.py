@@ -30,19 +30,21 @@ def render() -> None:
         st.error("Không tìm thấy data/samples.json. Chạy: `python scripts/generate_samples.py`.")
         return
     st.caption("Tất cả là ảnh tổng hợp, không phải ảnh chụp thật. Có thể tải ảnh chụp của bạn ở thanh bên.")
-    for row in range(0, len(samples), 3):
-        cols = st.columns(3, gap="medium")
-        for col, s in zip(cols, samples[row : row + 3]):
-            with col, st.container(border=True):
-                try:
-                    st.image(thumbnail(str(DATA_DIR / s["file"])), width="stretch")
-                except (InputError, OSError, MemoryError) as exc:
-                    st.error(f"Không đọc được ảnh mẫu: {exc}")
-                st.markdown(f"**{s['title']}**")
-                chips = [s["kind"].upper(), "có ground truth" if s["ground_truth"] else "không có ground truth",
-                         f"gợi ý K = {s['suggested']['k']}", f"đặc trưng {s['suggested']['feature']}"]
-                st.markdown("".join(f"<span class='isl-chip'>{c}</span>" for c in chips), unsafe_allow_html=True)
-                st.caption(f"**Mục đích:** {s['purpose']}")
-                st.caption(f"**Kỳ vọng:** {s['expected']}")
-                st.button("Dùng ảnh này", key=f"use_{s['id']}", on_click=_use_sample, args=(s["id"],),
-                          width="stretch")
+    with st.container(key="library-grid"):
+        for row in range(0, len(samples), 2):
+            cols = st.columns(2, gap="medium")
+            for col, s in zip(cols, samples[row : row + 2]):
+                with col, st.container(border=True, height="stretch", key=f"sample-card-{s['id']}"):
+                    try:
+                        st.image(thumbnail(str(DATA_DIR / s["file"])), width="stretch", alt=s["title"])
+                    except (InputError, OSError, MemoryError) as exc:
+                        st.error(f"Không đọc được ảnh mẫu: {exc}")
+                    st.markdown(f"**{s['title']}**")
+                    chips = [s["kind"].upper(), "có ground truth" if s["ground_truth"] else "không có ground truth",
+                             f"gợi ý K = {s['suggested']['k']}", f"đặc trưng {s['suggested']['feature']}"]
+                    st.markdown("".join(f"<span class='isl-chip'>{c}</span>" for c in chips), unsafe_allow_html=True)
+                    st.caption(f"**Mục đích:** {s['purpose']}")
+                    st.caption(f"**Kỳ vọng:** {s['expected']}")
+                    st.space("stretch")
+                    st.button("Dùng ảnh này", key=f"use_{s['id']}", on_click=_use_sample, args=(s["id"],),
+                              width="stretch")

@@ -76,8 +76,7 @@ MULTI_DOWNLOAD_LABELS = {
 def _reset_defaults() -> None:
     for k, v in DEFAULTS.items():
         st.session_state[k] = v
-    st.session_state["otsu_morph"] = "none"
-    st.session_state["otsu_morph_size"] = 3
+    ui.reset_morphology("otsu")
 
 
 def render() -> None:
@@ -91,7 +90,7 @@ def render() -> None:
     for k, v in DEFAULTS.items():
         restore_widget(k, v)
 
-    left, right = st.columns([1, 2.6], gap="large")
+    left, right = ui.workspace("otsu")
     with left:
         with st.form("otsu_form", border=True):
             st.markdown("**Tham số phân ngưỡng**")
@@ -138,7 +137,7 @@ def render() -> None:
         if run is None:
             if has_stale_result(RESULT_KEY, ctx.signature):
                 st.warning("Ảnh đầu vào đã thay đổi — kết quả cũ đã bị ẩn. Hãy bấm **Chạy Otsu** lại.")
-            ui.show_images([(prep.image, "Ảnh gốc"), (prep.gray, "Ảnh xám")])
+            ui.show_images(ui.source_panels(prep, with_gray=True))
             return
         if run.get("kind") == "multi":
             _render_multi(ctx, run)
@@ -148,7 +147,7 @@ def render() -> None:
 
 def _render_result(ctx, out, run: dict | None = None) -> None:
     prep, r = ctx.prepared, out.result
-    m = st.columns(5)
+    m = ui.metric_columns(5, "otsu")
     m[0].metric("Ngưỡng Otsu t*", r.threshold if r.valid else f"{r.threshold} (không hợp lệ)")
     m[1].metric("Ngưỡng dùng", f"{out.threshold_used}" + (" (thủ công)" if out.mode == "manual" else ""))
     m[2].metric("Độ tách η", f"{r.separability:.3f}", help="η = σ²_B(t*) / σ²_T, trong [0, 1]; càng gần 1 hai lớp càng tách biệt.")
@@ -160,7 +159,7 @@ def _render_result(ctx, out, run: dict | None = None) -> None:
 
     tab_res, tab_hist, tab_dl = st.tabs(["Kết quả phân ngưỡng", "Histogram & phương sai", "Tải xuống"])
     with tab_res:
-        ui.show_images([(prep.image, "Ảnh gốc"), (prep.gray, "Ảnh xám"), (out.binary, f"Ảnh nhị phân (> {out.threshold_used})")])
+        ui.show_images([*ui.source_panels(prep, with_gray=True), (out.binary, f"Ảnh nhị phân (> {out.threshold_used})")])
         if out.postprocess.operation != "none":
             ui.show_images([(out.raw_mask, "Mask trước hình thái học"), (out.mask, "Mask sau hình thái học"),
                             (out.overlay, "Đối tượng tô màu trên ảnh gốc")])
@@ -213,7 +212,7 @@ def _render_multi(ctx, run: dict) -> None:
     fg_key = f"otsu_multi_fg_{run['run_id']}"
     persistent_foreground(run, fg_key, options, default_multi_otsu_foreground(labels))
 
-    m = st.columns(5)
+    m = ui.metric_columns(5, "multi-otsu")
     m[0].metric("Ngưỡng t1", t1)
     m[1].metric("Ngưỡng t2", t2 if r.valid else f"{t2} (không hợp lệ)")
     m[2].metric("Độ tách η", f"{r.separability:.3f}", help="η = σ²_B(t1, t2) / σ²_T, trong [0, 1].")
@@ -238,7 +237,7 @@ def _render_multi(ctx, run: dict) -> None:
 
     tab_res, tab_hist, tab_dl = st.tabs(["Kết quả 3 lớp", "Histogram", "Tải xuống"])
     with tab_res:
-        ui.show_images([(prep.image, "Ảnh gốc"), (prep.gray, "Ảnh xám"), (out.label_color, "Bản đồ 3 lớp")])
+        ui.show_images([*ui.source_panels(prep, with_gray=True), (out.label_color, "Bản đồ 3 lớp")])
         st.markdown("Chú giải: " + legend, unsafe_allow_html=True)
         if not fg:
             st.info("Chưa chọn lớp nào: mask rỗng (toàn nền).")

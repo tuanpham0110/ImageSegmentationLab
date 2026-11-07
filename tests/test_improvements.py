@@ -359,3 +359,101 @@ def test_sidebar_median_filter_changes_signature():
     assert not at.exception
     ctx = at.session_state["_input_ctx"]
     assert ctx.signature != first and ctx.prepared.median_size == 3
+
+
+# ------------------------- Hồi quy sau review 07/11/2026 -------------------------
+
+def test_median_keeps_unfiltered_source_for_display_and_cutout():
+    loaded = load_path(DATA / "sample_images/noisy_circle.png")
+    plain = prepare_input(loaded, 800)
+    filtered = prepare_input(loaded, 800, median_size=5)
+    assert not plain.is_filtered and filtered.is_filtered
+    np.testing.assert_array_equal(filtered.original, plain.image)  # ảnh gốc = ảnh chưa lọc
+    assert not np.array_equal(filtered.image, filtered.original)  # thuật toán nhận ảnh đã lọc
+    np.testing.assert_array_equal(filtered.image, median_filter(plain.image, 5))
+    from src.processing.preprocessing import to_grayscale
+    np.testing.assert_array_equal(filtered.gray, to_grayscale(filtered.image, filtered.gray_method))
+    res = run_kmeans(filtered, KMeansParams(k=2))
+    out = kmeans_outputs(filtered, res, [1])
+    fg = out.mask > 0
+    src = filtered.original if filtered.original.ndim == 3 else np.stack([filtered.original] * 3, -1)
+    np.testing.assert_array_equal(out.cutout_rgba[fg][:, :3], src[fg])  # màu đối tượng = pixel nguồn
+    stats = run_otsu(filtered, "auto")
+    assert stats.mask.shape == filtered.image.shape[:2]
+
+
+@pytest.mark.parametrize("text,where", [('"1,2",3\n"4,5",6\n', "dòng 1, cột 1"),
+                                        ('1;2\n"3,4";5\n', "dòng 2, cột 1")])
+def test_csv_quoted_comma_reports_cell(text, where):
+    with pytest.raises(InputError, match=where):
+        parse_csv_matrix(text)
+
+
+def test_csv_quoted_plain_numbers_still_fast_path_ok():
+    np.testing.assert_array_equal(parse_csv_matrix('"1",2\n3,"4"\n'), [[1, 2], [3, 4]])
+
+
+def test_multi_otsu_variance_matrix_is_stable_for_skewed_histogram():
+    from fractions import Fraction
+
+    h = np.zeros(256, dtype=np.int64)
+    h[253], h[254], h[255] = 2 ** 52 - 2, 1, 1
+    r = multi_otsu_from_histogram(h)
+    assert r.thresholds == (253, 254)
+    n = int(h.sum())
+    mu = Fraction(253 * h[253] + 254 + 255, n)
+    exact = sum(Fraction(int(c), n) * (Fraction(v) - mu) ** 2
+                for c, v in ((h[253], 253), (1, 254), (1, 255)))
+    got = r.between_class_variance[253, 254]
+    assert got == pytest.approx(float(exact), rel=1e-6)
+    assert got == pytest.approx(r.max_variance, rel=1e-6)
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_multi_otsu_variance_matrix_matches_fraction(seed):
+    from fractions import Fraction
+
+    h = np.random.default_rng(seed).integers(0, 50, 256)
+    r = multi_otsu_from_histogram(h)
+    t1, t2 = r.thresholds
+    n = int(h.sum())
+    lv = np.arange(256)
+    mu = Fraction(int((lv * h).sum()), n)
+    exact = Fraction(0)
+    for lo, hi in ((0, t1 + 1), (t1 + 1, t2 + 1), (t2 + 1, 256)):
+        c, m = int(h[lo:hi].sum()), int((lv[lo:hi] * h[lo:hi]).sum())
+        exact += Fraction(c, n) * (Fraction(m, c) - mu) ** 2
+    assert r.between_class_variance[t1, t2] == pytest.approx(float(exact), rel=1e-12)
+    assert np.nanmax(r.between_class_variance) == pytest.approx(r.max_variance, rel=1e-12)
+
+
+def test_kmeans_reset_defaults_also_resets_morphology():
+    at = _app("kmeans").run()
+    next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
+    at.selectbox(key="km_morph").set_value("open_close")
+    at.selectbox(key="km_morph_size").set_value(7).run()
+    next(b for b in at.button if b.label == "Khôi phục mặc định").click().run()
+    next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert at.selectbox(key="km_morph").value == "none"
+    assert at.selectbox(key="km_morph_size").value == 3
+    assert at.session_state["_persist__km_morph"] == "none"
+
+
+def test_source_panels_show_unfiltered_original_and_filtered_input():
+    from src.ui.components import source_panels
+
+    loaded = load_path(DATA / "sample_images/noisy_circle.png")
+    plain = source_panels(prepare_input(loaded, 800), with_gray=True)
+    assert [c for _, c in plain] == ["Ảnh gốc", "Ảnh xám"]
+    prep = prepare_input(loaded, 800, median_size=3)
+    panels = source_panels(prep, with_gray=True)
+    assert [c for _, c in panels] == ["Ảnh gốc", "Sau lọc trung vị 3×3 (đầu vào thuật toán)", "Ảnh xám (sau lọc)"]
+    assert panels[0][0] is prep.original and panels[1][0] is prep.image
+
+
+def test_otsu_page_renders_with_median_filter():
+    at = _app("otsu").run()
+    at.selectbox(key="median_size").set_value(3).run()
+    next(b for b in at.button if b.label.startswith("Chạy Otsu")).click().run()
+    assert not at.exception, [e.value for e in at.exception]

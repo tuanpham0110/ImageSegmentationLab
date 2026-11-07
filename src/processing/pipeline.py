@@ -39,10 +39,20 @@ class PreparedInput:
     gray_method: str
     name: str
     median_size: int = 1  # cửa sổ lọc trung vị tiền xử lý (1 = không lọc)
+    source: np.ndarray | None = None  # ảnh đã giới hạn kích thước nhưng CHƯA lọc trung vị
 
     @property
     def is_color(self) -> bool:
         return self.image.ndim == 3
+
+    @property
+    def original(self) -> np.ndarray:
+        """Ảnh nguồn (chưa lọc) dùng để hiển thị đối chiếu và lấy màu cho ảnh tách nền/overlay."""
+        return self.image if self.source is None else self.source
+
+    @property
+    def is_filtered(self) -> bool:
+        return self.median_size > 1
 
 
 def prepare_input(loaded: LoadedImage, max_side: int, gray_method: str = "luminance",
@@ -50,11 +60,12 @@ def prepare_input(loaded: LoadedImage, max_side: int, gray_method: str = "lumina
     """Giới hạn kích thước xử lý, lọc trung vị khử nhiễu (tuỳ chọn) và tính ảnh xám.
 
     Lọc trung vị được áp dụng lên ảnh đã thu nhỏ, trước cả hai thuật toán, nên Otsu và
-    K-means luôn nhận cùng một ảnh đã khử nhiễu.
+    K-means luôn nhận cùng một ảnh đã khử nhiễu (``image``/``gray``). Ảnh chưa lọc được giữ
+    ở ``source`` để hiển thị "Ảnh gốc" và để ảnh tách nền/overlay giữ nguyên pixel nguồn.
     """
-    image, info = limit_size(loaded.array, max_side, resample="area")
-    if median_size != 1:
-        image = median_filter(image, median_size)
+    source, info = limit_size(loaded.array, max_side, resample="area")
+    source = np.ascontiguousarray(source)
+    image = median_filter(source, median_size) if median_size != 1 else source
     return PreparedInput(
         image=np.ascontiguousarray(image),
         gray=to_grayscale(image, gray_method),
@@ -62,6 +73,7 @@ def prepare_input(loaded: LoadedImage, max_side: int, gray_method: str = "lumina
         gray_method=gray_method,
         name=loaded.source_name,
         median_size=int(median_size),
+        source=source,
     )
 
 
@@ -149,9 +161,9 @@ def kmeans_outputs(prepared: PreparedInput, result: ImageKMeansResult, foregroun
         segmented=result.segmented,
         label_color=colorize_labels(result.labels),
         mask=mask,
-        cutout_rgba=cutout_rgba(prepared.image, mask),
-        cutout_preview=cutout_on_color(prepared.image, mask),
-        overlay=overlay_mask(prepared.image, mask),
+        cutout_rgba=cutout_rgba(prepared.original, mask),
+        cutout_preview=cutout_on_color(prepared.original, mask),
+        overlay=overlay_mask(prepared.original, mask),
         foreground_clusters=fg,
         raw_mask=raw_mask,
         postprocess=postprocess,
@@ -180,8 +192,12 @@ def cluster_table(result: ImageKMeansResult) -> list[dict]:
 
 
 def _preprocess_stats(prepared: PreparedInput) -> dict:
-    return {"loc_trung_vi": (f"{prepared.median_size}x{prepared.median_size}" if prepared.median_size > 1
-                             else "không")}
+    if not prepared.is_filtered:
+        return {"loc_trung_vi": "không"}
+    k = prepared.median_size
+    return {"loc_trung_vi": f"{k}x{k}",
+            "anh_dau_vao_thuat_toan": "ảnh đã lọc trung vị",
+            "nguon_mau_tach_nen_overlay": "ảnh gốc chưa lọc (giữ nguyên pixel nguồn)"}
 
 
 def kmeans_stats(prepared: PreparedInput, params: KMeansParams, result: ImageKMeansResult, fg: list[int],
@@ -295,9 +311,9 @@ def run_otsu(prepared: PreparedInput, polarity: str = "bright", manual_threshold
         polarity=polarity,
         binary=binary,
         mask=mask,
-        cutout_rgba=cutout_rgba(prepared.image, mask),
-        cutout_preview=cutout_on_color(prepared.image, mask),
-        overlay=overlay_mask(prepared.image, mask),
+        cutout_rgba=cutout_rgba(prepared.original, mask),
+        cutout_preview=cutout_on_color(prepared.original, mask),
+        overlay=overlay_mask(prepared.original, mask),
         foreground_ratio=foreground_ratio(mask),
         warnings=warnings,
         raw_mask=raw_mask,
@@ -395,9 +411,9 @@ def multi_otsu_outputs(prepared: PreparedInput, result: MultiOtsuResult, labels:
         label_color=colorize_labels(labels),
         foreground_classes=fg,
         mask=mask,
-        cutout_rgba=cutout_rgba(prepared.image, mask),
-        cutout_preview=cutout_on_color(prepared.image, mask),
-        overlay=overlay_mask(prepared.image, mask),
+        cutout_rgba=cutout_rgba(prepared.original, mask),
+        cutout_preview=cutout_on_color(prepared.original, mask),
+        overlay=overlay_mask(prepared.original, mask),
         foreground_ratio=foreground_ratio(mask),
         warnings=list(result.warnings),
         raw_mask=raw_mask,
