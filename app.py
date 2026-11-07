@@ -30,10 +30,10 @@ from src.ui.sidebar import render_input_sidebar  # noqa: E402
 PAGES = {
     "overview": (page_overview.render, "Tổng quan", ":material/home:"),
     "kmeans": (page_kmeans.render, "K-means", ":material/palette:"),
-    "otsu": (page_otsu.render, "Otsu Thresholding", ":material/contrast:"),
+    "otsu": (page_otsu.render, "Phân ngưỡng Otsu", ":material/contrast:"),
     "compare": (page_compare.render, "So sánh thuật toán", ":material/compare:"),
     "library": (page_library.render, "Thư viện ảnh mẫu", ":material/photo_library:"),
-    "theory": (page_theory.render, "Kiến thức thuật toán", ":material/functions:"),
+    "theory": (page_theory.render, "Kiến thức nền tảng", ":material/functions:"),
     "guide": (page_guide.render, "Hướng dẫn", ":material/menu_book:"),
 }
 

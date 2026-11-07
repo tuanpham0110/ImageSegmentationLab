@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import streamlit as st
 
+from src.ui import components as ui
+from src.ui.state import get_context
+
 STEPS = [
     ("Chọn ảnh đầu vào", "Dùng ảnh mẫu hoặc tải ảnh PNG, JPG, BMP hay ma trận CSV từ máy tính."),
     ("Chuẩn bị dữ liệu", "Giới hạn kích thước, chuyển mức xám và lọc trung vị nếu cần khử nhiễu."),
@@ -14,20 +17,33 @@ STEPS = [
 
 
 def render() -> None:
-    st.html(
-        "<section class='isl-hero'>"
-        "<div class='isl-eyebrow'>PTIT · XỬ LÝ ẢNH · ĐỀ TÀI 03</div>"
-        "<h1>Phân đoạn ảnh<br>với K-means và Otsu</h1>"
-        "<p>Khám phá cách thuật toán phân chia một bức ảnh thành các vùng. "
-        "Chọn dữ liệu, điều chỉnh tham số và quan sát kết quả qua từng bước xử lý.</p>"
-        "<div class='isl-hero-footer'><span>02 phương pháp phân đoạn</span>"
-        "<span>Ảnh màu &amp; ảnh mức xám</span><span>Xuất kết quả PNG · CSV · JSON</span></div>"
-        "</section>"
-    )
-
-    st.html("<div class='isl-section-heading'><h2>Chọn phương pháp thực hành</h2>"
-            "<span>Cùng một ảnh, hai cách tiếp cận</span></div>")
     pages = st.session_state["_nav_pages"]
+    with st.container(border=True, key="overview-hero"):
+        intro, preview = st.columns([1.5, 1], gap="medium", vertical_alignment="center")
+        with intro:
+            st.html(
+                "<section class='isl-hero'>"
+                "<div class='isl-eyebrow'>Xử lý ảnh · PTIT</div>"
+                "<h1>Phân đoạn ảnh.<br>Hiểu rõ từng kết quả.</h1>"
+                "<p>Thực hành K-means và Otsu trên ảnh của bạn. "
+                "Điều chỉnh tham số, tách đối tượng và so sánh hai phương pháp ngay trong một không gian làm việc.</p>"
+                "</section>"
+            )
+            with st.container(horizontal=True, gap="small", key="overview-start"):
+                st.page_link(pages["kmeans"], label="Thực hành K-means", icon=":material/play_arrow:")
+                st.page_link(pages["otsu"], label="Khám phá Otsu", icon=":material/arrow_forward:")
+        with preview, st.container(key="overview-preview"):
+            ctx = get_context()
+            if ctx is not None:
+                ui.show_image(ctx.prepared.image, "Ảnh đang chọn · sẵn sàng thực hành")
+            else:
+                st.info("Chọn ảnh mẫu hoặc tải ảnh lên ở thanh bên để bắt đầu.")
+        st.html("<div class='isl-hero-footer'><span>02 thuật toán</span>"
+                "<span>Ảnh màu &amp; ảnh mức xám</span><span>Xuất PNG · CSV · JSON</span>"
+                "<span>Xử lý cục bộ trên máy</span></div>")
+
+    st.html("<div class='isl-section-heading'><h2>Chọn phương pháp</h2>"
+            "<span>Hai cách tiếp cận, cùng một ảnh đầu vào</span></div>")
     with st.container(key="overview-methods"):
         left, right = st.columns(2, gap="medium")
         with left, st.container(border=True, height="stretch", key="method-kmeans"):
@@ -35,8 +51,8 @@ def render() -> None:
                 "<div class='isl-method-top'><span class='isl-method-number'>01</span>"
                 "<span class='isl-method-tag'>PHÂN CỤM PIXEL</span></div>"
                 "<h3 class='isl-method-title'>K-means</h3>"
-                "<p class='isl-method-copy'>Gom những pixel có màu sắc hoặc mức xám gần nhau thành K cụm. "
-                "Quan sát màu tâm cụm, bản đồ nhãn và chọn các cụm thuộc đối tượng cần tách.</p>"
+                "<p class='isl-method-copy'>Chia ảnh thành các nhóm màu tương đồng. "
+                "Chọn số cụm K, quan sát bản đồ nhãn và tách vùng đối tượng bạn quan tâm.</p>"
                 "<p class='isl-method-note'><strong>Phù hợp:</strong> ảnh màu, nhiều vùng màu khác nhau "
                 "và thực hành lượng tử hoá màu.</p>"
             )
@@ -46,8 +62,8 @@ def render() -> None:
                 "<div class='isl-method-top'><span class='isl-method-number'>02</span>"
                 "<span class='isl-method-tag'>PHÂN NGƯỠNG MỨC XÁM</span></div>"
                 "<h3 class='isl-method-title'>Otsu</h3>"
-                "<p class='isl-method-copy'>Tự tìm ngưỡng phân chia các lớp sáng và tối dựa trên histogram. "
-                "Theo dõi ngưỡng tối ưu, ảnh nhị phân và mở rộng với Multi-Otsu ba lớp.</p>"
+                "<p class='isl-method-copy'>Tự tìm ngưỡng phân chia đối tượng và nền theo độ sáng. "
+                "Xem histogram, điều chỉnh ngưỡng và thử Multi-Otsu với ba lớp.</p>"
                 "<p class='isl-method-note'><strong>Phù hợp:</strong> ảnh có đối tượng tương phản với nền, "
                 "văn bản quét và histogram hai đỉnh rõ.</p>"
             )
@@ -87,5 +103,5 @@ def render() -> None:
             "- Pillow đọc, ghi và đổi kích thước ảnh; Matplotlib vẽ biểu đồ; Streamlit xây dựng giao diện.\n"
             "- Ứng dụng chạy cục bộ, không cần Internet hoặc API."
         )
-    st.html("<p class='isl-footnote'>Image Segmentation Lab · Học viện Công nghệ Bưu chính Viễn thông "
-            "<br>IoU và Dice chỉ được tính khi có ảnh ground truth để đối chiếu.</p>")
+    st.html("<p class='isl-footnote'>Image Segmentation Lab · PTIT · "
+            "IoU và Dice chỉ được tính khi có ground truth để đối chiếu.</p>")

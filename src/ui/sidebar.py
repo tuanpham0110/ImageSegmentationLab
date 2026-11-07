@@ -72,15 +72,15 @@ def render_input_sidebar() -> None:
             elif injected is not None:
                 name, data = injected
 
-        st.html("<div class='isl-sidebar-label'>Chuẩn bị dữ liệu</div>")
-        st.select_slider("Cạnh dài tối đa (pixel)", MAX_SIDE_OPTIONS, key="max_side",
-                         help="Ảnh lớn hơn được thu nhỏ (giữ tỉ lệ) trước khi xử lý để tránh treo máy.")
-        st.selectbox("Chuyển ảnh màu sang xám", list(GRAY_METHODS), key="gray_method",
-                     format_func=lambda m: GRAY_METHODS[m])
-        st.selectbox("Lọc trung vị khử nhiễu", list(MEDIAN_OPTIONS), key="median_size",
-                     format_func=lambda k: MEDIAN_OPTIONS[k],
-                     help="Lọc phi tuyến (giáo trình Chương 4): thay mỗi pixel bằng trung vị cửa sổ k×k. "
-                          "Khử nhiễu hạt trước Otsu/K-means — hai thuật toán theo từng điểm, không dùng pixel lân cận.")
+        with st.expander("Tiền xử lý ảnh", icon=":material/tune:"):
+            st.select_slider("Cạnh dài tối đa (pixel)", MAX_SIDE_OPTIONS, key="max_side",
+                             help="Ảnh lớn hơn được thu nhỏ (giữ tỉ lệ) trước khi xử lý để tránh treo máy.")
+            st.selectbox("Chuyển ảnh màu sang xám", list(GRAY_METHODS), key="gray_method",
+                         format_func=lambda m: GRAY_METHODS[m])
+            st.selectbox("Lọc trung vị khử nhiễu", list(MEDIAN_OPTIONS), key="median_size",
+                         format_func=lambda k: MEDIAN_OPTIONS[k],
+                         help="Lọc phi tuyến (giáo trình Chương 4): thay mỗi pixel bằng trung vị cửa sổ k×k. "
+                              "Khử nhiễu hạt trước Otsu/K-means — hai thuật toán theo từng điểm, không dùng pixel lân cận.")
 
         if data is None:
             set_context(None, None)
@@ -101,4 +101,4 @@ def render_input_sidebar() -> None:
         set_context(ctx)
         w, h = ctx.prepared.resize.processed_size
         st.html("<div class='isl-input-status'><span class='isl-status-dot'></span>"
-                f"<div><strong>{escape(name)}</strong><p>Sẵn sàng xử lý · {w} × {h} pixel</p></div></div>")
+                f"<div><strong title='{escape(name, quote=True)}'>{escape(name)}</strong><p>Sẵn sàng · {w} × {h} pixel</p></div></div>")

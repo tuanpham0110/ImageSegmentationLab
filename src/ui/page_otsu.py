@@ -80,8 +80,7 @@ def _reset_defaults() -> None:
 
 
 def render() -> None:
-    ui.page_header("Phân ngưỡng Otsu (Otsu Thresholding)",
-                   "Chọn ngưỡng t* làm cực đại phương sai giữa các lớp trên histogram 256 mức xám (tự cài đặt).")
+    ui.page_header("Phân ngưỡng Otsu", "Tách đối tượng theo độ sáng, xem histogram và đối chiếu ngưỡng tự động.")
     ctx = ui.require_input()
     if ctx is None:
         return
@@ -93,13 +92,19 @@ def render() -> None:
     left, right = ui.workspace("otsu")
     with left:
         with st.form("otsu_form", border=True):
-            st.markdown("**Tham số phân ngưỡng**")
-            classes = st.radio("Số lớp", CLASS_MODES, key="otsu_classes", help=CLASSES_HELP)
-            mode = st.radio("Ngưỡng dùng để tạo kết quả (2 lớp)", MODES, key="otsu_mode")
-            manual_t = st.slider("Ngưỡng thủ công T (chỉ dùng ở chế độ thủ công)", 0, 255, key="otsu_manual_t")
-            polarity = st.radio("Đối tượng (foreground) là (2 lớp)", list(POLARITY_OPTIONS), key="otsu_polarity",
-                                help=POLARITY_HELP)
-            post = ui.morphology_controls("otsu")
+            st.markdown("**Thiết lập Otsu**")
+            classes = st.radio("Phương pháp", CLASS_MODES, key="otsu_classes", help=CLASSES_HELP,
+                               format_func=lambda value: "Otsu · 2 lớp" if value == CLASS_MODES[0] else "Multi-Otsu · 3 lớp")
+            mode = st.radio("Chế độ ngưỡng (2 lớp)", MODES, key="otsu_mode", horizontal=True,
+                            format_func=lambda value: "Tự động" if value == MODES[0] else "Thủ công")
+            polarity = st.radio("Đối tượng cần tách (2 lớp)", list(POLARITY_OPTIONS), key="otsu_polarity",
+                                help=POLARITY_HELP,
+                                format_func=lambda value: {"Gợi ý theo viền ảnh": "Đề xuất theo viền ảnh",
+                                                           "Lớp sáng (> t)": "Đối tượng sáng", "Lớp tối (≤ t)": "Đối tượng tối"}[value])
+            with st.expander("Ngưỡng thủ công & hậu xử lý", icon=":material/tune:"):
+                manual_t = st.slider("Ngưỡng thủ công T", 0, 255, key="otsu_manual_t",
+                                     help="Chỉ áp dụng khi chọn chế độ Thủ công ở bài toán 2 lớp.")
+                post = ui.morphology_controls("otsu")
             submitted = st.form_submit_button("Chạy Otsu", type="primary", width="stretch")
         for k in DEFAULTS:
             remember_widget(k)

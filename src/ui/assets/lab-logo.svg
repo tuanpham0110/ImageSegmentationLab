@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="300" height="58" viewBox="0 0 300 58">
-  <rect x="0" y="5" width="48" height="48" rx="9" fill="#8f293e"/>
+  <rect x="0" y="5" width="48" height="48" rx="12" fill="#1877f2"/>
   <path d="M13 18h9v9h-9zm13 0h9v9h-9zM13 31h9v9h-9z" fill="#fff"/>
-  <path d="M26 31h9v9h-9z" fill="#d9a3af"/>
-  <text x="62" y="27" fill="#292723" font-family="Times New Roman, Times, serif" font-weight="700" font-size="23">Phân đoạn ảnh</text>
-  <text x="62" y="46" fill="#655f58" font-family="Times New Roman, Times, serif" font-size="14">K-means &amp; Otsu · PTIT</text>
+  <path d="M26 31h9v9h-9z" fill="#a8d0ff"/>
+  <text x="62" y="27" fill="#182230" font-family="Arial, Segoe UI, sans-serif" font-weight="700" font-size="22">Phân đoạn ảnh</text>
+  <text x="62" y="46" fill="#667085" font-family="Arial, Segoe UI, sans-serif" font-size="13">K-means &amp; Otsu · PTIT</text>
 </svg>

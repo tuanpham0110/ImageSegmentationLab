@@ -11,15 +11,15 @@ import numpy as np  # noqa: E402
 from src.processing.postprocessing import cluster_palette_hex  # noqa: E402
 
 matplotlib.rcParams.update({
-    "font.family": "serif",
-    "font.serif": ["Times New Roman", "Liberation Serif", "DejaVu Serif"],
-    "mathtext.fontset": "stix",
+    "font.family": "sans-serif",
+    "font.sans-serif": ["Arial", "Segoe UI", "DejaVu Sans"],
+    "mathtext.fontset": "dejavusans",
 })
 
-TEXT_PRIMARY = "#292723"
-TEXT_SECONDARY = "#655f58"
-GRID = "#ded8cf"
-SERIES_MAIN = "#8f293e"
+TEXT_PRIMARY = "#182230"
+TEXT_SECONDARY = "#667085"
+GRID = "#e3e8ef"
+SERIES_MAIN = "#1877f2"
 ACCENT = "#e34948"
 NEUTRAL = "#8c959f"
 

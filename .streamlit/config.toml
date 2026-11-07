@@ -1,34 +1,34 @@
 [theme]
 base = "light"
-primaryColor = "#8f293e"
-backgroundColor = "#f8f6f2"
-secondaryBackgroundColor = "#f0ede7"
-textColor = "#292723"
-font = "Times New Roman"
-headingFont = "Times New Roman"
-codeFont = "Times New Roman"
-baseFontSize = 18
-headingFontSizes = ["2.5rem", "1.85rem", "1.4rem", "1.15rem", "1.05rem", "1rem"]
-headingFontWeights = [700, 700, 700, 700, 700, 700]
-metricValueFontSize = "1.55rem"
-metricValueFontWeight = 700
-borderColor = "#ded8cf"
-baseRadius = "10px"
-buttonRadius = "7px"
+primaryColor = "#1877f2"
+backgroundColor = "#f5f7fb"
+secondaryBackgroundColor = "#f0f3f8"
+textColor = "#182230"
+font = "Arial"
+headingFont = "Arial"
+codeFont = "Arial"
+baseFontSize = 15
+headingFontSizes = ["1.9rem", "1.5rem", "1.2rem", "1.05rem", "1rem", "0.9rem"]
+headingFontWeights = [700, 700, 600, 600, 600, 600]
+metricValueFontSize = "1.35rem"
+metricValueFontWeight = 600
+borderColor = "#e3e8ef"
+baseRadius = "12px"
+buttonRadius = "8px"
 showWidgetBorder = true
 showSidebarBorder = true
-dataframeHeaderBackgroundColor = "#f0ede7"
-dataframeHeaderTextColor = "#292723"
-paddingTop = "1.4rem"
+dataframeHeaderBackgroundColor = "#f0f3f8"
+dataframeHeaderTextColor = "#344054"
+paddingTop = "1rem"
 paddingBottom = "3rem"
 
 [theme.sidebar]
 backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f6f3ef"
-borderColor = "#ded8cf"
-textColor = "#292723"
-primaryColor = "#8f293e"
-paddingTop = "1rem"
+secondaryBackgroundColor = "#f5f7fb"
+borderColor = "#e3e8ef"
+textColor = "#344054"
+primaryColor = "#1877f2"
+paddingTop = "0.5rem"
 paddingBottom = "1.5rem"
 
 [server]
@@ -37,3 +37,6 @@ headless = false
 
 [browser]
 gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"

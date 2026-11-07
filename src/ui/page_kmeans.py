@@ -59,23 +59,26 @@ def params_form(is_color: bool, key_prefix: str = "km") -> KMeansParams | None:
     for key, v in zip(keys, DEFAULTS.values()):
         restore_widget(key, v)
     with st.form(f"{key_prefix}_form", border=True):
-        st.markdown("**Tham số K-means**")
+        st.markdown("**Thiết lập K-means**")
         k = st.slider("Số cụm K", 2, UI_MAX_K, key=f"{key_prefix}_k",
                       help="Số nhóm màu/mức xám cần chia. K-means không tự xác định K. "
                            "Bảng màu bản đồ nhãn tự mở rộng theo K.")
         feature_label = st.radio(
-            "Vector đặc trưng của pixel", list(FEATURE_OPTIONS), key=f"{key_prefix}_feature",
+            "Đặc trưng phân cụm", list(FEATURE_OPTIONS), key=f"{key_prefix}_feature",
+            format_func=lambda label: {"RGB (3 kênh)": "Màu RGB", "CIE L*a*b* (3 kênh, theo cảm nhận)": "Màu Lab (theo cảm nhận)",
+                                       "Mức xám (1 kênh)": "Mức xám"}[label],
             disabled=not is_color,
             help="Ảnh xám luôn dùng 1 kênh mức xám." if not is_color else
             ("RGB: 3 chiều (R,G,B). CIE L*a*b*: khoảng cách Euclid = độ lệch màu ΔE*ab theo cảm nhận thị giác "
              "(RGB không đồng nhất về cảm nhận). Mức xám: 1 chiều."),
         )
-        init_label = st.selectbox("Khởi tạo tâm", list(INIT_OPTIONS), key=f"{key_prefix}_init")
-        max_iter = st.number_input("Vòng lặp tối đa", 1, 1000, step=10, key=f"{key_prefix}_max_iter")
-        seed = st.number_input("Hạt giống ngẫu nhiên (seed)", 0, 2**31 - 1, step=1, key=f"{key_prefix}_seed")
-        tol = st.number_input("Ngưỡng hội tụ (độ dịch tâm)", 0.0, 50.0, step=1e-4, format="%.4f",
-                              key=f"{key_prefix}_tol",
-                              help="Dừng khi tâm cụm dịch chuyển (chuẩn Euclid, thang 0–255) ≤ ngưỡng này.")
+        with st.expander("Thiết lập nâng cao", icon=":material/tune:"):
+            init_label = st.selectbox("Khởi tạo tâm", list(INIT_OPTIONS), key=f"{key_prefix}_init")
+            max_iter = st.number_input("Vòng lặp tối đa", 1, 1000, step=10, key=f"{key_prefix}_max_iter")
+            seed = st.number_input("Hạt giống ngẫu nhiên (seed)", 0, 2**31 - 1, step=1, key=f"{key_prefix}_seed")
+            tol = st.number_input("Ngưỡng hội tụ", 0.0, 50.0, step=1e-4, format="%.4f",
+                                  key=f"{key_prefix}_tol",
+                                  help="Dừng khi tâm cụm dịch chuyển (chuẩn Euclid, thang 0–255) ≤ ngưỡng này.")
         submitted = st.form_submit_button("Chạy K-means", type="primary", width="stretch")
     for key in keys:
         remember_widget(key)
@@ -86,7 +89,7 @@ def params_form(is_color: bool, key_prefix: str = "km") -> KMeansParams | None:
 
 
 def render() -> None:
-    ui.page_header("Phân đoạn bằng K-means", "Phân cụm pixel theo khoảng cách Euclid tới tâm cụm (tự cài đặt, NumPy).")
+    ui.page_header("Phân đoạn bằng K-means", "Chọn số cụm, điều chỉnh đặc trưng và quan sát các vùng màu trong ảnh.")
     ctx = ui.require_input()
     if ctx is None:
         return

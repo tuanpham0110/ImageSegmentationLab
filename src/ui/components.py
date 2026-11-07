@@ -16,28 +16,26 @@ from src.utils import visualization as viz
 
 MIN_DISPLAY_SIDE = 256  # ảnh nhỏ hơn được phóng to (nearest) khi HIỂN THỊ để nhìn rõ từng pixel
 
-CSS = "<style>" + Path(__file__).with_name("styles.css").read_text(encoding="utf-8") + "</style>"
-
-
 def inject_css() -> None:
-    st.html(CSS)
+    # Read on rerun so a running app also picks up stylesheet changes.
+    st.html("<style>" + Path(__file__).with_name("styles.css").read_text(encoding="utf-8") + "</style>")
 
 
 def page_header(title: str, subtitle: str) -> None:
-    st.html(f"<header class='isl-page-header'><div class='isl-eyebrow'>PHÒNG THỰC HÀNH XỬ LÝ ẢNH</div>"
+    st.html(f"<header class='isl-page-header'><div class='isl-eyebrow'>Image Segmentation Lab</div>"
             f"<h1 class='isl-page-title'>{escape(title)}</h1><p class='isl-subtitle'>{escape(subtitle)}</p></header>")
 
 
 def metric_columns(count: int, key: str):
     """Các thẻ tự xuống hàng theo chiều rộng còn lại, không ép năm cột hẹp."""
     with st.container(horizontal=True, gap="xsmall", key=f"metrics-{key}"):
-        return [st.container(width=160) for _ in range(count)]
+        return [st.container(width=130) for _ in range(count)]
 
 
 def workspace(key: str):
     """Giữ đủ chỗ cho tham số; xếp dọc khi vùng nội dung không còn đủ rộng."""
-    with st.container(key=f"workspace-{key}"):
-        return st.columns([1.05, 2], gap="medium")
+    with st.container(horizontal=True, gap="small", key=f"workspace-{key}"):
+        return st.container(width=300, key=f"controls-{key}"), st.container(key=f"results-{key}")
 
 
 def _for_display(arr: np.ndarray) -> tuple[np.ndarray, bool]:
@@ -108,13 +106,16 @@ def input_summary(ctx) -> None:
     loaded, prep = ctx.loaded, ctx.prepared
     ow, oh = prep.resize.original_size
     pw, ph = prep.resize.processed_size
-    chans = "3 (RGB)" if loaded.is_color else "1 (mức xám)"
-    st.html(f"<p class='isl-file-summary'>Ảnh đầu vào <strong>{escape(loaded.source_name)}</strong></p>")
-    cols = metric_columns(4, "input")
-    cols[0].metric("Định dạng", loaded.file_format)
-    cols[1].metric("Kích thước gốc", f"{ow}×{oh}")
-    cols[2].metric("Số kênh", chans)
-    cols[3].metric("Dung lượng", human_bytes(loaded.file_bytes))
+    chans = "RGB · 3 kênh" if loaded.is_color else "Mức xám · 1 kênh"
+    filename = escape(loaded.source_name, quote=True)
+    cells = [("Định dạng", loaded.file_format), ("Kích thước", f"{ow} × {oh} px"),
+             ("Không gian màu", chans), ("Dung lượng", human_bytes(loaded.file_bytes))]
+    st.html(
+        "<dl class='isl-input-summary' aria-label='Thông tin ảnh đầu vào'>"
+        f"<div class='isl-file-cell'><dt>Ảnh đang sử dụng</dt><dd title='{filename}'>{filename}</dd></div>"
+        + "".join(f"<div><dt>{label}</dt><dd>{escape(str(value))}</dd></div>" for label, value in cells)
+        + "</dl>"
+    )
     if prep.resize.resized:
         st.info(f"Ảnh được thu nhỏ để xử lý: **{ow}×{oh} → {pw}×{ph}** (giới hạn cạnh dài trong thanh bên). "
                 f"Mọi kết quả và tệp tải xuống có kích thước {pw}×{ph}.")
