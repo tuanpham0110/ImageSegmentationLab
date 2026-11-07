@@ -333,3 +333,23 @@ def test_kmeans_rejects_arithmetic_overflow_instead_of_returning_nonfinite_resul
 def test_assignment_rejects_unrepresentable_squared_distance():
     with pytest.raises(ValueError):
         assign_labels(np.array([[0.0]]), np.array([[1e200], [2e200]]))
+
+
+def test_converged_centers_are_means_of_returned_labels_with_equidistant_points():
+    # Hồi quy: 80 cách đều 0 và 160; trước đây nhãn cuối đổi cách phá hoà nhưng tâm không cập nhật.
+    data = np.array([0.0, 80.0, 160.0, 240.0])
+    result = kmeans(data, 2)
+    assert result.converged
+    np.testing.assert_array_equal(result.labels, [0, 0, 1, 1])
+    np.testing.assert_allclose(result.centers, [[40.0], [200.0]])
+    assert result.sse == pytest.approx(6400.0)
+
+
+@pytest.mark.parametrize("seed", range(20))
+@pytest.mark.parametrize("init", ["kmeans++", "random"])
+def test_reported_convergence_implies_centers_match_label_means(seed, init):
+    data = np.random.default_rng(seed).integers(0, 8, 40).astype(float) * 40  # nhiều điểm cách đều
+    result = kmeans(data, 3, seed=seed, init=init)
+    if result.converged:
+        for j in range(result.k_effective):
+            assert result.centers[j, 0] == pytest.approx(data[result.labels == j].mean(), abs=1e-4)

@@ -295,8 +295,12 @@ def kmeans(
 
     for it in range(1, max_iter + 1):
         n_iter = it
-        # Bước 1: gán nhãn theo tâm gần nhất
-        labels, min_sq = _assign_labels(x, centers, chunk_size)
+        # Bước 1: gán nhãn theo tâm gần nhất. Hoà khoảng cách được phá theo thứ tự độ sáng
+        # của tâm — đúng quy tắc của bước gán nhãn cuối — nên tâm tính ra ở vòng này khớp
+        # với nhãn trả về. Chỉ số tâm nội bộ không đổi để lịch sử tâm theo dõi đúng từng cụm.
+        rank = _relabel_by_brightness(centers)
+        sorted_labels, min_sq = _assign_labels(x, centers[rank], chunk_size)
+        labels = rank.astype(np.int32)[sorted_labels]
         sse_history.append(_weighted_sse(w, min_sq))
 
         # Bước 2: cập nhật tâm = trung bình (có trọng số) các điểm trong cụm, dùng np.bincount theo từng chiều
@@ -357,6 +361,16 @@ def kmeans(
         converged = False
         warnings.append(f"Kết quả cuối còn {np.count_nonzero(counts_f == 0)} cụm rỗng sau bước gán nhãn; "
                         "chưa hội tụ. Hãy tăng max_iter hoặc giảm tol.")
+    elif converged:
+        # Bảo đảm "hội tụ" nghĩa là tâm báo cáo đúng là trung bình của các cụm theo nhãn trả về.
+        final_means = np.empty_like(centers)
+        for d in range(x.shape[1]):
+            final_means[:, d] = np.bincount(labels, weights=w * x[:, d], minlength=k_eff) / counts_f
+        gap = float(np.max(np.sqrt(np.sum((final_means - centers) ** 2, axis=1))))
+        if not gap <= tol:
+            converged = False
+            warnings.append(f"Tâm cuối lệch {gap:.4g} so với trung bình cụm theo nhãn cuối (> tol); "
+                            "chưa hội tụ. Hãy tăng max_iter hoặc giảm tol.")
 
     return KMeansResult(
         labels=labels,

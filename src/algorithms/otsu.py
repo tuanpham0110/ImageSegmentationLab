@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from fractions import Fraction
 
 import numpy as np
 
@@ -140,8 +141,23 @@ def otsu_from_histogram(hist: np.ndarray) -> OtsuResult:
             warnings=warnings,
         )
 
-    max_var = float(sigma_b[valid].max())
-    tied = np.flatnonzero(valid & (sigma_b == max_var))
+    # Xác định cực đại và các ngưỡng đồng hạng bằng số hữu tỉ chính xác, không dùng == số thực:
+    # sigma_b(t) = (n*m0 - M*c0)^2 / (n^2 * c0 * c1), M = tổng mômen. Các ngưỡng có cùng phương sai
+    # đúng về mặt toán (ví dụ ảnh [0, 1, 1, 2]) có thể lệch nhau 1 ulp khi tính bằng float64.
+    # Chỉ so chính xác các ứng viên gần cực đại float (sai số float64 ~1e-15 << 1e-9). Các ngưỡng
+    # nằm trong cùng khoảng trống của histogram có cùng c0 nên cùng giá trị: chỉ tính một lần mỗi c0.
+    total_moment = int(moment0[-1])
+    float_max = float(sigma_b[valid].max())
+    candidates = np.flatnonzero(valid & (sigma_b >= float_max * (1 - 1e-9)))
+    cand_c0 = c0[candidates]
+    # Mỗi c0 phân biệt ứng với một ngưỡng đại diện (cùng c0 => cùng m0 vì các mức giữa có h = 0).
+    distinct_c0, first = np.unique(cand_c0, return_index=True)
+    exact = [Fraction((n * int(moment0[t]) - total_moment * int(a)) ** 2, int(a) * (n - int(a)))
+             for a, t in zip(distinct_c0, candidates[first])]
+    best = max(exact)
+    best_c0 = [a for a, v in zip(distinct_c0, exact) if v == best]
+    tied = candidates[np.isin(cand_c0, best_c0)].astype(np.int64)
+    max_var = float(best / (n * n))
     midpoint = int(np.floor(tied.mean()))
     # Các cực đại có thể nằm trên nhiều khoảng rời nhau. Trung bình của chúng
     # không nhất thiết là cực đại: phải chọn một phần tử thực sự thuộc argmax.

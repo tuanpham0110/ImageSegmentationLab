@@ -185,7 +185,11 @@ def save_foreground(run: dict, fg) -> None:
 
 
 def get_uploaded_gt(signature: str) -> dict | None:
-    """Ground truth đã tải lên cho đúng đầu vào hiện tại: {"name", "file_id", "mask"} hoặc None."""
+    """Ground truth đã tải lên cho đúng đầu vào hiện tại hoặc None.
+
+    Dạng {"name", "file_id", "mask", "error"}: tệp lỗi được lưu với mask = None và
+    error = thông báo, để lỗi không biến mất khi chuyển trang rồi quay lại.
+    """
     stored = st.session_state.get(UPLOADED_GT_KEY)
     if stored is None or stored.get("signature") != signature:
         return None
@@ -193,7 +197,14 @@ def get_uploaded_gt(signature: str) -> dict | None:
 
 
 def store_uploaded_gt(signature: str, name: str, file_id: str, mask: np.ndarray) -> None:
-    st.session_state[UPLOADED_GT_KEY] = {"signature": signature, "name": name, "file_id": file_id, "mask": mask}
+    st.session_state[UPLOADED_GT_KEY] = {"signature": signature, "name": name, "file_id": file_id,
+                                         "mask": mask, "error": None}
+
+
+def store_uploaded_gt_error(signature: str, name: str, file_id: str, error: str) -> None:
+    """Ghi nhớ tệp ground truth lỗi; chỉ bị xoá khi bỏ/thay tệp hoặc đổi đầu vào."""
+    st.session_state[UPLOADED_GT_KEY] = {"signature": signature, "name": name, "file_id": file_id,
+                                         "mask": None, "error": error}
 
 
 def clear_uploaded_gt() -> None:
@@ -205,5 +216,6 @@ __all__ = [
     "load_manifest", "sample_by_id", "thumbnail", "build_context", "set_context", "get_context",
     "get_input_error", "store_result", "get_result", "has_stale_result",
     "restore_widget", "remember_widget", "persistent_foreground", "save_foreground",
-    "UPLOADED_GT_KEY", "get_uploaded_gt", "store_uploaded_gt", "clear_uploaded_gt",
+    "UPLOADED_GT_KEY", "get_uploaded_gt", "store_uploaded_gt", "store_uploaded_gt_error",
+    "clear_uploaded_gt",
 ]

@@ -894,4 +894,53 @@ def test_transparent_ground_truth_upload_is_rejected_without_fallback_scores():
     assert not at.exception
     assert any("vùng trong suốt" in e.value for e in at.error)
     assert _iou_rows(at) is None  # không âm thầm dùng GT mẫu thay cho tệp lỗi
+    assert at.session_state["cmp_uploaded_gt"]["mask"] is None
+
+
+def _compare_with_transparent_gt():
+    rgba = np.zeros((4, 4, 4), np.uint8)
+    rgba[1:3, 1:3] = (255, 255, 255, 255)
+    at = _app("compare")
+    at.session_state["sample_id"] = "circle_black_on_white"
+    at.run()
+    next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
+    at.file_uploader[0].set_value(("alpha_gt.png", to_png_bytes(rgba), "image/png")).run()
+    return at
+
+
+def test_failed_ground_truth_upload_survives_navigation():
+    at = _compare_with_transparent_gt()
+    _navigate(at, "guide")
+    _navigate(at, "compare")
+    assert not at.exception
+    assert any("vùng trong suốt" in e.value for e in at.error)
+    assert _iou_rows(at) is None  # không quay về GT mẫu với IoU = 1.0
+    assert any("alpha_gt.png" in c.value for c in at.caption if c.value.startswith("Tệp ground truth đã tải lên bị lỗi"))
+    at.multiselect[0].set_value([0]).run()
+    assert _iou_rows(at) is None
+
+
+def test_failed_ground_truth_is_cleared_by_explicit_removal():
+    at = _compare_with_transparent_gt()
+    _navigate(at, "guide")
+    _navigate(at, "compare")
+    next(b for b in at.button if b.label == "Bỏ ground truth tải lên").click().run()
+    assert not at.exception and not at.error
+    assert "cmp_uploaded_gt" not in at.session_state
+    assert _iou_rows(at)["K-means"] == 1.0
+
+
+def test_failed_ground_truth_is_cleared_by_uploader_removal_or_replacement():
+    at = _compare_with_transparent_gt()
+    at.file_uploader[0].clear().run()
+    assert "cmp_uploaded_gt" not in at.session_state and _iou_rows(at)["K-means"] == 1.0
+    at = _compare_with_transparent_gt()
+    at.file_uploader[0].set_value(("opposite_gt.png", _opposite_gt(), "image/png")).run()
+    assert not at.error
+    assert _gt_source(at) == "Tính trên ground truth tải lên (opposite_gt.png)."
+
+
+def test_failed_ground_truth_is_cleared_when_input_changes():
+    at = _compare_with_transparent_gt()
+    at.selectbox(key="sample_id").set_value("noisy_circle").run()
     assert "cmp_uploaded_gt" not in at.session_state

@@ -52,7 +52,7 @@ Cảnh báo phát sinh:
 | 1 | 70,408,242 | 20 |
 | 2 | 6,507,222 | 8 |
 | 3 | 6,507,252 | 7 |
-| 4 | 10,995,159 | 34 |
+| 4 | 10,995,052 | 37 |
 
 ## Thời gian theo kích thước ảnh (ảnh RGB ngẫu nhiên; K-means K = 4, tối đa 20 vòng)
 

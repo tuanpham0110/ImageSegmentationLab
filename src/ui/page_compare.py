@@ -21,6 +21,7 @@ from src.ui.state import (
     save_foreground,
     store_result,
     store_uploaded_gt,
+    store_uploaded_gt_error,
 )
 from src.utils.image_io import InputError, load_mask_bytes
 from src.utils.metrics import compare_masks
@@ -41,7 +42,7 @@ def _on_gt_upload_change(uploader_key: str) -> None:
 def _ground_truth_uploader(ctx) -> tuple[np.ndarray | None, str | None, bool]:
     """Widget tải ground truth + lưu mask bền theo chữ ký đầu vào.
 
-    Trả về (mask, tên tệp, có_lỗi). Mask chỉ được giải mã lại khi tệp đổi.
+    Trả về (mask, tên tệp, có_lỗi). Mask (hoặc lỗi) chỉ được giải mã lại khi tệp đổi.
     """
     key = f"cmp_gt_upload_{ctx.signature}"
     gt_file = st.file_uploader("Ground-truth mask (tuỳ chọn, PNG trắng = đối tượng)", type=["png", "bmp"],
@@ -54,16 +55,25 @@ def _ground_truth_uploader(ctx) -> tuple[np.ndarray | None, str | None, bool]:
         try:
             mask = fit_ground_truth(load_mask_bytes(gt_file.getvalue(), gt_file.name), ctx.prepared)
         except (InputError, ValueError, MemoryError) as exc:
-            st.error(f"Không dùng được ground-truth mask: {exc}")
-            return None, None, True
-        store_uploaded_gt(ctx.signature, gt_file.name, gt_file.file_id, mask)
+            # Lưu cả trạng thái lỗi: quay lại trang không được lặng lẽ dùng GT mẫu.
+            store_uploaded_gt_error(ctx.signature, gt_file.name, gt_file.file_id, str(exc))
+        else:
+            store_uploaded_gt(ctx.signature, gt_file.name, gt_file.file_id, mask)
         stored = get_uploaded_gt(ctx.signature)
     if stored is None:
         return None, None, False
+    failed = stored.get("error") is not None
+    if failed:
+        st.error(f"Không dùng được ground-truth mask: {stored['error']}")
     if gt_file is None:
-        # Widget rỗng do vừa chuyển trang: vẫn dùng mask đã tải, cho phép bỏ chủ động.
-        st.caption(f"Đang dùng ground truth đã tải lên: **{stored['name']}**.")
+        # Widget rỗng do vừa chuyển trang: vẫn giữ tệp đã tải (kể cả tệp lỗi), cho phép bỏ chủ động.
+        if failed:
+            st.caption(f"Tệp ground truth đã tải lên bị lỗi: **{stored['name']}**.")
+        else:
+            st.caption(f"Đang dùng ground truth đã tải lên: **{stored['name']}**.")
         st.button("Bỏ ground truth tải lên", on_click=clear_uploaded_gt, key="cmp_gt_clear", width="stretch")
+    if failed:
+        return None, stored["name"], True
     return stored["mask"], stored["name"], False
 
 

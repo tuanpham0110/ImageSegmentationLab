@@ -215,3 +215,13 @@ def test_extremely_imbalanced_histogram_preserves_minority_class(n):
 def test_histogram_does_not_silently_coerce_non_real_counts(hist):
     with pytest.raises(ValueError):
         otsu_from_histogram(hist)
+
+
+def test_exactly_tied_thresholds_are_detected_despite_float_rounding():
+    # t = 0 và t = 1 cùng có sigma_B^2 = 1/3 chính xác; float64 lệch 1 ulp giữa hai giá trị.
+    result = otsu_threshold(np.array([[0, 1, 1, 2]], np.uint8))
+    assert result.tied_thresholds == [0, 1]
+    assert result.threshold == 0  # floor(trung bình {0, 1}) = 0
+    assert result.max_variance == pytest.approx(1 / 3)
+    np.testing.assert_array_equal(apply_threshold(np.array([[0, 1, 1, 2]], np.uint8), result.threshold),
+                                  [[0, 255, 255, 255]])

@@ -89,6 +89,28 @@ def _png_bit_depth(data: bytes) -> tuple[int, int] | None:
     return bit_depth, color_type
 
 
+def _png16_alpha_low_bytes_opaque(data: bytes) -> bool | None:
+    """Kiểm tra byte thấp của kênh alpha PNG RGBA 16 bit ở độ sâu gốc.
+
+    Pillow chỉ giữ byte cao (alpha 65280 hoặc 65534 thành 255), nên giải mã lại cùng
+    dữ liệu với rawmode 'RGBA;16L' để lấy byte thấp: alpha = 65535 khi và chỉ khi cả
+    hai byte bằng 255 (byte cao đã được _composite_alpha kiểm tra).
+    Trả True/False nếu kiểm tra được chính xác, None nếu không (ví dụ PNG LA 16 bit
+    hoặc Pillow đổi cách giải mã) -> nơi gọi phải từ chối thay vì đoán.
+    """
+    try:
+        with Image.open(io.BytesIO(data)) as img:
+            tiles = list(img.tile)
+            if img.mode != "RGBA" or not tiles or any(t[0] != "zip" or t[3] != "RGBA;16B" for t in tiles):
+                return None
+            img.tile = [t._replace(args="RGBA;16L") if hasattr(t, "_replace") else (*t[:3], "RGBA;16L")
+                        for t in tiles]
+            img.load()
+            return bool(np.all(np.asarray(img)[..., 3] == 255))
+    except (OSError, ValueError, SyntaxError, IndexError, TypeError):
+        return None
+
+
 def load_image_bytes(data: bytes, name: str = "image") -> LoadedImage:
     """Đọc ảnh PNG/JPG/BMP từ bytes thành mảng uint8.
 
@@ -133,6 +155,17 @@ def _load_image_bytes(data: bytes, name: str, *, normalize_high_depth: bool) -> 
                     "tức ⌊v / 256⌋). Không giãn tương phản như ảnh xám 16 bit; "
                     "các mức khác nhau dưới 1/256 thang sáng sẽ bị gộp."
                 )
+            if (not normalize_high_depth and png_depth is not None and png_depth[0] == 16
+                    and png_depth[1] in (4, 6)):
+                # Mask có kênh alpha 16 bit: kiểm tra độ trong suốt ở độ sâu gốc.
+                opaque = _png16_alpha_low_bytes_opaque(data) if png_depth[1] == 6 else None
+                if opaque is None:
+                    raise InputError(
+                        f"Mask PNG {_PNG_COLOR_TYPES[png_depth[1]]} 16 bit có kênh alpha: chưa kiểm tra chính xác "
+                        "được độ trong suốt. Hãy lưu lại mask ở 8 bit/kênh hoặc bỏ kênh alpha."
+                    )
+                if not opaque:
+                    raise InputError(MASK_TRANSPARENCY_ERROR)
             img.load()
             arr, mode = _decoded_array(img, notes, normalize_high_depth)
     except InputError:

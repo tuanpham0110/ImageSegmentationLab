@@ -42,8 +42,8 @@ cỏ, hồ; hai dãy núi màu gần nhau). Giá trị tối ưu toàn cục kh�
 
 | Seed | 0 | 1 | 2 | 3 | 4 |
 |---|---|---|---|---|---|
-| SSE | 6 507 252 | **70 408 242** | 6 507 222 | 6 507 252 | 10 995 159 |
-| Vòng lặp | 10 | 20 | 8 | 7 | 34 |
+| SSE | 6 507 252 | **70 408 242** | 6 507 222 | 6 507 252 | 10 995 052 |
+| Vòng lặp | 10 | 20 | 8 | 7 | 37 |
 
 Seed 1 rơi vào cực tiểu địa phương xấu (SSE gấp ~10,8 lần) ⇒ minh chứng K-means phụ thuộc khởi tạo; đây là lý do có
 random seed và tuỳ chọn K-means++.

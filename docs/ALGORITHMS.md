@@ -48,12 +48,13 @@ Với phép gán cố định, ∂J/∂Z_k = 0 cho Z_k = (1/N_k) Σ_{x∈C_k} x 
 Vào: X (N×D), K, max_iter, tol, seed, init
 1. Khởi tạo K tâm Z (K-means++ hoặc K giá trị PHÂN BIỆT chọn ngẫu nhiên)
 2. for t = 1..max_iter:
-     a) c(i) = argmin_k ‖xᵢ − Z_k‖²              (gán nhãn)
+     a) c(i) = argmin_k ‖xᵢ − Z_k‖²              (gán nhãn; hoà thì chọn tâm tối hơn — cùng quy tắc với bước 4)
      b) Z_k  = trung bình các xᵢ có c(i) = k     (cập nhật)
         nếu cụm k rỗng: Z_k = điểm xa tâm của nó nhất (không trùng tâm khác)
      c) nếu max_k ‖Z_k(mới) − Z_k(cũ)‖ ≤ tol và không có cụm rỗng: dừng (hội tụ)
 3. Sắp xếp cụm theo độ sáng tâm (cụm 0 tối nhất)
-4. Gán nhãn lần cuối theo Z đã sắp xếp; hoà thì chọn chỉ số nhỏ nhất; tính SSE và số pixel mỗi cụm
+4. Gán nhãn lần cuối theo Z đã sắp xếp; hoà thì chọn chỉ số nhỏ nhất; tính SSE và số pixel mỗi cụm.
+   Chỉ báo hội tụ nếu Z lệch trung bình cụm theo nhãn cuối không quá tol
 Ra: nhãn (H×W), tâm, SSE, số vòng, cờ hội tụ, lịch sử SSE/độ dịch tâm
 ```
 
@@ -141,7 +142,7 @@ giáo trình ghi 1.66 do làm tròn m(g) trước khi tính.
 |---|---|
 | Lớp rỗng (ω₀ = 0 hoặc ω₁ = 0) | t đó không hợp lệ, σ²_B = 0, không chia cho 0. Xác định bằng số pixel tích luỹ **nguyên** (không phụ thuộc sai số float) |
 | Ảnh một mức xám | Không có t hợp lệ ⇒ `valid = False`, cảnh báo, t = mức xám đó; mask tự động luôn rỗng dù chọn lớp sáng/tối. Chế độ thủ công vẫn cho chọn lớp có chủ đích |
-| Nhiều t cùng cực đại | Chọn **phần tử trong tập cực đại gần floor(trung bình) nhất**, hoà chọn phần tử nhỏ hơn. Với một đoạn liên tục, kết quả vẫn là floor(trung bình). Không lấy trung bình bên ngoài tập cực đại |
+| Nhiều t cùng cực đại | Tập cực đại được xác định **chính xác bằng số hữu tỉ** (σ²_B = (N·m₀ − M·c₀)² / (N²·c₀·c₁) với số nguyên), không so `==` số thực: ví dụ ảnh [0, 1, 1, 2] có t = 0 và t = 1 cùng σ²_B = 1/3. Chọn **phần tử trong tập cực đại gần floor(trung bình) nhất**, hoà chọn phần tử nhỏ hơn. Với một đoạn liên tục, kết quả vẫn là floor(trung bình). Không lấy trung bình bên ngoài tập cực đại |
 | Quy ước nhị phân | pixel > t ⇒ 255 (C₁), ngược lại 0 (giống công thức 3.1.3 với θ = t + 1) |
 | Lớp nào là đối tượng | Lựa chọn: lớp sáng, lớp tối, hoặc **gợi ý theo viền ảnh** (lớp chiếm đa số viền là nền) — heuristic, cùng giả định như K-means |
 | Ngưỡng thủ công | Dùng `apply_threshold` với T người dùng chọn; t* vẫn được tính và vẽ để đối chiếu |

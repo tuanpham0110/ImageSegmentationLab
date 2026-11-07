@@ -348,6 +348,31 @@ def test_fully_opaque_rgba_ground_truth_is_accepted():
     np.testing.assert_array_equal(load_mask_bytes(to_png_bytes(rgba), "gt.png"), [[255, 0], [0, 0]])
 
 
+@pytest.mark.parametrize("alpha", [65280, 65534, 0])
+def test_16bit_rgba_ground_truth_checks_alpha_at_native_depth(alpha):
+    # Pillow giảm 65280/65534 về 255: phải kiểm tra ở thang 0–65535 (P3).
+    pixels = np.array([[[65535, 65535, 65535, 65535], [0, 0, 0, alpha]]])
+    with pytest.raises(InputError, match="vùng trong suốt"):
+        load_mask_bytes(_png16(pixels, 6), "gt16.png")
+
+
+def test_fully_opaque_16bit_rgba_ground_truth_is_accepted():
+    pixels = np.array([[[65535, 65535, 65535, 65535], [0, 0, 0, 65535]]])
+    np.testing.assert_array_equal(load_mask_bytes(_png16(pixels, 6), "gt16.png"), [[255, 0]])
+
+
+@pytest.mark.parametrize("alpha", [65535, 65280])
+def test_16bit_la_ground_truth_is_rejected_because_alpha_cannot_be_checked_exactly(alpha):
+    pixels = np.array([[[65535, 65535], [0, alpha]]])
+    with pytest.raises(InputError, match="chưa kiểm tra chính xác"):
+        load_mask_bytes(_png16(pixels, 4), "gt16.png")
+
+
+def test_16bit_rgba_input_image_is_still_loaded():
+    pixels = np.array([[[65535, 0, 0, 65280], [0, 0, 0, 65535]]])
+    assert load_image_bytes(_png16(pixels, 6), "in16.png").array.shape == (1, 2, 3)
+
+
 def test_input_image_transparency_is_still_composited_on_white():
     rgba = np.zeros((1, 2, 4), np.uint8)
     rgba[0, 1] = (10, 20, 30, 255)
