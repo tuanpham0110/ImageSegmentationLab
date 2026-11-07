@@ -26,6 +26,9 @@ MANIFEST_PATH = DATA_DIR / "samples.json"
 MAX_SIDE_OPTIONS = [128, 256, 400, 600, 800, 1024, 1600, 2048]
 DEFAULT_MAX_SIDE = 800
 RESULT_KEYS = ("km_result", "otsu_result", "cmp_result")
+# Ground truth người dùng tải lên ở trang So sánh. Lưu ngoài widget upload vì Streamlit
+# xoá state của widget khi chuyển trang; gắn với chữ ký đầu vào để không dùng nhầm ảnh khác.
+UPLOADED_GT_KEY = "cmp_uploaded_gt"
 
 
 @dataclass
@@ -114,6 +117,10 @@ def set_context(ctx: InputContext | None, error: str | None = None) -> None:
             # Giữ dấu báo kết quả cũ, giải phóng mảng ảnh và bytes xuất.
             # Dấu stale ngăn khôi phục payload đã bỏ nếu người dùng chọn lại ảnh cũ.
             st.session_state[key] = {"signature": result.get("signature"), "_stale": True}
+    uploaded_gt = st.session_state.get(UPLOADED_GT_KEY)
+    if uploaded_gt is not None and (ctx is None or uploaded_gt.get("signature") != ctx.signature):
+        # Ground truth tải lên chỉ đúng với ảnh/tiền xử lý đã dùng khi tải.
+        st.session_state.pop(UPLOADED_GT_KEY, None)
     st.session_state["_input_ctx"] = ctx
     st.session_state["_input_error"] = error
 
@@ -177,9 +184,26 @@ def save_foreground(run: dict, fg) -> None:
     run["foreground"] = sorted(int(c) for c in fg)
 
 
+def get_uploaded_gt(signature: str) -> dict | None:
+    """Ground truth đã tải lên cho đúng đầu vào hiện tại: {"name", "file_id", "mask"} hoặc None."""
+    stored = st.session_state.get(UPLOADED_GT_KEY)
+    if stored is None or stored.get("signature") != signature:
+        return None
+    return stored
+
+
+def store_uploaded_gt(signature: str, name: str, file_id: str, mask: np.ndarray) -> None:
+    st.session_state[UPLOADED_GT_KEY] = {"signature": signature, "name": name, "file_id": file_id, "mask": mask}
+
+
+def clear_uploaded_gt() -> None:
+    st.session_state.pop(UPLOADED_GT_KEY, None)
+
+
 __all__ = [
     "InputContext", "InputError", "MAX_SIDE_OPTIONS", "DEFAULT_MAX_SIDE", "DATA_DIR",
     "load_manifest", "sample_by_id", "thumbnail", "build_context", "set_context", "get_context",
     "get_input_error", "store_result", "get_result", "has_stale_result",
     "restore_widget", "remember_widget", "persistent_foreground", "save_foreground",
+    "UPLOADED_GT_KEY", "get_uploaded_gt", "store_uploaded_gt", "clear_uploaded_gt",
 ]

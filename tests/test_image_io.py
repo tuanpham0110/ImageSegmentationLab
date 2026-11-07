@@ -314,3 +314,41 @@ def test_postprocessing_accepts_integer_valued_non_uint8_images():
 
     out = cutout_rgba(np.array([[0, 255]], dtype=np.int64), np.array([[True, False]]))
     np.testing.assert_array_equal(out, [[[0, 0, 0, 255], [255, 255, 255, 0]]])
+
+
+# ---------------- Hồi quy: ground truth có vùng trong suốt (RISK-004) ----------------
+
+def _transparent_masks():
+    rgba = np.zeros((4, 4, 4), np.uint8)
+    rgba[1:3, 1:3] = (255, 255, 255, 255)
+    la = Image.fromarray(np.dstack([np.full((2, 2), 255, np.uint8), np.array([[255, 0], [255, 255]], np.uint8)]), "LA")
+    palette = Image.fromarray(np.array([[0, 1]], np.uint8), "P")
+    palette.putpalette([0, 0, 0, 255, 255, 255])
+    gray_key = Image.fromarray(np.array([[0, 255]], np.uint8), "L")
+    gray16_key = Image.fromarray(np.array([[0, 65535]], np.uint16))
+    return [
+        to_png_bytes(rgba),
+        encode(la, "PNG"),
+        encode(palette, "PNG", transparency=0),
+        encode(gray_key, "PNG", transparency=0),
+        encode(gray16_key, "PNG", transparency=0),
+    ]
+
+
+@pytest.mark.parametrize("data", _transparent_masks(), ids=["rgba", "la", "palette_trns", "gray_trns", "gray16_trns"])
+def test_ground_truth_with_transparency_is_rejected(data):
+    with pytest.raises(InputError, match="vùng trong suốt"):
+        load_mask_bytes(data, "gt.png")
+
+
+def test_fully_opaque_rgba_ground_truth_is_accepted():
+    rgba = np.zeros((2, 2, 4), np.uint8)
+    rgba[..., 3] = 255
+    rgba[0, 0, :3] = 255
+    np.testing.assert_array_equal(load_mask_bytes(to_png_bytes(rgba), "gt.png"), [[255, 0], [0, 0]])
+
+
+def test_input_image_transparency_is_still_composited_on_white():
+    rgba = np.zeros((1, 2, 4), np.uint8)
+    rgba[0, 1] = (10, 20, 30, 255)
+    np.testing.assert_array_equal(load_image_bytes(to_png_bytes(rgba), "in.png").array, [[[255, 255, 255], [10, 20, 30]]])

@@ -719,7 +719,7 @@ def test_uploaded_ground_truth_is_decoded_once_until_the_file_changes(monkeypatc
     at.file_uploader[0].set_value(("second.png", gt_bytes, "image/png")).run()
     assert not at.exception and calls == ["first.png", "second.png"]
     at.file_uploader[0].clear().run()
-    assert "_gt_cache" not in at.session_state["cmp_result"]
+    assert "cmp_uploaded_gt" not in at.session_state
 
 
 # ---------------- Hồi quy: giữ lựa chọn người dùng khi chuyển trang ----------------
@@ -799,3 +799,99 @@ def test_otsu_histogram_table_lists_all_256_levels():
     next(b for b in at.button if b.label.startswith("Chạy Otsu")).click().run()
     tables = [df.value for df in at.dataframe if "Mức xám g" in df.value.columns]
     assert tables and list(tables[0]["Mức xám g"]) == list(range(256))
+
+
+# ---------------- Hồi quy: ground truth tải lên qua điều hướng (BUG-005) và mask trong suốt (RISK-004) ----------------
+
+def _gt_source(at) -> str | None:
+    return next((c.value for c in at.caption if c.value.startswith("Tính trên ")), None)
+
+
+def _iou_rows(at) -> dict | None:
+    for df in at.dataframe:
+        if "IoU" in df.value.columns:
+            return dict(zip(df.value["Phương pháp"], df.value["IoU"]))
+    return None
+
+
+def _opposite_gt() -> bytes:
+    gt = np.asarray(Image.open(DATA / "ground_truth" / "circle_black_on_white_gt.png"))
+    return to_png_bytes(np.where(gt > 127, 0, 255).astype(np.uint8))
+
+
+def _compare_with_uploaded_gt(run_first: bool = True):
+    at = _app("compare")
+    at.session_state["sample_id"] = "circle_black_on_white"
+    at.run()
+    if run_first:
+        next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
+    at.file_uploader[0].set_value(("opposite_gt.png", _opposite_gt(), "image/png")).run()
+    return at
+
+
+def test_uploaded_ground_truth_survives_navigation():
+    at = _compare_with_uploaded_gt()
+    assert _gt_source(at) == "Tính trên ground truth tải lên (opposite_gt.png)."
+    before = _iou_rows(at)
+    assert before is not None and before["K-means"] < 0.5  # GT đảo ngược: khác hẳn GT mẫu (IoU = 1)
+    _navigate(at, "guide")
+    _navigate(at, "compare")
+    assert not at.exception
+    assert _gt_source(at) == "Tính trên ground truth tải lên (opposite_gt.png)."
+    assert _iou_rows(at) == before
+    assert any("opposite_gt.png" in c.value for c in at.caption if c.value.startswith("Đang dùng ground truth"))
+    # Thao tác khác sau khi quay lại (widget upload đang rỗng) không được làm mất GT.
+    at.multiselect[0].set_value([0]).run()
+    assert _gt_source(at) == "Tính trên ground truth tải lên (opposite_gt.png)."
+
+
+def test_uploaded_ground_truth_before_first_run_survives_navigation():
+    at = _compare_with_uploaded_gt(run_first=False)
+    _navigate(at, "theory")
+    _navigate(at, "compare")
+    next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
+    assert not at.exception
+    assert _gt_source(at) == "Tính trên ground truth tải lên (opposite_gt.png)."
+
+
+def test_explicit_removal_of_uploaded_ground_truth_returns_to_sample_ground_truth():
+    at = _compare_with_uploaded_gt()
+    _navigate(at, "guide")
+    _navigate(at, "compare")
+    next(b for b in at.button if b.label == "Bỏ ground truth tải lên").click().run()
+    assert not at.exception
+    assert "cmp_uploaded_gt" not in at.session_state
+    assert _gt_source(at) == "Tính trên ground truth của ảnh mẫu."
+    assert _iou_rows(at)["K-means"] == 1.0
+
+
+def test_clearing_uploader_removes_uploaded_ground_truth():
+    at = _compare_with_uploaded_gt()
+    at.file_uploader[0].clear().run()
+    assert not at.exception
+    assert _gt_source(at) == "Tính trên ground truth của ảnh mẫu."
+
+
+def test_uploaded_ground_truth_is_dropped_when_input_changes():
+    at = _compare_with_uploaded_gt()
+    at.selectbox(key="sample_id").set_value("noisy_circle").run()
+    assert "cmp_uploaded_gt" not in at.session_state
+    at.selectbox(key="sample_id").set_value("circle_black_on_white").run()
+    assert not at.exception
+    assert "cmp_uploaded_gt" not in at.session_state
+    next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()  # kết quả cũ đã bị ẩn khi đổi ảnh
+    assert _gt_source(at) == "Tính trên ground truth của ảnh mẫu."
+
+
+def test_transparent_ground_truth_upload_is_rejected_without_fallback_scores():
+    rgba = np.zeros((4, 4, 4), np.uint8)
+    rgba[1:3, 1:3] = (255, 255, 255, 255)  # 4 pixel đối tượng đục, 12 pixel nền trong suốt
+    at = _app("compare")
+    at.session_state["sample_id"] = "circle_black_on_white"
+    at.run()
+    next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
+    at.file_uploader[0].set_value(("alpha_gt.png", to_png_bytes(rgba), "image/png")).run()
+    assert not at.exception
+    assert any("vùng trong suốt" in e.value for e in at.error)
+    assert _iou_rows(at) is None  # không âm thầm dùng GT mẫu thay cho tệp lỗi
+    assert "cmp_uploaded_gt" not in at.session_state

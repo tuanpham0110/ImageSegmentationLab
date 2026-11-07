@@ -50,10 +50,23 @@ class LoadedImage:
         return self.array.shape[1]
 
 
-def _composite_alpha(img: Image.Image, notes: list[str]) -> Image.Image:
-    """Ghép ảnh có kênh alpha lên nền trắng (pixel trong suốt trở thành trắng)."""
+MASK_TRANSPARENCY_ERROR = (
+    "Ground-truth mask có vùng trong suốt (kênh alpha hoặc khóa tRNS). Mask phải là ảnh đục: "
+    "trắng = đối tượng, đen = nền. Ứng dụng không tự đoán vùng trong suốt là nền hay đối tượng — "
+    "hãy lưu lại mask không có độ trong suốt (ví dụ ghép lên nền đen)."
+)
+
+
+def _composite_alpha(img: Image.Image, notes: list[str], reject_transparency: bool = False) -> Image.Image:
+    """Ghép ảnh có kênh alpha lên nền trắng (pixel trong suốt trở thành trắng).
+
+    Với mask (reject_transparency=True), ghép lên nền trắng sẽ biến nền trong suốt
+    thành đối tượng, nên pixel không đục hoàn toàn bị từ chối thay vì đổi nghĩa âm thầm.
+    """
     rgba = img.convert("RGBA")
     alpha = np.asarray(rgba)[..., 3]
+    if alpha.min() < 255 and reject_transparency:
+        raise InputError(MASK_TRANSPARENCY_ERROR)
     if alpha.min() < 255:
         notes.append("Ảnh có kênh alpha (trong suốt): các vùng trong suốt được ghép lên nền trắng.")
     background = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
@@ -161,10 +174,12 @@ def _decoded_array(img: Image.Image, notes: list[str], normalize_high_depth: boo
         if transparent is not None:
             transparent_pixels = raw == transparent
             if np.any(transparent_pixels):
+                if not normalize_high_depth:  # đang đọc mask
+                    raise InputError(MASK_TRANSPARENCY_ERROR)
                 arr[transparent_pixels] = 255
                 notes.append("Ảnh có kênh alpha (trong suốt): các vùng trong suốt được ghép lên nền trắng.")
     elif mode in ("LA", "RGBA", "PA") or "transparency" in img.info:
-        arr = np.asarray(_composite_alpha(img, notes))
+        arr = np.asarray(_composite_alpha(img, notes, reject_transparency=not normalize_high_depth))
     elif mode in ("1", "L"):
         arr = np.asarray(img.convert("L"))
     else:
@@ -290,6 +305,8 @@ def load_mask_bytes(data: bytes, name: str = "mask.png") -> np.ndarray:
     """Đọc mask: pixel 8 bit >127 (16 bit >=32768) là đối tượng; trả uint8 0/255.
 
     Không giãn tương phản mask: ảnh trắng 16 bit phải giữ nguyên toàn đối tượng.
+    Mask có pixel trong suốt (alpha < 255 hoặc khớp khóa tRNS) bị từ chối; mask RGBA/LA
+    đục hoàn toàn vẫn được nhận.
     """
     loaded = (load_csv_bytes(data, name) if Path(name).suffix.lower() == ".csv"
               else _load_image_bytes(data, name, normalize_high_depth=False))

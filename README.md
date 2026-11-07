@@ -8,7 +8,7 @@
 
 - **Không dùng OpenCV**, không dùng `sklearn.cluster.KMeans` hay `skimage.filters.threshold_otsu`.
 - K-means và Otsu nằm trong [src/algorithms/](src/algorithms/), tách biệt hoàn toàn với giao diện.
-- 317 kiểm thử tự động (Pytest), gồm kiểm thử hồi quy và giao diện bằng Streamlit `AppTest`.
+- 330 kiểm thử tự động (Pytest), gồm kiểm thử hồi quy và giao diện bằng Streamlit `AppTest`.
 - Không cần Internet, không có API, không có cơ sở dữ liệu.
 
 ---
@@ -65,7 +65,7 @@ python scripts\run_experiments.py --skip-figures
 | **Tổng quan** | Giới thiệu đề tài, quy trình xử lý, cách bắt đầu |
 | **K-means** | Chọn K (2–8), đặc trưng RGB/mức xám, khởi tạo K-means++/ngẫu nhiên, số vòng lặp, ngưỡng hội tụ, seed. Xem ảnh phân cụm, bản đồ nhãn, **chọn cụm làm đối tượng** để tạo mask và ảnh tách nền, bảng tâm cụm/số pixel/tỷ lệ, biểu đồ tỷ lệ cụm và SSE theo vòng lặp |
 | **Otsu Thresholding** | Histogram 256 mức với đường ngưỡng t\*, đồ thị σ²_B(t), ảnh xám, ảnh nhị phân, mask, ảnh tách nền; chế độ ngưỡng thủ công để đối chiếu; chọn đối tượng là lớp sáng/tối/gợi ý theo viền ảnh |
-| **So sánh thuật toán** | Cùng một ảnh: ảnh gốc / K-means / Otsu; so sánh hai mask, bản đồ khác biệt; IoU/Dice **chỉ khi có ground truth**; bảng so sánh bản chất, tham số, thời gian, ưu nhược điểm |
+| **So sánh thuật toán** | Cùng một ảnh: ảnh gốc / K-means / Otsu; so sánh hai mask, bản đồ khác biệt; IoU/Dice **chỉ khi có ground truth** (GT tải lên phải là ảnh đục, được giữ khi chuyển trang cho tới khi bỏ tệp hoặc đổi ảnh); bảng so sánh bản chất, tham số, thời gian, ưu nhược điểm |
 | **Thư viện ảnh mẫu** | 11 tình huống kiểm thử tổng hợp chạy offline, có ground truth khi phù hợp |
 | **Kiến thức thuật toán** | Công thức, giả mã, chứng minh f(g) ở giáo trình mục 3.1.6 chính là σ²_B của Otsu, minh hoạ từng vòng lặp K-means trên ảnh 10×10, đối chiếu ví dụ giáo trình |
 | **Hướng dẫn** | Thao tác, định dạng CSV, danh sách tệp tải xuống |

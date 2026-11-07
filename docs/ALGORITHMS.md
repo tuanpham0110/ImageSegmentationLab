@@ -203,6 +203,10 @@ Ground truth tải lên gắn với chữ ký đầu vào; khi đổi ảnh/ti�
 - PNG màu 16-bit/kênh (RGB, RGBA, xám + alpha): Pillow chỉ giữ byte cao (⌊v/256⌋) nên ứng dụng đọc độ sâu từ IHDR, ghi chú rõ việc giảm về 8 bit; nếu có tRNS (khóa ở thang 16 bit, không so khớp được sau khi giảm) thì từ chối thay vì ghép sai âm thầm.
 - Ground truth 16-bit dùng thang tuyệt đối 0–65535 → 0–255, không giãn theo min/max của từng mask;
   pixel >=32768 là đối tượng. Mask trắng 65535 giữ toàn foreground.
+- Ground truth có vùng trong suốt (alpha < 255, khóa tRNS ở ảnh xám/bảng màu/16-bit) bị từ chối: ghép lên nền trắng
+  như ảnh đầu vào sẽ biến nền trong suốt thành đối tượng. Mask RGBA/LA đục hoàn toàn vẫn được nhận.
+- Ground truth tải lên ở trang So sánh được lưu theo chữ ký đầu vào, độc lập với widget upload: giữ qua điều hướng,
+  chỉ bỏ khi người dùng xóa tệp/bấm “Bỏ ground truth tải lên” hoặc đổi ảnh/tiền xử lý. Tệp lỗi không bị thay bằng GT mẫu.
 - Trong pipeline, mask bool, 0/1 và 0/255 cùng nghĩa: giá trị >0 là đối tượng; trước resize/đảo chuyển về 0/255.
   Metrics và hậu xử lý dùng chung kiểm tra mask 2D, không rỗng, không âm/hữu hạn.
 - K-means giữ counts int64 cho số pixel thông thường. Trọng số lẻ hoặc tổng ngoài miền int64 trả counts float64;

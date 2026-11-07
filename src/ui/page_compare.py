@@ -11,18 +11,60 @@ from src.ui import components as ui
 from src.ui.page_kmeans import params_form
 from src.ui.page_otsu import POLARITY_HELP, POLARITY_OPTIONS, polarity_caption
 from src.ui.state import (
+    clear_uploaded_gt,
     get_result,
+    get_uploaded_gt,
     has_stale_result,
     persistent_foreground,
     remember_widget,
     restore_widget,
     save_foreground,
     store_result,
+    store_uploaded_gt,
 )
 from src.utils.image_io import InputError, load_mask_bytes
 from src.utils.metrics import compare_masks
 
 RESULT_KEY = "cmp_result"
+
+
+def _on_gt_upload_change(uploader_key: str) -> None:
+    """Chỉ khi người dùng chủ động bỏ tệp (bấm ×) mới xoá ground truth đã lưu.
+
+    Khi chuyển trang, Streamlit dựng lại widget rỗng nhưng không gọi on_change,
+    nên ground truth đã tải vẫn được giữ.
+    """
+    if st.session_state.get(uploader_key) is None:
+        clear_uploaded_gt()
+
+
+def _ground_truth_uploader(ctx) -> tuple[np.ndarray | None, str | None, bool]:
+    """Widget tải ground truth + lưu mask bền theo chữ ký đầu vào.
+
+    Trả về (mask, tên tệp, có_lỗi). Mask chỉ được giải mã lại khi tệp đổi.
+    """
+    key = f"cmp_gt_upload_{ctx.signature}"
+    gt_file = st.file_uploader("Ground-truth mask (tuỳ chọn, PNG trắng = đối tượng)", type=["png", "bmp"],
+                               key=key, on_change=_on_gt_upload_change, args=(key,),
+                               help="Mask gắn với ảnh đầu vào hiện tại. Khi đổi ảnh hoặc tiền xử lý, hãy tải lại mask. "
+                                    "Mask phải đục (không có vùng trong suốt).")
+    stored = get_uploaded_gt(ctx.signature)
+    if gt_file is not None and (stored is None or stored["file_id"] != gt_file.file_id):
+        clear_uploaded_gt()
+        try:
+            mask = fit_ground_truth(load_mask_bytes(gt_file.getvalue(), gt_file.name), ctx.prepared)
+        except (InputError, ValueError, MemoryError) as exc:
+            st.error(f"Không dùng được ground-truth mask: {exc}")
+            return None, None, True
+        store_uploaded_gt(ctx.signature, gt_file.name, gt_file.file_id, mask)
+        stored = get_uploaded_gt(ctx.signature)
+    if stored is None:
+        return None, None, False
+    if gt_file is None:
+        # Widget rỗng do vừa chuyển trang: vẫn dùng mask đã tải, cho phép bỏ chủ động.
+        st.caption(f"Đang dùng ground truth đã tải lên: **{stored['name']}**.")
+        st.button("Bỏ ground truth tải lên", on_click=clear_uploaded_gt, key="cmp_gt_clear", width="stretch")
+    return stored["mask"], stored["name"], False
 
 
 def _agreement_map(a: np.ndarray, b: np.ndarray) -> np.ndarray:
@@ -66,9 +108,7 @@ def render() -> None:
         restore_widget("cmp_otsu_polarity", "Gợi ý theo viền ảnh")
         st.radio("Otsu: đối tượng là", list(POLARITY_OPTIONS), key="cmp_otsu_polarity", help=POLARITY_HELP)
         remember_widget("cmp_otsu_polarity")
-        gt_file = st.file_uploader("Ground-truth mask (tuỳ chọn, PNG trắng = đối tượng)", type=["png", "bmp"],
-                                   key=f"cmp_gt_upload_{ctx.signature}",
-                                   help="Mask gắn với ảnh đầu vào hiện tại. Khi đổi ảnh hoặc tiền xử lý, hãy tải lại mask.")
+        uploaded_gt = _ground_truth_uploader(ctx)
     if params is not None:
         try:
             with st.spinner("Đang chạy K-means…"):
@@ -90,10 +130,10 @@ def render() -> None:
             st.info("Chọn tham số rồi bấm **Chạy K-means** — Otsu được chạy cùng lúc trên cùng ảnh.")
             ui.show_image(prep.image, "Ảnh gốc")
             return
-        _render(ctx, run, gt_file)
+        _render(ctx, run, uploaded_gt)
 
 
-def _render(ctx, run, gt_file) -> None:
+def _render(ctx, run, uploaded_gt) -> None:
     prep, km = ctx.prepared, run["km"]
     # Payload đã gắn với chữ ký ảnh. Chỉ tính lại Otsu khi đổi cực tính hoặc chạy mới.
     polarity = POLARITY_OPTIONS[st.session_state.get("cmp_otsu_polarity", "Gợi ý theo viền ảnh")]
@@ -141,25 +181,14 @@ def _render(ctx, run, gt_file) -> None:
     st.caption(f"Mức trùng khớp giữa hai mask (không phải độ chính xác): IoU = {agree.iou:.4f}, "
                f"tỷ lệ pixel cùng nhãn = {agree.pixel_accuracy:.4f}.")
 
-    gt, gt_source = ctx.ground_truth, "ground truth của ảnh mẫu"
-    if gt_file is not None:
-        try:
-            # Chỉ giữ một mask ở kích thước xử lý; không giải mã lại ảnh GT gốc
-            # khi người dùng đổi cụm foreground hoặc cực tính Otsu.
-            cached_gt = run.get("_gt_cache")
-            if cached_gt is None or cached_gt["file_id"] != gt_file.file_id:
-                run.pop("_gt_cache", None)
-                gt = fit_ground_truth(load_mask_bytes(gt_file.getvalue(), gt_file.name), prep)
-                run["_gt_cache"] = {"file_id": gt_file.file_id, "mask": gt}
-            else:
-                gt = cached_gt["mask"]
-            gt_source = f"ground truth tải lên ({gt_file.name})"
-        except (InputError, ValueError, MemoryError) as exc:
-            run.pop("_gt_cache", None)
-            st.error(f"Không dùng được ground-truth mask: {exc}")
-            gt = None
+    uploaded_mask, uploaded_name, upload_failed = uploaded_gt
+    if upload_failed:
+        # Tệp tải lên lỗi: không lặng lẽ thay bằng ground truth của ảnh mẫu.
+        gt, gt_source = None, None
+    elif uploaded_mask is not None:
+        gt, gt_source = uploaded_mask, f"ground truth tải lên ({uploaded_name})"
     else:
-        run.pop("_gt_cache", None)
+        gt, gt_source = ctx.ground_truth, "ground truth của ảnh mẫu"
 
     st.markdown("##### Đánh giá định lượng")
     rows = []

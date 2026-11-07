@@ -41,7 +41,7 @@ pháp này.
 
 ### 1.4 Kết quả cần đạt
 
-Ứng dụng Streamlit 7 trang chạy trên Windows; 11 ảnh mẫu offline có ground truth khi phù hợp; 317 kiểm thử tự động;
+Ứng dụng Streamlit 7 trang chạy trên Windows; 11 ảnh mẫu offline có ground truth khi phù hợp; 330 kiểm thử tự động;
 báo cáo, slide, kịch bản demo và câu hỏi phản biện.
 
 ---
@@ -334,7 +334,7 @@ Không có ground truth thì chỉ nhận xét trực quan, không ghi IoU.
   ngưỡng đồng hạng, ảnh một mức xám) bằng NumPy, không dùng OpenCV.
 - Chứng minh và kiểm chứng số liệu: hàm f(g) ở giáo trình mục 3.1.6 là tiêu chí Otsu.
 - Ứng dụng 7 trang: tải/lưu ảnh thật và CSV, xem kết quả trực quan, tách nền, so sánh, tải 7 loại tệp mỗi thuật toán.
-- 11 test case offline, 317 kiểm thử tự động đều đạt, số liệu thực nghiệm sinh tự động. Bằng chứng mới tại [REVIEW_ROUND2_20261106.md](REVIEW_ROUND2_20261106.md); lượt trước tại [REVIEW_20261106.md](REVIEW_20261106.md).
+- 11 test case offline, 330 kiểm thử tự động đều đạt, số liệu thực nghiệm sinh tự động. Bằng chứng mới tại [REVIEW_ROUND2_20261106.md](REVIEW_ROUND2_20261106.md); lượt trước tại [REVIEW_20261106.md](REVIEW_20261106.md).
 
 ### 6.2 Hạn chế
 

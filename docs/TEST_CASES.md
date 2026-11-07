@@ -92,8 +92,8 @@ Nhật ký ngày 05/11 trong phần D và các artifact cũ được giữ để
 |---|---|---|
 | `tests/test_kmeans.py` | 64 | Nghiệm tính tay, trọng số, SSE, cụm rỗng, tham số; khoảng cách/tie-break; counts vượt int64 và từ chối số học tràn float64 |
 | `tests/test_otsu.py` | 44 | Ví dụ giáo trình, brute force, ngưỡng đồng hạng rời nhau, lớp rỗng, histogram mất cân bằng, validation và cực tính |
-| `tests/test_image_io.py` | 73 | PNG/JPEG/BMP, alpha/EXIF/tRNS gồm 16-bit; mask 16-bit giữ thang sáng; CSV chính xác; validation PNG/CSV/JSON trước xuất |
-| `tests/test_integration.py` | 92 | Pipeline/11 mẫu/7 trang; upload/GT/cache; lỗi tài nguyên/dữ liệu; JSON ghi cách chuyển xám; luồng PNG 16-bit + GT trắng 16-bit cho đúng IoU |
+| `tests/test_image_io.py` | 80 | PNG/JPEG/BMP, alpha/EXIF/tRNS gồm 16-bit; mask 16-bit giữ thang sáng; CSV chính xác; validation PNG/CSV/JSON trước xuất |
+| `tests/test_integration.py` | 98 | Pipeline/11 mẫu/7 trang; upload/GT/cache; lỗi tài nguyên/dữ liệu; JSON ghi cách chuyển xám; luồng PNG 16-bit + GT trắng 16-bit cho đúng IoU |
 | `tests/test_preprocessing.py` | 24 | Pixel sai, NaN/Inf, ảnh rỗng/sai chiều; kích thước/phương pháp sai; bảo toàn pixel nguyên và mask khi resize nearest |
 | `tests/test_metrics.py` | 11 | Ma trận nhầm lẫn tính tay, IoU/Dice/accuracy, toàn nền hợp lệ; từ chối mask rỗng/sai chiều/không hữu hạn |
 | `tests/test_postprocessing.py` | 9 | Đảo mask bool/0–1/0–255; từ chối mask sai đồng bộ; RGBA/preview/overlay cùng quy ước foreground |
@@ -174,3 +174,11 @@ Báo cáo máy: [browser_checks_20261105_155516.json](results/browser_checks_202
 - BUG-003: bảng histogram hiển thị đủ 256 mức, kể cả h(g) = 0.
 - BUG-004: lỗi CSV báo số dòng thực trong tệp (tính cả dòng trống và hàng trải nhiều dòng).
 - RISK-002: hậu xử lý từ chối ảnh ngoài [0, 255], không nguyên, NaN hoặc sai số kênh thay vì ép kiểu quấn số.
+
+## H. Sửa lỗi sau review commit c1e1b0f (06/11/2026)
+
+- Từ 317 lên **330 PASS**, thêm 13 ca; 9 ca mới fail trên mã c1e1b0f và pass sau khi sửa.
+- BUG-005: ground truth tải lên giữ nguyên tên nguồn và IoU/Dice khi chuyển trang rồi quay lại, kể cả khi tải trước lần chạy đầu;
+  chỉ bỏ khi xóa tệp, bấm “Bỏ ground truth tải lên” hoặc đổi ảnh.
+- RISK-004: ground truth RGBA/LA có alpha < 255, ảnh xám/bảng màu/16-bit có tRNS bị từ chối kèm thông báo;
+  qua giao diện không báo IoU/Dice và không lặng lẽ dùng GT mẫu thay thế. Mask RGBA đục vẫn hợp lệ.
