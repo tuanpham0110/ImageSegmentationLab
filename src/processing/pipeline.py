@@ -7,12 +7,14 @@ nên ảnh hiển thị và tệp tải xuống luôn được tạo từ cùng 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from io import BytesIO
+from zipfile import ZIP_DEFLATED, ZipFile
 
 import numpy as np
 
-from src.algorithms.kmeans import ImageKMeansResult, segment_image_kmeans
+from src.algorithms.kmeans import FEATURES, ImageKMeansResult, segment_image_kmeans
 from src.algorithms.otsu import MultiOtsuResult, OtsuResult, segment_image_multi_otsu, segment_image_otsu
-from src.processing.filters import MORPH_OPERATIONS, apply_morphology, median_filter
+from src.processing.filters import MORPH_OPERATIONS, apply_morphology, median_filter, validate_window_size
 from src.processing.postprocessing import (
     colorize_labels,
     cutout_on_color,
@@ -21,6 +23,7 @@ from src.processing.postprocessing import (
     mask_from_labels,
     overlay_mask,
     suggest_foreground_clusters,
+    validate_foreground_clusters,
 )
 from src.processing.preprocessing import ResizeInfo, limit_size, resize_to, to_grayscale
 from src.utils.image_io import LoadedImage, matrix_to_csv_bytes, table_to_csv_bytes, to_json_bytes, to_png_bytes
@@ -63,6 +66,7 @@ def prepare_input(loaded: LoadedImage, max_side: int, gray_method: str = "lumina
     K-means luôn nhận cùng một ảnh đã khử nhiễu (``image``/``gray``). Ảnh chưa lọc được giữ
     ở ``source`` để hiển thị "Ảnh gốc" và để ảnh tách nền/overlay giữ nguyên pixel nguồn.
     """
+    median_size = validate_window_size(median_size)
     source, info = limit_size(loaded.array, max_side, resample="area")
     source = np.ascontiguousarray(source)
     image = median_filter(source, median_size) if median_size != 1 else source
@@ -87,6 +91,7 @@ class MaskPostprocess:
     def __post_init__(self):
         if self.operation not in MORPH_OPERATIONS:
             raise ValueError(f"Phép hình thái học không hợp lệ: {self.operation!r}.")
+        validate_window_size(self.size)
 
     def apply(self, mask: np.ndarray) -> np.ndarray:
         return mask if self.operation == "none" else apply_morphology(mask, self.operation, self.size)
@@ -128,6 +133,8 @@ class KMeansParams:
 
 
 def run_kmeans(prepared: PreparedInput, params: KMeansParams) -> ImageKMeansResult:
+    if params.feature not in FEATURES:
+        raise ValueError(f"Loại đặc trưng không hợp lệ: {params.feature!r}.")
     feature = params.feature if prepared.is_color else "gray"
     data = prepared.image if feature in ("rgb", "lab") else prepared.gray
     return segment_image_kmeans(
@@ -154,8 +161,8 @@ def default_foreground(result: ImageKMeansResult) -> list[int]:
 
 def kmeans_outputs(prepared: PreparedInput, result: ImageKMeansResult, foreground_clusters,
                    postprocess: MaskPostprocess = NO_POSTPROCESS) -> KMeansOutputs:
-    fg = sorted(set(int(c) for c in foreground_clusters))
-    raw_mask = mask_from_labels(result.labels, fg)
+    fg = validate_foreground_clusters(foreground_clusters, result.core.k_effective)
+    raw_mask = mask_from_labels(result.labels, fg, n_clusters=result.core.k_effective)
     mask = postprocess.apply(raw_mask)
     return KMeansOutputs(
         segmented=result.segmented,
@@ -372,6 +379,20 @@ def otsu_export_files(prepared: PreparedInput, out: OtsuOutputs) -> dict[str, tu
     }
 
 
+def comparison_export_files(prepared: PreparedInput, params: KMeansParams, result: ImageKMeansResult,
+                            km_out: KMeansOutputs, otsu_out: OtsuOutputs) -> dict[str, tuple[bytes, str]]:
+    """Xuất đúng hai kết quả hiện tại; ZIP chứa đủ PNG, CSV và tham số của cả hai."""
+    files = {**kmeans_export_files(prepared, params, result, km_out), **otsu_export_files(prepared, otsu_out)}
+    buffer = BytesIO()
+    with ZipFile(buffer, "w", compression=ZIP_DEFLATED) as archive:
+        for name, (data, _) in files.items():
+            archive.writestr(name, data)
+    return {
+        "comparison_results.zip": (buffer.getvalue(), "application/zip"),
+        **{name: files[name] for name in ("kmeans_mask.png", "otsu_mask.png", "kmeans_cutout.png", "otsu_cutout.png")},
+    }
+
+
 # ----------------------------- Multi-Otsu ------------------------------
 
 @dataclass
@@ -402,10 +423,8 @@ def default_multi_otsu_foreground(labels: np.ndarray) -> list[int]:
 
 def multi_otsu_outputs(prepared: PreparedInput, result: MultiOtsuResult, labels: np.ndarray, foreground_classes,
                        postprocess: MaskPostprocess = NO_POSTPROCESS) -> MultiOtsuOutputs:
-    fg = sorted(set(int(c) for c in foreground_classes))
-    if any(c not in (0, 1, 2) for c in fg):
-        raise ValueError("Lớp đối tượng phải nằm trong {0, 1, 2}.")
-    raw_mask = mask_from_labels(labels, fg)
+    fg = validate_foreground_clusters(foreground_classes, 3)
+    raw_mask = mask_from_labels(labels, fg, n_clusters=3)
     mask = postprocess.apply(raw_mask)
     return MultiOtsuOutputs(
         result=result,

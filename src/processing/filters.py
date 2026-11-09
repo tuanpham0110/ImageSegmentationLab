@@ -37,7 +37,7 @@ MORPH_LABELS = {
 _MEDIAN_ROW_BLOCK = 128
 
 
-def _check_size(size: int) -> int:
+def validate_window_size(size: int) -> int:
     if (isinstance(size, (bool, np.bool_)) or not isinstance(size, (int, np.integer))
             or size < 1 or size % 2 == 0):
         raise ValueError("Kích thước cửa sổ phải là số nguyên lẻ >= 1.")
@@ -46,7 +46,7 @@ def _check_size(size: int) -> int:
 
 def median_filter(image: np.ndarray, size: int = 3) -> np.ndarray:
     """Lọc trung vị k×k cho ảnh uint8 (H, W) hoặc (H, W, 3); mỗi kênh lọc độc lập."""
-    size = _check_size(size)
+    size = validate_window_size(size)
     img = np.asarray(image)
     if img.ndim not in (2, 3) or (img.ndim == 3 and img.shape[2] != 3) or img.size == 0:
         raise ValueError("Ảnh phải có dạng (H, W) hoặc (H, W, 3), không rỗng.")
@@ -90,14 +90,14 @@ def _as_bool(mask: np.ndarray) -> np.ndarray:
 
 def dilate(mask: np.ndarray, size: int = 3) -> np.ndarray:
     """Giãn nhị phân với phần tử cấu trúc vuông size×size. Trả mask bool."""
-    size = _check_size(size)
+    size = validate_window_size(size)
     m = _as_bool(mask)
     return m.copy() if size == 1 else _window_reduce(m, size, np.max)
 
 
 def erode(mask: np.ndarray, size: int = 3) -> np.ndarray:
     """Co nhị phân với phần tử cấu trúc vuông size×size. Trả mask bool."""
-    size = _check_size(size)
+    size = validate_window_size(size)
     m = _as_bool(mask)
     return m.copy() if size == 1 else _window_reduce(m, size, np.min)
 
@@ -116,7 +116,7 @@ def apply_morphology(mask: np.ndarray, operation: str = "none", size: int = 3) -
     """Áp dụng phép hình thái học lên mask; trả mask uint8 0/255 cùng quy ước với các mask khác."""
     if operation not in MORPH_OPERATIONS:
         raise ValueError(f"Phép hình thái học không hợp lệ: {operation!r}.")
-    size = _check_size(size)
+    size = validate_window_size(size)
     m = _as_bool(mask)
     if operation == "open":
         m = opening(m, size)

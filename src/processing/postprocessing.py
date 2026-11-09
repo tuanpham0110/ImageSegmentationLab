@@ -52,21 +52,41 @@ def cluster_palette(n: int) -> np.ndarray:
                     dtype=np.uint8).reshape(-1, 3)
 
 
+def _validate_labels(labels: np.ndarray) -> np.ndarray:
+    lab = np.asarray(labels)
+    if lab.ndim != 2 or lab.size == 0 or lab.dtype.kind not in "iu" or lab.min() < 0:
+        raise ValueError("Nhãn cụm phải là ma trận 2 chiều không rỗng, chứa số nguyên >= 0.")
+    return lab
+
+
+def validate_foreground_clusters(foreground_clusters: Iterable[int], n_clusters: int) -> list[int]:
+    """Không tự đổi 0.5/True/'1' thành một lựa chọn cụm khác."""
+    try:
+        selected = list(foreground_clusters)
+    except TypeError as exc:
+        raise ValueError("Lựa chọn cụm đối tượng phải là một danh sách số nguyên.") from exc
+    if any(isinstance(c, (bool, np.bool_)) or not isinstance(c, (int, np.integer))
+           or not 0 <= c < n_clusters for c in selected):
+        raise ValueError(f"Chỉ số cụm đối tượng phải là số nguyên trong [0, {n_clusters - 1}].")
+    return sorted(set(int(c) for c in selected))
+
+
 def colorize_labels(labels: np.ndarray) -> np.ndarray:
     """Tô màu bản đồ nhãn (H, W) -> ảnh RGB (H, W, 3); bảng màu mở rộng theo số cụm."""
-    lab = np.asarray(labels)
-    if lab.size and lab.dtype.kind not in "iu":
-        raise ValueError("Nhãn cụm phải là số nguyên.")
-    if lab.size and lab.min() < 0:
-        raise ValueError("Nhãn cụm phải là số nguyên >= 0.")
-    n = int(lab.max()) + 1 if lab.size else 0
-    return cluster_palette(max(n, 1))[lab]
+    lab = _validate_labels(labels)
+    return cluster_palette(int(lab.max()) + 1)[lab]
 
 
-def mask_from_labels(labels: np.ndarray, foreground_clusters: Iterable[int]) -> np.ndarray:
+def mask_from_labels(labels: np.ndarray, foreground_clusters: Iterable[int], *,
+                     n_clusters: int | None = None) -> np.ndarray:
     """Mask nhị phân uint8: 255 nếu pixel thuộc một trong các cụm được chọn làm đối tượng, ngược lại 0."""
-    selected = np.array(sorted(set(int(c) for c in foreground_clusters)), dtype=np.int64)
-    return np.where(np.isin(labels, selected), 255, 0).astype(np.uint8)
+    lab = _validate_labels(labels)
+    n = int(lab.max()) + 1 if n_clusters is None else n_clusters
+    if (isinstance(n, (bool, np.bool_)) or not isinstance(n, (int, np.integer)) or n < 1
+            or int(lab.max()) >= n):
+        raise ValueError("Nhãn cụm phải nằm trong phạm vi số cụm đã khai báo.")
+    selected = validate_foreground_clusters(foreground_clusters, n)
+    return np.where(np.isin(lab, selected), 255, 0).astype(np.uint8)
 
 
 def invert_mask(mask: np.ndarray) -> np.ndarray:

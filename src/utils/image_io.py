@@ -325,11 +325,13 @@ def parse_csv_matrix(text: str) -> np.ndarray:
         rows.append(joined if fast else _parse_csv_row_slow(cells, r_idx))
     if not n_cols:
         raise InputError("CSV không có cột dữ liệu.")
-    values = np.array(",".join(rows).split(","), dtype=np.int64)
-    return values.reshape(len(rows), n_cols).astype(np.uint8)
+    # Các hàng đã được xác nhận/canonical hoá. Đọc thẳng uint8 để tránh tạo
+    # hàng triệu chuỗi Python và một bản sao int64 chỉ để đổi lại về 8 bit.
+    values = np.fromstring(",".join(rows), sep=",", dtype=np.uint8)
+    return values.reshape(len(rows), n_cols)
 
 
-_CSV_BYTE = r"(?:[01]?\d?\d|2[0-4]\d|25[0-5])"  # 0..255, cho phép số 0 đứng đầu ("007")
+_CSV_BYTE = r"(?:[01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])"  # số ASCII; Unicode đi qua Decimal để chuẩn hoá
 _FAST_CSV_ROW = re.compile(rf"{_CSV_BYTE}(?:,{_CSV_BYTE})*")
 _CSV_NUMBER = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)$")
 

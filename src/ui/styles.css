@@ -68,7 +68,7 @@
 [class*="st-key-workspace-"] > [data-testid="stLayoutWrapper"]:first-child { flex: 1 0 300px; min-width: 0; max-width: 320px; }
 [class*="st-key-workspace-"] > [data-testid="stLayoutWrapper"]:last-child { flex: 999 1 470px; min-width: 0; }
 [class*="st-key-results-"] { min-width: 0; }
-[data-testid="stForm"] { background: #fff; padding: 17px; border: 1px solid var(--isl-line); border-radius: 12px; box-shadow: 0 2px 5px #15294a03; }
+[data-testid="stForm"], .st-key-otsu-controls { background: #fff; padding: 17px; border: 1px solid var(--isl-line); border-radius: 12px; box-shadow: 0 2px 5px #15294a03; }
 [data-testid="stForm"] > [data-testid="stVerticalBlock"] { gap: 14px; }
 [data-testid="stForm"] [data-testid="stWidgetLabel"] p { font-size: 13px; font-weight: 500; }
 [data-testid="stForm"] [data-testid="stRadio"] p { font-size: 13px; }
@@ -100,6 +100,7 @@
 [data-testid="stTable"] th, [data-testid="stTable"] td { padding: 12px 14px; min-width: 110px; word-break: normal; }
 [data-testid="stDownloadButton"] button { height: auto; }
 [data-testid="stDownloadButton"] button p { white-space: normal; line-height: 1.5; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--isl-accent); outline-offset: 3px; }
 .isl-chip { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 10px; border: 1px solid #e6eaf0; background: #f5f7fb; color: #526174; margin: 0 5px 5px 0; line-height: 1.6; }
 .isl-swatch { display: inline-block; width: 9px; height: 9px; border-radius: 3px; vertical-align: 0; margin-right: 5px; }
 

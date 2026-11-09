@@ -91,21 +91,29 @@ def render() -> None:
 
     left, right = ui.workspace("otsu")
     with left:
-        with st.form("otsu_form", border=True):
+        # Các lựa chọn quyết định widget nào được dùng cần rerun ngay; thuật toán
+        # vẫn chỉ chạy khi bấm nút. Form gom mọi widget sẽ để ngưỡng thủ công
+        # và lựa chọn 2 lớp trông như có hiệu lực cả ở chế độ Multi-Otsu.
+        with st.container(border=True, key="otsu-controls"):
             st.markdown("**Thiết lập Otsu**")
             classes = st.radio("Phương pháp", CLASS_MODES, key="otsu_classes", help=CLASSES_HELP,
                                format_func=lambda value: "Otsu · 2 lớp" if value == CLASS_MODES[0] else "Multi-Otsu · 3 lớp")
             mode = st.radio("Chế độ ngưỡng (2 lớp)", MODES, key="otsu_mode", horizontal=True,
+                            disabled=classes == CLASS_MODES[1],
                             format_func=lambda value: "Tự động" if value == MODES[0] else "Thủ công")
             polarity = st.radio("Đối tượng cần tách (2 lớp)", list(POLARITY_OPTIONS), key="otsu_polarity",
+                                disabled=classes == CLASS_MODES[1],
                                 help=POLARITY_HELP,
                                 format_func=lambda value: {"Gợi ý theo viền ảnh": "Đề xuất theo viền ảnh",
                                                            "Lớp sáng (> t)": "Đối tượng sáng", "Lớp tối (≤ t)": "Đối tượng tối"}[value])
             with st.expander("Ngưỡng thủ công & hậu xử lý", icon=":material/tune:"):
                 manual_t = st.slider("Ngưỡng thủ công T", 0, 255, key="otsu_manual_t",
+                                     disabled=classes == CLASS_MODES[1] or mode != MODES[1],
                                      help="Chỉ áp dụng khi chọn chế độ Thủ công ở bài toán 2 lớp.")
                 post = ui.morphology_controls("otsu")
-            submitted = st.form_submit_button("Chạy Otsu", type="primary", width="stretch")
+            if classes == CLASS_MODES[1]:
+                st.caption("Hai ngưỡng được tìm tự động. Chọn lớp đối tượng sau khi chạy.")
+            submitted = st.button("Chạy Otsu", type="primary", width="stretch")
         for k in DEFAULTS:
             remember_widget(k)
         st.button("Khôi phục mặc định", on_click=_reset_defaults, key="otsu_reset", width="stretch")
@@ -159,6 +167,9 @@ def _render_result(ctx, out, run: dict | None = None) -> None:
     m[3].metric("Đối tượng", f"{out.foreground_ratio * 100:.1f}%", help="Tỷ lệ pixel đối tượng; phần còn lại là nền.")
     m[4].metric("Thời gian", f"{r.elapsed_seconds * 1000:.2f} ms", help=TIMING_SCOPE)
     st.caption(f"Quy ước: pixel > {out.threshold_used} → 255 (lớp C1, sáng). " + polarity_caption(out))
+    st.caption("Kết quả lần chạy gần nhất · "
+               + ("Ngưỡng thủ công" if out.mode == "manual" else "Otsu tự động")
+               + ". Đổi thiết lập rồi bấm Chạy Otsu để cập nhật.")
     for w in out.warnings:
         st.warning(w)
 

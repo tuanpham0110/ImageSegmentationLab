@@ -55,7 +55,7 @@ def _reset_defaults() -> None:
     remember_widget("km_invert_foreground")
 
 
-def params_form(is_color: bool, key_prefix: str = "km") -> KMeansParams | None:
+def params_form(is_color: bool, key_prefix: str = "km", *, submit_label: str = "Chạy K-means") -> KMeansParams | None:
     """Form tham số K-means. Trả về KMeansParams khi người dùng bấm chạy, ngược lại None."""
     keys = [k.replace("km", key_prefix, 1) for k in DEFAULTS]
     for key, v in zip(keys, DEFAULTS.values()):
@@ -81,7 +81,7 @@ def params_form(is_color: bool, key_prefix: str = "km") -> KMeansParams | None:
             tol = st.number_input("Ngưỡng hội tụ", 0.0, 50.0, step=1e-4, format="%.4f",
                                   key=f"{key_prefix}_tol",
                                   help="Dừng khi tâm cụm dịch chuyển (chuẩn Euclid, thang 0–255) ≤ ngưỡng này.")
-        submitted = st.form_submit_button("Chạy K-means", type="primary", width="stretch")
+        submitted = st.form_submit_button(submit_label, type="primary", width="stretch")
     for key in keys:
         remember_widget(key)
     if not submitted:

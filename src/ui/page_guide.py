@@ -30,7 +30,7 @@ def render() -> None:
 - Lỗi được báo kèm vị trí dòng/cột: ký tự không phải số, số thập phân, giá trị ngoài [0, 255], dòng thiếu cột, ô trống.
 
 #### 3. K-means
-1. Chọn **K** (2–8), vector đặc trưng (RGB hoặc mức xám), cách khởi tạo, số vòng lặp tối đa, ngưỡng hội tụ, seed.
+1. Chọn **K** (2–16), vector đặc trưng (RGB, Lab hoặc mức xám), cách khởi tạo, số vòng lặp tối đa, ngưỡng hội tụ, seed.
 2. Bấm **Chạy K-means**. Thay đổi tham số không tự chạy lại — chỉ chạy khi bấm nút.
 3. Tab **Tách nền**: chọn cụm làm đối tượng (mặc định là gợi ý theo viền ảnh, không phải kết luận của thuật toán).
 4. Tab **Thống kê**: tâm cụm, số pixel, tỷ lệ, SSE theo vòng lặp.
@@ -46,6 +46,7 @@ def render() -> None:
 - Chạy K-means và Otsu trên cùng ảnh; so sánh ảnh kết quả và **mask nhị phân**.
 - IoU/Dice chỉ được tính khi có **ground truth** (ảnh mẫu có sẵn, hoặc tải mask PNG trắng = đối tượng, cùng kích thước ảnh gốc).
 - Mask tải lên gắn với đầu vào hiện tại. Khi đổi ảnh hoặc tiền xử lý, hãy tải lại mask để tránh dùng nhầm ground truth.
+- Tab **Tải xuống** trên trang So sánh cho tải mask, ảnh tách nền hoặc toàn bộ PNG/CSV/JSON của cả hai thuật toán trong một tệp ZIP.
 
 #### 6. Lưu kết quả
 | Tệp | Nội dung |
@@ -60,8 +61,8 @@ def render() -> None:
 | `otsu_histogram.csv` | h(g) và σ²_B(g) cho 256 mức |
 | `*_stats.json` | Tham số và toàn bộ thống kê của lần chạy |
 
-Trình duyệt xử lý nơi lưu và xác nhận ghi đè. Thông báo sau khi bấm tải chỉ xác nhận đã yêu cầu trình duyệt
-tải tệp; ứng dụng không thể xác nhận tệp đã được ghi xuống ổ đĩa. Nếu tạo tệp thất bại, trang hiển thị lỗi.
+Trình duyệt xử lý nơi lưu và xác nhận ghi đè. Bấm tải không chạy lại thuật toán hoặc thay đổi kết quả.
+Kiểm tra tệp trong mục tải xuống của trình duyệt. Nếu tạo tệp thất bại, trang hiển thị lỗi.
 
 Thời gian hiển thị tính từ ảnh đã tiền xử lý đến nhãn/ảnh tâm hoặc ảnh nhị phân; loại trừ đọc tệp,
 chuyển xám/resize, chọn đối tượng, biểu đồ và xuất tệp.

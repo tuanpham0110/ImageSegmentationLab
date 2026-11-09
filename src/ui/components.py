@@ -71,7 +71,7 @@ def show_images(items: list[tuple[np.ndarray, str]]) -> None:
     # Hai ảnh mỗi hàng vẫn đọc rõ khi nằm trong cột kết quả.
     for start in range(0, len(items), 2):
         row = items[start:start + 2]
-        cols = st.columns(min(2, len(items)), gap="small")
+        cols = st.columns(len(row), gap="small")
         for col, (arr, cap) in zip(cols, row):
             with col:
                 show_image(arr, cap)
@@ -189,15 +189,21 @@ def download_buttons(files: dict[str, tuple[bytes, str]], labels: dict[str, str]
     """Hiển thị các nút tải xuống theo lưới 2 cột, đủ chỗ cho tên tệp."""
     st.caption("Trình duyệt xử lý vị trí lưu và xác nhận ghi đè tệp.")
     names = list(files.keys())
+    if names and names[0].endswith(".zip"):
+        name = names.pop(0)
+        _download_file(name, files[name], labels.get(name, name), key_prefix, primary=True)
     for row_start in range(0, len(names), 2):
-        cols = st.columns(2)
-        for col, name in zip(cols, names[row_start : row_start + 2]):
-            data, mime = files[name]
+        row = names[row_start:row_start + 2]
+        cols = st.columns(len(row))
+        for col, name in zip(cols, row):
             with col:
-                requested = st.download_button(
-                    labels.get(name, name), data=data, file_name=name, mime=mime,
-                    key=f"{key_prefix}_{name}", width="stretch",
-                )
-                if requested:
-                    st.info(f"Đã yêu cầu trình duyệt tải {name}. Kiểm tra mục tải xuống của trình duyệt.")
-                st.caption(f"{name} · {human_bytes(len(data))}")
+                _download_file(name, files[name], labels.get(name, name), key_prefix)
+
+
+def _download_file(name: str, file: tuple[bytes, str], label: str, key_prefix: str, *, primary: bool = False) -> None:
+    data, mime = file
+    st.download_button(
+        label, data=data, file_name=name, mime=mime, key=f"{key_prefix}_{name}", width="stretch",
+        on_click="ignore", type="primary" if primary else "secondary",
+    )
+    st.caption(f"{name} · {human_bytes(len(data))}")

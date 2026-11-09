@@ -448,7 +448,7 @@ def test_otsu_exports_are_reused_until_a_new_run(monkeypatch):
     next(b for b in at.button if b.label.startswith("Chạy Otsu")).click().run()
     at.run()
     assert not at.exception and len(calls) == 1
-    at.radio(key="otsu_mode").set_value("Thủ công (đối chiếu)")
+    at.radio(key="otsu_mode").set_value("Thủ công (đối chiếu)").run()
     at.slider(key="otsu_manual_t").set_value(50)
     next(b for b in at.button if b.label.startswith("Chạy Otsu")).click().run()
     assert not at.exception and len(calls) == 2
