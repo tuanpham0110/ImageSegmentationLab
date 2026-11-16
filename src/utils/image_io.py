@@ -226,6 +226,11 @@ def _decoded_array(img: Image.Image, notes: list[str], normalize_high_depth: boo
             lo, hi = float(raw.min()), float(raw.max())
             arr = np.zeros(raw.shape, np.uint8) if hi == lo else np.round((raw - lo) / (hi - lo) * 255).astype(np.uint8)
             notes.append(f"Ảnh {mode} (độ sâu > 8 bit) được chuẩn hoá tuyến tính về [0, 255].")
+        elif np.all((raw == 0) | (raw == 1)):
+            # Mask nhị phân có thể lưu trực tiếp nhãn 0/1 trong PNG 16 bit.
+            # Chia cho 65535 sẽ làm mất mọi pixel đối tượng trước bước đọc mask.
+            arr = (raw * 255).astype(np.uint8)
+            notes.append("Mask nhãn 0/1 được đổi thành 0/255, giữ nguyên vùng đối tượng.")
         else:
             arr = np.round(np.clip(raw / np.iinfo(np.uint16).max, 0, 1) * 255).astype(np.uint8)
             notes.append("Mask 16 bit được đổi từ thang [0, 65535] về [0, 255], giữ độ sáng tuyệt đối.")
@@ -383,16 +388,28 @@ def load_path(path: str | Path) -> LoadedImage:
 
 
 def load_mask_bytes(data: bytes, name: str = "mask.png") -> np.ndarray:
-    """Đọc mask: pixel 8 bit >127 (16 bit >=32768) là đối tượng; trả uint8 0/255.
+    """Đọc mask PNG/BMP/CSV, trả uint8 0/255.
 
-    Không giãn tương phản mask: ảnh trắng 16 bit phải giữ nguyên toàn đối tượng.
+    Mask chỉ chứa 0/1 được hiểu là nhãn nhị phân (1 = đối tượng), kể cả toàn 1.
+    CSV yêu cầu 0/1 hoặc 0/255, tránh nhận nhầm ma trận nhãn nhiều cụm.
+    Với ảnh mask mức xám khác, pixel 8 bit >127 (16 bit >=32768) là đối tượng.
+    Không giãn tương phản mask: ảnh trắng 16 bit giữ nguyên toàn đối tượng.
     Mask có pixel trong suốt (alpha < 255 hoặc khớp khóa tRNS) bị từ chối; mask RGBA/LA
     đục hoàn toàn vẫn được nhận.
     """
     loaded = (load_csv_bytes(data, name) if Path(name).suffix.lower() == ".csv"
               else _load_image_bytes(data, name, normalize_high_depth=False))
     arr = loaded.array if loaded.array.ndim == 2 else loaded.array.mean(axis=2)
-    return np.where(arr > 127, 255, 0).astype(np.uint8)
+    png_depth = _png_bit_depth(data)
+    high_depth = (loaded.original_mode in ("I;16", "I;16B", "I;16L", "I", "F")
+                  or (png_depth is not None and png_depth[0] == 16))
+    # Không nhận nhầm ảnh 16 bit gần đen (ví dụ 256 -> 1 sau giảm bit) là
+    # nhãn 0/1. Nhãn xám 16 bit thật đã được nhận diện ở thang gốc phía trên.
+    logical = not high_depth and np.all((arr == 0) | (arr == 1))
+    if loaded.file_format == "CSV" and not logical and not np.all((arr == 0) | (arr == 255)):
+        raise InputError("CSV ground truth phải là mask nhị phân 0/1 hoặc 0/255. "
+                         "Không dùng ma trận nhãn nhiều cụm hoặc bảng thống kê làm ground truth.")
+    return np.where(arr > (0 if logical else 127), 255, 0).astype(np.uint8)
 
 
 # ----------------------------- Ghi kết quả -----------------------------

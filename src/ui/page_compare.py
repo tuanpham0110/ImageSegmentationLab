@@ -53,9 +53,11 @@ def _ground_truth_uploader(ctx) -> tuple[np.ndarray | None, str | None, bool]:
     Trả về (mask, tên tệp, có_lỗi). Mask (hoặc lỗi) chỉ được giải mã lại khi tệp đổi.
     """
     key = f"cmp_gt_upload_{ctx.signature}"
-    gt_file = st.file_uploader("Ground-truth mask (tuỳ chọn, PNG trắng = đối tượng)", type=["png", "bmp"],
+    gt_file = st.file_uploader("Ground-truth mask (tuỳ chọn, PNG/BMP/CSV)", type=["png", "bmp", "csv"],
                                key=key, on_change=_on_gt_upload_change, args=(key,),
-                               help="Mask gắn với ảnh đầu vào hiện tại. Khi đổi ảnh hoặc tiền xử lý, hãy tải lại mask. "
+                               help="Nhận mask 0/1 (1 = đối tượng) hoặc 0/255 (trắng = đối tượng). "
+                                    "CSV là ma trận không có tiêu đề, không phải ma trận nhãn nhiều cụm. "
+                                    "Mask gắn với ảnh đầu vào hiện tại. Khi đổi ảnh hoặc tiền xử lý, hãy tải lại mask. "
                                     "Mask phải đục (không có vùng trong suốt).")
     stored = get_uploaded_gt(ctx.signature)
     if gt_file is not None and (stored is None or stored["file_id"] != gt_file.file_id):
@@ -207,6 +209,7 @@ def _result_tabs(ctx, run, out, otsu, uploaded_gt) -> None:
         _mask_comparison(out, otsu)
     with scores:
         _scores(ctx, run, out, otsu, uploaded_gt)
+        _current_image_analysis(prep, km, out, otsu)
         _comparison_table(run)
     with downloads:
         st.caption("Tệp ZIP chứa toàn bộ ảnh PNG, ma trận CSV và tham số JSON của hai kết quả đang hiển thị.")
@@ -284,3 +287,29 @@ def _comparison_table(run) -> None:
              f"t* = {otsu.result.threshold}; {polarity_caption(otsu)}"),
             ("Thời gian đo được", f"{km.core.elapsed_seconds * 1000:.1f} ms", f"{otsu.result.elapsed_seconds * 1000:.2f} ms")]
     st.table(pd.DataFrame(qual + QUALITATIVE, columns=["Tiêu chí", "K-means", "Otsu"]).set_index("Tiêu chí"))
+
+
+def _current_image_analysis(prep, km, out, otsu) -> None:
+    """Diễn giải thống kê đo được, không suy diễn độ chính xác khi thiếu ground truth."""
+    st.markdown("##### Phân tích ảnh hiện tại")
+    r = otsu.result
+    if prep.is_color and km.feature in ("rgb", "lab"):
+        st.write(f"K-means đang dùng đặc trưng {km.feature.upper()} ({km.core.k_effective} cụm), "
+                 "còn Otsu chỉ dùng mức xám. Các vùng khác màu nhưng gần độ sáng có thể bị Otsu gộp lại.")
+    elif km.core.k_effective > 2:
+        st.write(f"K-means chia {km.core.k_effective} cụm mức xám; Otsu chỉ chia hai lớp. "
+                 "Khi đối tượng có nhiều mức sáng, cần kiểm tra xem lớp Otsu có bỏ sót vùng nào của đối tượng.")
+    if r.valid:
+        st.write(f"Hai lớp Otsu có độ sáng trung bình {r.mean0:.2f} và {r.mean1:.2f} "
+                 f"(chênh {r.mean1 - r.mean0:.2f}/255), chiếm {r.weight0:.1%} và {r.weight1:.1%} pixel. "
+                 f"Độ tách histogram η = {r.separability:.3f}; đây không phải xác suất phân đoạn đúng.")
+        # Phân vị rời rạc từ histogram: không cần sắp xếp lại toàn bộ ảnh.
+        lo, hi = np.searchsorted(np.cumsum(r.histogram), np.array([0.05, 0.95]) * r.histogram.sum())
+        if hi - lo <= 32 and r.mean1 - r.mean0 <= 32:
+            st.info(f"Dải mức xám chứa ít nhất 90% pixel là [{lo}, {hi}], chỉ rộng {hi - lo}/255. "
+                    "Với dải sáng hẹp, nhiễu dễ làm thay đổi nhãn. Có thể thử lọc trung vị rồi đối chiếu lại mask.")
+    else:
+        st.write("Ảnh không có hai lớp mức xám khác rỗng; Otsu tự động không xác định được đối tượng.")
+    disagree = int(np.count_nonzero(out.mask != otsu.mask))
+    st.caption(f"Hai mask bất đồng tại {disagree:,}/{out.mask.size:,} pixel ({disagree / out.mask.size:.2%}). "
+               "Mức bất đồng chỉ cho biết hai phương pháp khác nhau; cần ground truth độc lập để kết luận phương pháp nào đúng.")

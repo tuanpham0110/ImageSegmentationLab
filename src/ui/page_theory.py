@@ -152,7 +152,7 @@ def _complexity() -> None:
     st.markdown("""
 | | K-means | Otsu |
 |---|---|---|
-| Độ phức tạp thời gian | O(N log N) gom màu + O(U · K · D · số vòng lặp), U ≤ N giá trị phân biệt | O(N) dựng histogram + O(L) với L = 256 |
+| Độ phức tạp thời gian | Gom pixel: O(N + 256) với ảnh xám, O(N log N) với ảnh màu; sau đó O(U · K · D · số vòng lặp), U ≤ N giá trị phân biệt | O(N) dựng histogram + O(L) với L = 256 |
 | Bộ nhớ thêm | O(N + U·D + B·D), gồm chỉ số phục hồi, tâm/dữ liệu và hiệu với từng tâm theo khối | O(L) thống kê; O(N) nếu tính cả ảnh nhị phân |
 | Kết quả | Cực tiểu địa phương, phụ thuộc khởi tạo | Tối ưu toàn cục theo σ²_B (duyệt mọi t) |
 | Thông tin dùng | Giá trị pixel (màu/xám) | Chỉ histogram mức xám |

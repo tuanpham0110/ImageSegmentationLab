@@ -67,6 +67,7 @@ benchmark smoke và ngăn đưa môi trường ảo vào Git. Trạng thái CI t
 python scripts/benchmark_kmeans.py --sizes 800 1600 2048 --ks 4 16 --repeats 3
 python scripts/benchmark_csv.py
 python scripts/evaluate_real_images.py --fetch --samples 30 --repeats 3
+python scripts/run_experiments.py --skip-figures --repeats 3 --output-dir outputs/review
 python scripts/render_real_examples.py
 ```
 
@@ -133,7 +134,7 @@ Lỗi được báo bằng tiếng Việt kèm vị trí dòng/cột: ký tự k
 ```
 app.py                         Điểm khởi chạy Streamlit (điều hướng 7 trang)
 requirements.txt  pytest.ini  .streamlit/config.toml
-src/algorithms/kmeans.py       K-means tự cài đặt (Lloyd, K-means++, cụm rỗng, có trọng số, tính theo khối)
+src/algorithms/kmeans.py       K-means tự cài đặt (Lloyd, K-means++, cụm rỗng, trọng số, histogram ảnh xám, tính theo khối)
 src/algorithms/otsu.py         Otsu tự cài đặt từ histogram (σ²_B, ngưỡng đồng hạng, lớp rỗng)
 src/processing/preprocessing.py  Chuyển xám (BT.601 / trung bình), giới hạn kích thước
 src/processing/postprocessing.py Mask từ cụm, ảnh tách nền RGBA, tô màu nhãn, gợi ý nền theo viền
@@ -145,7 +146,7 @@ src/ui/                        Thanh bên, các trang, thành phần giao diện
 data/sample_images/ data/sample_csv/ data/ground_truth/ data/samples.json   Dữ liệu demo offline
 scripts/generate_samples.py    Sinh dữ liệu mẫu
 scripts/run_experiments.py     Chạy thực nghiệm, ghi số liệu thật
-tests/                         Kiểm thử thuật toán, I/O, tiền/hậu xử lý, metrics và tích hợp/giao diện (7 tệp)
+tests/                         Kiểm thử thuật toán, I/O, tiền/hậu xử lý, metrics và tích hợp/giao diện (11 tệp)
 docs/                          Báo cáo, thuật toán, test case, kịch bản demo, slide, câu hỏi phản biện,
                                kết quả thực nghiệm (results/), hình (figures/), ảnh chụp giao diện (screenshots/)
 ```
@@ -164,6 +165,14 @@ docs/                          Báo cáo, thuật toán, test case, kịch bản
 | [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md) | Phạm vi sửa P0/P1/P2, bằng chứng kiểm thử và các mục nhóm cần bổ sung |
 | [docs/REVIEW_20261106.md](docs/REVIEW_20261106.md) | Review toàn diện ngày 06/11/2026: lỗi, nguyên nhân, sửa trực tiếp và bằng chứng kiểm chứng mới |
 | [docs/REVIEW_ROUND2_20261106.md](docs/REVIEW_ROUND2_20261106.md) | Review tiếp: ảnh/mask 16-bit, quy ước mask, số học K-means, xuất tệp và cache ground truth |
+
+Review source ngày 16/11/2026: **546 test PASS** (mốc trước sửa: 519), 13 kiểm tra trình duyệt PASS và 13 tệp tải
+xuống được đọc lại/đối chiếu, gồm ZIP 14 thành phần. Sửa đọc mask nhãn 0/1, thêm ground truth CSV 0/1 hoặc 0/255
+(từ chối nhãn nhiều cụm), phân tích kết quả theo ảnh hiện tại và sidebar tự thích ứng màn hình nhỏ.
+Gom pixel ảnh xám dùng histogram O(N + 256), giữ nguyên kết quả phân cụm. Bằng chứng chạy mới nằm trong
+`outputs/review_20261116/` (thư mục sinh tự động, không đưa vào Git); có thể chạy lại các lệnh kiểm thử ở trên.
+Đánh giá 30 ảnh thật có mask tham chiếu vẫn cho thấy giới hạn của foreground tự động; không suy từ các ca
+tổng hợp đạt IoU cao rằng hệ thống tách đúng mọi vật thể trong ảnh thật.
 
 Lượt review tiếp ngày 06/11/2026: **295 test PASS**, thêm 46 ca; sửa PNG 16-bit có khóa trong suốt và mask trắng
 16-bit, thống nhất mask bool/0–1/0–255, kiểm tra số học/xuất tệp và ghi đủ cách chuyển xám trong JSON K-means.

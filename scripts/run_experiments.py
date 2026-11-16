@@ -3,8 +3,8 @@
 Chạy:  python scripts/run_experiments.py
 Quy tắc (cố định, không chỉnh tay theo kết quả):
   * K-means: K và đặc trưng theo gợi ý trong data/samples.json, K-means++, seed 0, tol 1e-4, tối đa 100 vòng;
-    cụm đối tượng = gợi ý tự động theo viền ảnh (cụm chiếm nhiều pixel viền nhất là nền).
-  * Otsu: ngưỡng tự động; lớp đối tượng (sáng/tối) = gợi ý theo viền ảnh (lớp chiếm đa số viền ảnh là nền).
+    cụm đối tượng = gợi ý theo tỷ lệ viền/trung tâm (cụm trội ở viền được coi là nền).
+  * Otsu: ngưỡng tự động; lớp đối tượng (sáng/tối) dùng cùng gợi ý tỷ lệ viền/trung tâm.
   * Thời gian: trung vị của 5 lần chạy.
   * IoU/Dice chỉ tính khi mẫu có ground truth.
 """
@@ -69,10 +69,15 @@ def timed(fn, repeats=REPEATS, elapsed=None):
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--skip-figures", action="store_true", help="Chỉ cập nhật số liệu, giữ nguyên ảnh minh hoạ hiện có.")
+    parser.add_argument("--output-dir", type=Path, default=OUT, help="Thư mục ghi JSON/Markdown kết quả kiểm thử.")
+    parser.add_argument("--figure-dir", type=Path, default=FIG, help="Thư mục ghi ảnh minh hoạ khi không bỏ qua.")
+    parser.add_argument("--repeats", type=int, default=REPEATS, help="Số lần đo mỗi ảnh mẫu (lấy trung vị).")
     args = parser.parse_args()
-    OUT.mkdir(parents=True, exist_ok=True)
+    if args.repeats < 1:
+        parser.error("repeats phải >= 1")
+    args.output_dir.mkdir(parents=True, exist_ok=True)
     if not args.skip_figures:
-        FIG.mkdir(parents=True, exist_ok=True)
+        args.figure_dir.mkdir(parents=True, exist_ok=True)
     manifest = json.loads((DATA / "samples.json").read_text(encoding="utf-8"))
     rows = []
     for s in manifest:
@@ -81,10 +86,11 @@ def main() -> int:
         if s["ground_truth"]:
             gt = fit_ground_truth(np.asarray(Image.open(DATA / s["ground_truth"]).convert("L")), prepared)
         params = KMeansParams(k=s["suggested"]["k"], feature=s["suggested"]["feature"], seed=0)
-        km, km_t = timed(lambda: run_kmeans(prepared, params), elapsed=lambda result: result.core.elapsed_seconds)
+        km, km_t = timed(lambda: run_kmeans(prepared, params), args.repeats,
+                         elapsed=lambda result: result.core.elapsed_seconds)
         fg = default_foreground(km)
         kout = kmeans_outputs(prepared, km, fg)
-        otsu, otsu_t = timed(lambda: run_otsu(prepared, polarity="auto"),
+        otsu, otsu_t = timed(lambda: run_otsu(prepared, polarity="auto"), args.repeats,
                             elapsed=lambda result: result.result.elapsed_seconds)
         invert = otsu.invert
         row = {
@@ -102,7 +108,7 @@ def main() -> int:
             row.update(kmeans_iou=ks.iou, kmeans_dice=ks.dice, otsu_iou=os_.iou, otsu_dice=os_.dice)
         rows.append(row)
         if not args.skip_figures:
-            _figure(s, prepared, kout, otsu)
+            _figure(s, prepared, kout, otsu, args.figure_dir)
         print(f"{s['id']:<24} K={row['k_effective']} it={row['kmeans_iter']:<3} t*={row['otsu_threshold']:<3} "
               + (f"IoU km={row['kmeans_iou']:.4f} otsu={row['otsu_iou']:.4f}" if gt is not None else "(không có GT)"))
 
@@ -134,18 +140,18 @@ def main() -> int:
 
     env = {"python": platform.python_version(), "os": platform.platform(), "processor": platform.processor(),
             "numpy": np.__version__, "measured_at": datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).isoformat(timespec="seconds"),
-            "timing_scope": TIMING_SCOPE, "sample_repeats": REPEATS, "sweep_repeats": 3}
-    (OUT / "experiment_results.json").write_text(
+            "timing_scope": TIMING_SCOPE, "sample_repeats": args.repeats, "sweep_repeats": 3}
+    (args.output_dir / "experiment_results.json").write_text(
         json.dumps({"environment": env, "samples": rows, "k_sweep_rgb_regions": k_sweep,
                     "seed_sweep_rgb_regions_k6_random": seed_sweep, "scaling": scale},
                    ensure_ascii=False, indent=2), encoding="utf-8")
-    _write_markdown(env, rows, k_sweep, seed_sweep, scale)
-    print("Đã ghi docs/results/experiment_results.json và .md. "
-          + ("Giữ nguyên ảnh minh hoạ." if args.skip_figures else "Đã ghi hình trong docs/figures/."))
+    _write_markdown(env, rows, k_sweep, seed_sweep, scale, args.output_dir)
+    print(f"Đã ghi {args.output_dir / 'experiment_results.json'} và .md. "
+          + ("Giữ nguyên ảnh minh hoạ." if args.skip_figures else f"Đã ghi hình trong {args.figure_dir}."))
     return 0
 
 
-def _figure(s, prepared, kout, otsu) -> None:
+def _figure(s, prepared, kout, otsu, figure_dir=FIG) -> None:
     panels = [(prepared.original, "Ảnh gốc"), (kout.segmented, "K-means"), (kout.mask, "Mask K-means"),
               (otsu.binary, f"Otsu (t* = {otsu.result.threshold})"), (otsu.mask, "Mask Otsu")]
     fig, axes = plt.subplots(1, 5, figsize=(13, 2.9), dpi=110)
@@ -155,15 +161,15 @@ def _figure(s, prepared, kout, otsu) -> None:
         ax.axis("off")
     fig.suptitle(s["title"], fontsize=11, x=0.01, ha="left")
     fig.tight_layout()
-    fig.savefig(FIG / f"{s['id']}.png")
+    fig.savefig(figure_dir / f"{s['id']}.png")
     plt.close(fig)
 
 
-def _write_markdown(env, rows, k_sweep, seed_sweep, scale) -> None:
+def _write_markdown(env, rows, k_sweep, seed_sweep, scale, output_dir=OUT) -> None:
     lines = ["# Kết quả thực nghiệm (sinh tự động bởi scripts/run_experiments.py)", "",
              f"Môi trường: Python {env['python']}, NumPy {env['numpy']}, {env['os']}, CPU: {env['processor']}.",
              f"Thời điểm đo: {env['measured_at']} (Asia/Ho_Chi_Minh).",
-             "Bảng mẫu: trung vị 5 lần chạy; quét K và kích thước: trung vị 3 lần. Ảnh mẫu đều ≤ 800 px.",
+             f"Bảng mẫu: trung vị {env['sample_repeats']} lần chạy; quét K và kích thước: trung vị 3 lần. Ảnh mẫu đều ≤ 800 px.",
              "Phạm vi đo: " + TIMING_SCOPE, "",
              "| Mẫu | Kích thước | K (thực tế) | Vòng lặp | K-means (ms) | t* Otsu | Otsu (ms) | IoU K-means | IoU Otsu | Dice K-means | Dice Otsu |",
              "|---|---|---|---|---|---|---|---|---|---|---|"]
@@ -185,7 +191,7 @@ def _write_markdown(env, rows, k_sweep, seed_sweep, scale) -> None:
               "| Cạnh | Số pixel | K-means (ms) | Vòng lặp | Hội tụ | Otsu (ms) |", "|---|---|---|---|---|---|"]
     lines += [f"| {r['side']} | {r['pixels']:,} | {r['kmeans_20iter_ms']:.1f} | {r['kmeans_iter']} | "
               f"{'Có' if r['kmeans_converged'] else 'Chưa'} | {r['otsu_ms']:.2f} |" for r in scale]
-    (OUT / "experiment_results.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (output_dir / "experiment_results.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

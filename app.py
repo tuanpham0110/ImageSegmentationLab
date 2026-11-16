@@ -13,7 +13,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 st.set_page_config(page_title="Phân đoạn ảnh · K-means & Otsu", page_icon=":material/blur_on:", layout="wide",
-                   initial_sidebar_state="expanded")
+                   initial_sidebar_state="auto")
 
 from src.ui import (  # noqa: E402
     page_compare,

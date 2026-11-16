@@ -92,7 +92,9 @@ trung tâm) và nền nhiều màu (trời + cỏ đều trội ở viền ⇒ �
 
 ### 3.5 Độ phức tạp
 
-Thời gian O(U·K·D·T) với U ≤ N là số giá trị phân biệt, T là số vòng lặp; cộng O(N log N) cho bước gom pixel.
+Thời gian O(U·K·D·T) với U ≤ N là số giá trị phân biệt, T là số vòng lặp; bước gom pixel dùng histogram
+O(N + 256) cho ảnh xám và sắp xếp O(N log N) cho ảnh màu. Cả hai giữ nguyên các giá trị phân biệt,
+số lần xuất hiện và ánh xạ phục hồi pixel, nên không làm xấp xỉ dữ liệu phân cụm.
 Bộ nhớ O(N + U·D + B·D), gồm chỉ số phục hồi/nhãn, dữ liệu phân biệt và hiệu với từng tâm theo khối. Bước gom màu giữ
 pixel uint8 và đóng gói tối đa 24 bit RGB vào int32, tránh ma trận float64/int64 N×D không cần thiết.
 
@@ -210,7 +212,9 @@ Ground truth tải lên gắn với chữ ký đầu vào; khi đổi ảnh/ti�
 
 - PNG xám 16-bit có tRNS: đối chiếu khóa trong suốt trong thang gốc, chuẩn hóa độ sáng rồi ghép vùng trong suốt trắng.
 - PNG màu 16-bit/kênh (RGB, RGBA, xám + alpha): Pillow chỉ giữ byte cao (⌊v/256⌋) nên ứng dụng đọc độ sâu từ IHDR, ghi chú rõ việc giảm về 8 bit; nếu có tRNS (khóa ở thang 16 bit, không so khớp được sau khi giảm) thì từ chối thay vì ghép sai âm thầm.
-- Ground truth 16-bit dùng thang tuyệt đối 0–65535 → 0–255, không giãn theo min/max của từng mask;
+- Ground truth xám chỉ chứa nhãn 0/1 được giữ đúng nghĩa nhị phân, kể cả PNG xám 16-bit và mask toàn 1.
+  CSV ground truth nhận 0/1 hoặc 0/255, từ chối ma trận nhãn nhiều cụm để tránh tính sai chỉ số.
+  Ảnh ground truth 16-bit khác dùng thang tuyệt đối 0–65535 → 0–255, không giãn theo min/max của từng mask;
   pixel >=32768 là đối tượng. Mask trắng 65535 giữ toàn foreground.
 - Ground truth có vùng trong suốt (alpha < 255, khóa tRNS ở ảnh xám/bảng màu/16-bit) bị từ chối: ghép lên nền trắng
   như ảnh đầu vào sẽ biến nền trong suốt thành đối tượng. Mask RGBA/LA đục hoàn toàn vẫn được nhận.

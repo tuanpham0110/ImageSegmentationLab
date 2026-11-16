@@ -44,7 +44,10 @@ def render() -> None:
 
 #### 5. So sánh
 - Chạy K-means và Otsu trên cùng ảnh; so sánh ảnh kết quả và **mask nhị phân**.
-- IoU/Dice chỉ được tính khi có **ground truth** (ảnh mẫu có sẵn, hoặc tải mask PNG trắng = đối tượng, cùng kích thước ảnh gốc).
+- IoU/Dice chỉ được tính khi có **ground truth** (ảnh mẫu có sẵn, hoặc tải mask PNG/BMP/CSV, cùng kích thước ảnh gốc
+  hoặc kích thước xử lý). Mask nhị phân **0/1**: 1 = đối tượng; mask **0/255**: trắng = đối tượng.
+- Có thể tải lại `otsu_binary_matrix.csv` làm mask tham chiếu để kiểm tra dữ liệu xuất. Mask dự đoán của thuật toán
+  không phải ground truth độc lập, nên độ trùng khớp khi so lại chính mask đó không đánh giá chất lượng phân đoạn.
 - Mask tải lên gắn với đầu vào hiện tại. Khi đổi ảnh hoặc tiền xử lý, hãy tải lại mask để tránh dùng nhầm ground truth.
 - Tab **Tải xuống** trên trang So sánh cho tải mask, ảnh tách nền hoặc toàn bộ PNG/CSV/JSON của cả hai thuật toán trong một tệp ZIP.
 

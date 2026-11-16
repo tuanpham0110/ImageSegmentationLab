@@ -263,6 +263,15 @@ def test_16bit_rgb_png_with_transparency_key_is_rejected_not_misread():
         load_image_bytes(_png16(pixels, 2, trns=(1000, 2000, 3000)), "key16.png")
 
 
+@pytest.mark.parametrize("color_type,pixels", [
+    (2, [[[0, 0, 0], [256, 256, 256]]]),
+    (6, [[[0, 0, 0, 65535], [256, 256, 256, 65535]]]),
+])
+def test_dark_16bit_color_mask_does_not_become_logical_foreground(color_type, pixels):
+    data = _png16(np.array(pixels, np.uint16), color_type)
+    np.testing.assert_array_equal(load_mask_bytes(data), [[0, 0]])
+
+
 @pytest.mark.parametrize("color_type,pixels,expected", [
     (2, [[[0, 0, 0], [65535, 32768, 512]]], [[[0, 0, 0], [255, 128, 2]]]),
     (6, [[[0, 0, 0, 65535], [65535, 0, 0, 65535]]], [[[0, 0, 0], [255, 0, 0]]]),

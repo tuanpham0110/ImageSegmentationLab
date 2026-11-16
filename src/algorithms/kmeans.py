@@ -474,8 +474,8 @@ def image_to_features(image: np.ndarray, feature: str, *, dtype=np.float64) -> n
 def unique_pixels(features: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Gom các pixel cùng giá trị: trả về (giá trị phân biệt (U, D), chỉ số ngược (N,), số pixel (U,)).
 
-    Mỗi pixel 0..255 với D <= 3 kênh được gộp thành một số nguyên R*65536 + G*256 + B
-    để np.unique chạy trên mảng 1 chiều.
+    Ảnh xám dùng histogram 256 mức O(N); ảnh nhiều kênh gộp pixel 0..255 thành
+    một số nguyên R*65536 + G*256 + B để np.unique chạy trên mảng 1 chiều.
     """
     features = np.asarray(features)
     if features.ndim != 2 or not 1 <= features.shape[1] <= 3:
@@ -485,6 +485,16 @@ def unique_pixels(features: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndar
                 or np.any(features < 0) or np.any(features > 255)
                 or np.any(features != np.round(features))):
             raise ValueError("Pixel phải có giá trị nguyên trong [0, 255].")
+    if features.shape[1] == 1:
+        # Chỉ 256 mức xám: đếm trực tiếp và ánh xạ mức xám -> chỉ số cụm màu.
+        # Giữ đúng thứ tự tăng dần, counts và inverse như np.unique, không cần
+        # sắp xếp N pixel hay tạo mảng packed int32 cho ảnh xám lớn.
+        pixels = features[:, 0].astype(np.uint8, copy=False)
+        histogram = np.bincount(pixels, minlength=256)
+        levels = np.flatnonzero(histogram)
+        lookup = np.zeros(256, dtype=np.intp)
+        lookup[levels] = np.arange(levels.size)
+        return levels.astype(np.float64)[:, None], lookup[pixels], histogram[levels]
     # Tối đa 24 bit RGB, vừa int32. Không tạo thêm ma trận int64 N×D.
     packed = np.zeros(features.shape[0], dtype=np.int32)
     for c in range(features.shape[1]):
