@@ -51,6 +51,21 @@ def test_hand_computed_small_matrix():
     assert res.mean0 == pytest.approx(mu0) and res.mean1 == pytest.approx(mu1)
 
 
+def test_demo_matrix_checks_otsu_moments_and_binary_boundary():
+    # Ma trận tính tay trong slide. Mọi t từ 2 đến 7 cho cùng phân hoạch.
+    gray = np.array([[0, 0, 2], [8, 10, 10]], dtype=np.uint8)
+    expected = np.array([[0, 0, 0], [255, 255, 255]], dtype=np.uint8)
+    result, binary = segment_image_otsu(gray)
+    assert result.histogram.shape == (256,) and result.histogram.sum() == 6
+    assert result.tied_thresholds == list(range(2, 8)) and result.threshold == 4
+    assert (result.weight0, result.weight1) == (0.5, 0.5)
+    assert (result.mean0, result.mean1) == pytest.approx((2 / 3, 28 / 3))
+    assert result.max_variance == pytest.approx(169 / 9)
+    np.testing.assert_array_equal(binary, expected)
+    np.testing.assert_array_equal(apply_threshold(gray, 2), expected)  # I == t thuộc lớp tối
+    np.testing.assert_array_equal(gray, [[0, 0, 2], [8, 10, 10]])
+
+
 def test_two_level_image():
     img = np.full((40, 40), 50, dtype=np.uint8)
     img[10:30, 10:30] = 200

@@ -130,4 +130,4 @@ def apply_morphology(mask: np.ndarray, operation: str = "none", size: int = 3) -
         m = erode(m, size)
     elif operation == "dilate":
         m = dilate(m, size)
-    return np.where(m, 255, 0).astype(np.uint8)
+    return np.where(m, np.uint8(255), np.uint8(0))

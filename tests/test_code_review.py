@@ -106,6 +106,7 @@ def test_invert_foreground_updates_downloaded_mask_and_report():
     root = Path(__file__).resolve().parents[1]
     app = AppTest.from_file(str(root / "app.py"), default_timeout=60)
     app.session_state["_test_page"] = "kmeans"
+    app.session_state["km_result_tab"] = "Tải xuống"
     app.run()
     next(button for button in app.button if button.label == "Chạy K-means").click().run()
     assert not app.exception

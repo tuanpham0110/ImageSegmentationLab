@@ -118,6 +118,22 @@ def test_output_shapes_and_pixel_counts_rgb():
     assert res.core.counts.tolist() == np.bincount(res.labels.ravel(), minlength=4).tolist()
 
 
+def test_three_rgb_colors_recover_exact_partition_and_leave_input_unchanged():
+    colors = np.array([[0, 0, 200], [200, 0, 0], [0, 200, 0]], dtype=np.uint8)
+    expected_labels = np.array([[2, 0, 1, 2], [0, 0, 2, 1]])
+    image = colors[expected_labels]
+    snapshot = image.copy()
+    first = segment_image_kmeans(image, 3, "rgb", seed=7)
+    second = segment_image_kmeans(image, 3, "rgb", seed=7)
+    np.testing.assert_array_equal(first.centers, colors)
+    np.testing.assert_array_equal(first.labels, expected_labels)
+    np.testing.assert_array_equal(second.labels, first.labels)
+    np.testing.assert_array_equal(first.segmented, snapshot)
+    np.testing.assert_array_equal(image, snapshot)
+    assert first.core.counts.tolist() == [3, 2, 3]
+    assert first.core.converged and first.core.sse == 0
+
+
 def test_labels_consistent_with_centers_and_sse():
     rng = np.random.default_rng(3)
     x = rng.random((2000, 3)) * 255

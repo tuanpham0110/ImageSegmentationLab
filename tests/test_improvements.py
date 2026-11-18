@@ -333,8 +333,11 @@ def test_otsu_page_multi_otsu_mode():
     assert not at.exception, [e.value for e in at.exception]
     assert any(m.label == "Ngưỡng t2" for m in at.metric)
     assert at.multiselect[0].value == [1, 2]
-    assert len(at.get("download_button")) == 5
     assert any("IoU = 1.0000" in s.value for s in at.success)
+    assert not at.get("download_button")
+    at.session_state["multiotsu_result_tab"] = "Tải xuống"
+    at.run()
+    assert len(at.get("download_button")) == 5
 
 
 def test_kmeans_page_lab_and_large_k_with_morphology():

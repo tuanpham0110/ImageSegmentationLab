@@ -121,6 +121,9 @@ def test_csv_delimiters(text):
         ("1,2,3\n4,5\n", "cột"),
         ("1,2.5,3\n", "số nguyên"),
         ("1,,3\n", "Ô trống"),
+        ('1,2,""\n3,4,""\n', "dòng 1, cột 3"),
+        ('1,2," "\n3,4," "\n', "dòng 1, cột 3"),
+        ("1,2, \n3,4, \n", "dòng 1, cột 3"),
         ("", "rỗng"),
     ],
 )
@@ -193,12 +196,19 @@ def test_csv_cell_limit_is_checked_before_converting_an_oversized_row(monkeypatc
         parse_csv_matrix("1,2\ninvalid,4")
 
 
-def test_16bit_transparency_preserves_opaque_pixel_contrast():
-    pixels = np.array([[1000, 2000, 3000]], dtype=np.uint16)
-    loaded = load_image_bytes(encode(Image.fromarray(pixels), "PNG", transparency=1000), "depth.png")
-    np.testing.assert_array_equal(loaded.array, [[255, 128, 255]])
+@pytest.mark.parametrize("key", [0, 65535])
+def test_16bit_transparency_preserves_opaque_pixel_contrast(key):
+    pixels = np.array([[key, 20000, 20050, 20100]], dtype=np.uint16)
+    loaded = load_image_bytes(encode(Image.fromarray(pixels), "PNG", transparency=key), "depth.png")
+    np.testing.assert_array_equal(loaded.array, [[255, 0, 128, 255]])
     assert any("alpha" in note for note in loaded.notes)
     assert any("16" in note for note in loaded.notes)
+
+
+def test_all_transparent_16bit_gray_input_is_white():
+    image = Image.fromarray(np.zeros((1, 2), dtype=np.uint16))
+    loaded = load_image_bytes(encode(image, "PNG", transparency=0), "depth.png")
+    np.testing.assert_array_equal(loaded.array, [[255, 255]])
 
 
 @pytest.mark.parametrize("level,expected", [(0, 0), (32767, 0), (32768, 255), (65535, 255)])
@@ -270,6 +280,16 @@ def test_16bit_rgb_png_with_transparency_key_is_rejected_not_misread():
 def test_dark_16bit_color_mask_does_not_become_logical_foreground(color_type, pixels):
     data = _png16(np.array(pixels, np.uint16), color_type)
     np.testing.assert_array_equal(load_mask_bytes(data), [[0, 0]])
+
+
+@pytest.mark.parametrize("color_type,pixels", [
+    (2, [[[0, 0, 0], [1, 1, 1]]]),
+    (4, [[[0, 65535], [1, 65535]]]),
+    (6, [[[0, 0, 0, 65535], [1, 1, 1, 65535]]]),
+])
+def test_16bit_color_ground_truth_preserves_native_logical_labels(color_type, pixels):
+    data = _png16(np.array(pixels, np.uint16), color_type)
+    np.testing.assert_array_equal(load_mask_bytes(data), [[0, 255]])
 
 
 @pytest.mark.parametrize("color_type,pixels,expected", [
@@ -397,7 +417,7 @@ def test_corrupt_16bit_alpha_ground_truth_is_reported_as_corrupt(color_type, pix
 def test_16bit_alpha_ground_truth_is_rejected_if_exact_check_is_unavailable(monkeypatch):
     import src.utils.image_io as image_io
 
-    monkeypatch.setattr(image_io, "_png16_alpha_low_bytes_opaque", lambda data: None)
+    monkeypatch.setattr(image_io, "_png16_low_bytes", lambda data: None)
     pixels = np.array([[[65535, 65535, 65535, 65535], [0, 0, 0, 65535]]])
     with pytest.raises(InputError, match="chưa kiểm tra chính xác"):
         load_mask_bytes(_png16(pixels, 6), "gt16.png")

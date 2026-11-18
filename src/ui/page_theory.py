@@ -43,7 +43,8 @@ và số cụm K. K-means tìm các tâm $Z_1,\\dots,Z_K$ làm cực tiểu hàm
      a) Gán nhãn:  c(x) = argmin_k ||x − Z_k||²        (tính theo khối, tránh tràn RAM)
      b) Cập nhật:  Z_k = trung bình các x có c(x) = k
         – nếu cụm k rỗng: đặt Z_k = điểm xa tâm của nó nhất
-     c) Nếu max_k ||Z_k(mới) − Z_k(cũ)|| ≤ tol: dừng (hội tụ)
+     c) Nếu mọi cụm khác rỗng và độ dịch tâm ≤ tol, gán lại nhãn.
+        Dừng khi trung bình theo nhãn mới vẫn cách tâm hiện tại không quá tol.
 3. Sắp tâm theo độ sáng, gán nhãn lần cuối theo Z (hoà chọn chỉ số nhỏ nhất), tính SSE và số pixel mỗi cụm
 Ra: nhãn (H×W), tâm cụm, SSE, số vòng lặp""", language="text")
     st.markdown("""

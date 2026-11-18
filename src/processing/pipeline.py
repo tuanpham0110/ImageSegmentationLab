@@ -105,7 +105,7 @@ NO_POSTPROCESS = MaskPostprocess()
 
 def fit_ground_truth(gt: np.ndarray, prepared: PreparedInput) -> np.ndarray:
     """Đưa mask ground truth về đúng kích thước xử lý (nội suy láng giềng gần nhất)."""
-    gt = np.where(mask_to_bool(gt), 255, 0).astype(np.uint8)
+    gt = np.where(mask_to_bool(gt), np.uint8(255), np.uint8(0))
     w, h = prepared.resize.processed_size
     if gt.shape == (h, w):
         return gt
@@ -114,7 +114,19 @@ def fit_ground_truth(gt: np.ndarray, prepared: PreparedInput) -> np.ndarray:
         raise ValueError(
             f"Kích thước ground truth {gt.shape[1]}x{gt.shape[0]} không khớp ảnh gốc {ow}x{oh}."
         )
-    return np.where(resize_to(gt, (w, h), "nearest") > 127, 255, 0).astype(np.uint8)
+    return resize_to(gt, (w, h), "nearest")
+
+
+def original_size_png_files(source: np.ndarray, mask: np.ndarray, prefix: str,
+                            images: dict[str, np.ndarray]) -> dict[str, tuple[bytes, str]]:
+    """Khôi phục kết quả rời rạc bằng nearest và lấy lại màu pixel nguồn cho cutout."""
+    size = (source.shape[1], source.shape[0])
+    full_mask = resize_to(mask, size, "nearest")
+    files = {f"{prefix}_{name}_original.png": (to_png_bytes(resize_to(image, size, "nearest")), "image/png")
+             for name, image in images.items()}
+    files[f"{prefix}_mask_original.png"] = (to_png_bytes(full_mask), "image/png")
+    files[f"{prefix}_cutout_original.png"] = (to_png_bytes(cutout_rgba(source, full_mask)), "image/png")
+    return files
 
 
 # ------------------------------- K-means -------------------------------
@@ -266,7 +278,7 @@ def suggest_dark_foreground(binary: np.ndarray) -> bool:
     Cùng quy tắc với gợi ý cụm của K-means (suggest_foreground_clusters): lớp xuất hiện ở viền ảnh
     nhiều hơn ở vùng trung tâm là nền. Nếu lớp sáng là nền thì đối tượng là lớp tối.
     """
-    labels = (np.asarray(binary) > 0).astype(np.int64)
+    labels = np.asarray(binary) > 0
     return suggest_foreground_clusters(labels, 2) == [0]
 
 

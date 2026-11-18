@@ -86,11 +86,11 @@ def mask_from_labels(labels: np.ndarray, foreground_clusters: Iterable[int], *,
             or int(lab.max()) >= n):
         raise ValueError("Nhãn cụm phải nằm trong phạm vi số cụm đã khai báo.")
     selected = validate_foreground_clusters(foreground_clusters, n)
-    return np.where(np.isin(lab, selected), 255, 0).astype(np.uint8)
+    return np.where(np.isin(lab, selected), np.uint8(255), np.uint8(0))
 
 
 def invert_mask(mask: np.ndarray) -> np.ndarray:
-    return np.where(mask_to_bool(mask), 0, 255).astype(np.uint8)
+    return np.where(mask_to_bool(mask), np.uint8(0), np.uint8(255))
 
 
 def to_rgb(image: np.ndarray) -> np.ndarray:
@@ -121,10 +121,14 @@ def _mask_for_image(mask: np.ndarray, image: np.ndarray) -> np.ndarray:
 
 def cutout_rgba(image: np.ndarray, mask: np.ndarray) -> np.ndarray:
     """Ảnh tách nền RGBA: giữ pixel đối tượng, nền trong suốt (alpha = 0)."""
-    rgb = to_rgb(image)
+    image = np.asarray(image)
+    rgb = image[..., None] if image.ndim == 2 and image.dtype == np.uint8 else to_rgb(image)
     m = _mask_for_image(mask, rgb)
-    alpha = np.where(m, 255, 0).astype(np.uint8)
-    return np.dstack([rgb, alpha])
+    out = np.empty((*m.shape, 4), dtype=np.uint8)
+    out[..., :3] = rgb
+    out[..., 3] = m
+    out[..., 3] *= 255
+    return out
 
 
 def cutout_on_color(image: np.ndarray, mask: np.ndarray, color: tuple[int, int, int] = (255, 255, 255)) -> np.ndarray:
@@ -136,10 +140,15 @@ def cutout_on_color(image: np.ndarray, mask: np.ndarray, color: tuple[int, int, 
 
 def overlay_mask(image: np.ndarray, mask: np.ndarray, color=(235, 104, 52), alpha: float = 0.45) -> np.ndarray:
     """Phủ màu bán trong suốt lên vùng đối tượng để kiểm tra trực quan."""
-    rgb = to_rgb(image).astype(np.float64)
+    rgb = to_rgb(image).copy()
     m = _mask_for_image(mask, rgb)
-    rgb[m] = (1 - alpha) * rgb[m] + alpha * np.array(color, dtype=np.float64)
-    return np.clip(np.round(rgb), 0, 255).astype(np.uint8)
+    blend = rgb[m].astype(np.float64)
+    blend *= 1 - alpha
+    blend += alpha * np.asarray(color, dtype=np.float64)
+    np.rint(blend, out=blend)
+    np.clip(blend, 0, 255, out=blend)
+    rgb[m] = blend
+    return rgb
 
 
 def border_share(labels: np.ndarray, n_clusters: int) -> np.ndarray:

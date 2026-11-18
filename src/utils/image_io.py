@@ -17,7 +17,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 SUPPORTED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".bmp"}
 MAX_FILE_BYTES = 30 * 1024 * 1024  # 30 MB
 MAX_DECODE_PIXELS = 40_000_000  # chặn ảnh quá lớn trước khi giải mã (chống treo máy)
-MAX_CSV_CELLS = 4_000_000  # tối đa 2000 x 2000 phần tử
+MAX_CSV_CELLS = 2048**2  # nhận lại ma trận ở kích thước xử lý tối đa của giao diện
 
 
 class InputError(ValueError):
@@ -89,35 +89,51 @@ def _png_bit_depth(data: bytes) -> tuple[int, int] | None:
     return bit_depth, color_type
 
 
-# Rawmode để giải mã lại PNG 16 bit có alpha sao cho kênh thứ 4 là BYTE THẤP của alpha:
-#   RGBA 16 bit (8 byte/pixel): 'RGBA;16L' lấy byte thứ hai của mỗi mẫu big-endian.
+# Rawmode lấy byte thấp của mỗi mẫu PNG 16 bit big-endian:
+#   RGB/RGBA: rawmode hậu tố '16L' lấy byte thứ hai của từng kênh.
 #   LA 16 bit (4 byte/pixel = L_hi L_lo A_hi A_lo): 'RGBA' 8 bit đọc nguyên 4 byte thô.
-# Cả hai giữ nguyên số byte/pixel nên bộ khử lọc PNG (filter Sub/Avg/Paeth) vẫn đúng.
-_PNG16_ALPHA_LOW_RAWMODE = {"RGBA;16B": "RGBA;16L", "LA;16B": "RGBA"}
+# Các rawmode giữ nguyên số byte/pixel nên bộ khử lọc PNG vẫn đúng.
+_PNG16_LOW_RAWMODE = {"RGB;16B": "RGB;16L", "RGBA;16B": "RGBA;16L", "LA;16B": "RGBA"}
 
 
-def _png16_alpha_low_bytes_opaque(data: bytes) -> bool | None:
-    """Kiểm tra byte thấp của kênh alpha PNG RGBA/LA 16 bit ở độ sâu gốc.
-
-    Pillow chỉ giữ byte cao (alpha 65280 hoặc 65534 thành 255). Alpha = 65535 khi và chỉ khi
-    cả hai byte bằng 255; byte cao được _composite_alpha kiểm tra, hàm này kiểm tra byte thấp.
-    Chỉ gọi sau khi ảnh đã giải mã thành công (tệp hỏng đã được báo lỗi riêng).
-    Trả True/False nếu kiểm tra được chính xác; None nếu cách giải mã của Pillow khác dự kiến
-    (dựa vào cấu trúc img.tile nội bộ) -> nơi gọi phải từ chối thay vì đoán.
-    """
+def _png16_low_bytes(data: bytes) -> np.ndarray | None:
+    """Đọc byte thấp. Trả None nếu cấu trúc decoder Pillow khác dự kiến."""
     try:
         with Image.open(io.BytesIO(data)) as img:
             tiles = list(img.tile)
             rawmodes = {t[3] for t in tiles} if tiles else set()
-            if (img.mode != "RGBA" or len(rawmodes) != 1 or any(t[0] != "zip" for t in tiles)
-                    or next(iter(rawmodes)) not in _PNG16_ALPHA_LOW_RAWMODE):
+            if (img.mode not in ("RGB", "RGBA") or len(rawmodes) != 1 or any(t[0] != "zip" for t in tiles)
+                    or next(iter(rawmodes)) not in _PNG16_LOW_RAWMODE):
                 return None
-            low = _PNG16_ALPHA_LOW_RAWMODE[next(iter(rawmodes))]
+            low = _PNG16_LOW_RAWMODE[next(iter(rawmodes))]
             img.tile = [t._replace(args=low) if hasattr(t, "_replace") else (*t[:3], low) for t in tiles]
-            img.load()
-            return bool(np.all(np.asarray(img)[..., 3] == 255))
+            ImageOps.exif_transpose(img, in_place=True)
+            return np.asarray(img)
     except (OSError, ValueError, SyntaxError, IndexError, TypeError, AttributeError):
         return None
+
+
+def _png16_logical_mask(img: Image.Image, data: bytes, color_type: int) -> np.ndarray | None:
+    """Giữ nhãn 0/1 ở độ sâu gốc và kiểm tra mask đục trước khi đọc độ sáng."""
+    high = np.asarray(img)
+    has_alpha = color_type in (4, 6)
+    if has_alpha and np.any(high[..., 3] != 255):
+        raise InputError(MASK_TRANSPARENCY_ERROR)
+    has_high_color = np.any(high[..., :3])
+    if has_high_color and not has_alpha:
+        return None  # Ảnh không thể là mask 0/1 và không cần kiểm tra alpha.
+    low = _png16_low_bytes(data)
+    if low is None:
+        raise InputError(
+            f"Mask PNG {_PNG_COLOR_TYPES[color_type]} 16 bit: chưa kiểm tra chính xác được nhãn "
+            "hoặc độ trong suốt. Hãy lưu lại mask ở 8 bit/kênh."
+        )
+    if has_alpha and np.any(low[..., 3] != 255):
+        raise InputError(MASK_TRANSPARENCY_ERROR)
+    color = low[..., 1:2] if color_type == 4 else low[..., :3]
+    if not has_high_color and np.all(color <= 1) and np.all(color == color[..., :1]):
+        return color[..., 0] * np.uint8(255)
+    return None
 
 
 def _scale_low_depth_gray_key(img: Image.Image, png_depth: tuple[int, int] | None) -> None:
@@ -181,19 +197,11 @@ def _load_image_bytes(data: bytes, name: str, *, normalize_high_depth: bool) -> 
                     "tức ⌊v / 256⌋). Không giãn tương phản như ảnh xám 16 bit; "
                     "các mức khác nhau dưới 1/256 thang sáng sẽ bị gộp."
                 )
-            img.load()  # tệp hỏng báo lỗi tại đây, trước bước kiểm tra alpha 16 bit
-            if (not normalize_high_depth and png_depth is not None and png_depth[0] == 16
-                    and png_depth[1] in (4, 6)):
-                # Mask có kênh alpha 16 bit: kiểm tra độ trong suốt ở độ sâu gốc.
-                opaque = _png16_alpha_low_bytes_opaque(data)
-                if opaque is None:
-                    raise InputError(
-                        f"Mask PNG {_PNG_COLOR_TYPES[png_depth[1]]} 16 bit có kênh alpha: chưa kiểm tra chính xác "
-                        "được độ trong suốt. Hãy lưu lại mask ở 8 bit/kênh hoặc bỏ kênh alpha."
-                    )
-                if not opaque:
-                    raise InputError(MASK_TRANSPARENCY_ERROR)
-            arr, mode = _decoded_array(img, notes, normalize_high_depth)
+            img.load()  # tệp hỏng báo lỗi trước bước kiểm tra byte thấp
+            mask16 = (png_depth[1] if not normalize_high_depth and png_depth is not None
+                      and png_depth[0] == 16 and png_depth[1] in (2, 4, 6) else None)
+            arr, mode = _decoded_array(img, notes, normalize_high_depth,
+                                       png16_mask=(data, mask16) if mask16 is not None else None)
     except InputError:
         raise
     except (UnidentifiedImageError, OSError, SyntaxError, ValueError, Image.DecompressionBombError) as exc:
@@ -209,12 +217,18 @@ def _load_image_bytes(data: bytes, name: str, *, normalize_high_depth: bool) -> 
     )
 
 
-def _decoded_array(img: Image.Image, notes: list[str], normalize_high_depth: bool) -> tuple[np.ndarray, str]:
+def _decoded_array(img: Image.Image, notes: list[str], normalize_high_depth: bool,
+                   png16_mask: tuple[bytes, int] | None = None) -> tuple[np.ndarray, str]:
     orientation = img.getexif().get(0x0112, 1)  # thẻ EXIF Orientation
     if orientation not in (1, None):
         img = ImageOps.exif_transpose(img)
         notes.append(f"Ảnh đã được xoay/lật theo thông tin hướng chụp EXIF (Orientation = {orientation}).")
     mode = img.mode
+
+    if png16_mask is not None:
+        logical = _png16_logical_mask(img, *png16_mask)
+        if logical is not None:
+            return logical, mode
 
     # So khóa tRNS trong thang gốc trước khi chuyển 16 bit về 8 bit.
     # convert("RGBA") trực tiếp từ I;16 sẽ clip các pixel >255 thành trắng.
@@ -222,9 +236,25 @@ def _decoded_array(img: Image.Image, notes: list[str], normalize_high_depth: boo
         raw = np.asarray(img, dtype=np.float64)
         if not np.all(np.isfinite(raw)):
             raise InputError("Ảnh chứa pixel NaN hoặc vô cực.")
+        transparent = img.info.get("transparency")
+        hidden = raw == transparent if transparent is not None else None
+        has_transparency = hidden is not None and hidden.any()
+        if has_transparency and not normalize_high_depth:
+            raise InputError(MASK_TRANSPARENCY_ERROR)
         if normalize_high_depth:
-            lo, hi = float(raw.min()), float(raw.max())
-            arr = np.zeros(raw.shape, np.uint8) if hi == lo else np.round((raw - lo) / (hi - lo) * 255).astype(np.uint8)
+            if has_transparency:
+                visible = ~hidden
+                lo = raw.min(where=visible, initial=np.inf)
+                hi = raw.max(where=visible, initial=-np.inf)
+            else:
+                lo, hi = raw.min(), raw.max()
+            if hi > lo:
+                scaled = (raw - lo) / (hi - lo) * 255
+                if has_transparency:
+                    scaled[hidden] = 255
+                arr = np.rint(scaled).astype(np.uint8)
+            else:
+                arr = np.zeros(raw.shape, np.uint8)
             notes.append(f"Ảnh {mode} (độ sâu > 8 bit) được chuẩn hoá tuyến tính về [0, 255].")
         elif np.all((raw == 0) | (raw == 1)):
             # Mask nhị phân có thể lưu trực tiếp nhãn 0/1 trong PNG 16 bit.
@@ -234,14 +264,9 @@ def _decoded_array(img: Image.Image, notes: list[str], normalize_high_depth: boo
         else:
             arr = np.round(np.clip(raw / np.iinfo(np.uint16).max, 0, 1) * 255).astype(np.uint8)
             notes.append("Mask 16 bit được đổi từ thang [0, 65535] về [0, 255], giữ độ sáng tuyệt đối.")
-        transparent = img.info.get("transparency")
-        if transparent is not None:
-            transparent_pixels = raw == transparent
-            if np.any(transparent_pixels):
-                if not normalize_high_depth:  # đang đọc mask
-                    raise InputError(MASK_TRANSPARENCY_ERROR)
-                arr[transparent_pixels] = 255
-                notes.append("Ảnh có kênh alpha (trong suốt): các vùng trong suốt được ghép lên nền trắng.")
+        if has_transparency:
+            arr[hidden] = 255
+            notes.append("Ảnh có kênh alpha (trong suốt): các vùng trong suốt được ghép lên nền trắng.")
     elif mode in ("LA", "RGBA", "PA") or "transparency" in img.info:
         arr = np.asarray(_composite_alpha(img, notes, reject_transparency=not normalize_high_depth))
     elif mode in ("1", "L"):
@@ -271,6 +296,9 @@ def _csv_rows(lines: list[str], line_numbers: list[int], delimiter: str | None):
     try:
         for row in reader:
             # Một hàng có thể trải nhiều dòng nếu ô chứa xuống dòng trong dấu nháy: lấy dòng bắt đầu.
+            if row and row[-1] == "" and lines[reader.line_num - 1].rstrip("\r\n").endswith(delimiter):
+                # Tương thích với một dấu phân cách thừa, nhưng không bỏ ô viết "" hoặc chứa khoảng trắng.
+                row.pop()
             yield line_numbers[consumed], row
             consumed = reader.line_num
     except csv.Error as exc:
@@ -313,8 +341,6 @@ def parse_csv_matrix(text: str) -> np.ndarray:
     first_line = line_numbers[0]
     for r_idx, raw_row in _csv_rows(lines, line_numbers, delim):
         cells = [c.strip() for c in raw_row]
-        if delim and cells and cells[-1] == "":  # cho phép dấu phân cách thừa cuối dòng
-            cells = cells[:-1]
         if n_cols is None:
             n_cols = len(cells)
         elif len(cells) != n_cols:

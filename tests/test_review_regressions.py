@@ -69,6 +69,7 @@ def test_otsu_exported_csv_can_be_used_as_the_same_mask():
 def test_comparison_accepts_logical_ground_truth_and_reports_real_scores(suffix):
     app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=60)
     app.session_state["_test_page"] = "compare"
+    app.session_state["cmp_result_tab"] = "Đánh giá"
     app.session_state["sample_id"] = "circle_black_on_white"
     app.run()
     next(b for b in app.button if b.label.startswith("Chạy K-means")).click().run()
@@ -87,6 +88,7 @@ def test_comparison_accepts_logical_ground_truth_and_reports_real_scores(suffix)
 def test_comparison_rejects_multiclass_csv_without_using_sample_ground_truth():
     app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=60)
     app.session_state["_test_page"] = "compare"
+    app.session_state["cmp_result_tab"] = "Đánh giá"
     app.session_state["sample_id"] = "circle_black_on_white"
     app.run()
     next(b for b in app.button if b.label.startswith("Chạy K-means")).click().run()

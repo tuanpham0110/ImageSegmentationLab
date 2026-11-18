@@ -98,7 +98,7 @@ python scripts\run_experiments.py --skip-figures
 | Trang | Nội dung |
 |---|---|
 | **Tổng quan** | Giới thiệu đề tài, quy trình xử lý, cách bắt đầu |
-| **K-means** | Chọn K (thanh trượt 2–16; thuật toán không giới hạn K, bảng màu nhãn tự mở rộng), đặc trưng RGB / **CIE L\*a\*b\*** / mức xám, khởi tạo K-means++/ngẫu nhiên, số vòng lặp, ngưỡng hội tụ, seed. Xem ảnh phân cụm, bản đồ nhãn, **chọn cụm làm đối tượng** để tạo mask và ảnh tách nền, bảng tâm cụm/số pixel/tỷ lệ, biểu đồ tỷ lệ cụm và SSE theo vòng lặp; hậu xử lý mask bằng hình thái học (mở/đóng/co/giãn) |
+| **K-means** | Chọn K từ 1–16, đặc trưng RGB / **CIE L\*a\*b\*** / mức xám, khởi tạo K-means++/ngẫu nhiên, số vòng lặp, ngưỡng hội tụ và seed. Xem ảnh phân cụm, bản đồ nhãn, bảng tâm cụm và SSE. Chọn cụm đối tượng, xem mask và áp dụng hình thái học khi cần. |
 | **Otsu Thresholding** | Histogram 256 mức với đường ngưỡng t\*, đồ thị σ²_B(t), ảnh xám, ảnh nhị phân, mask, ảnh tách nền; chế độ ngưỡng thủ công để đối chiếu; chọn đối tượng là lớp sáng/tối/gợi ý theo viền ảnh; **Multi-Otsu 3 lớp** (2 ngưỡng, vét cạn O(256²)) cho ảnh nhiều mức xám; hậu xử lý mask bằng hình thái học |
 | **So sánh thuật toán** | Cùng một ảnh: ảnh gốc / K-means / Otsu; so sánh hai mask, bản đồ khác biệt; IoU/Dice **chỉ khi có ground truth** (GT tải lên phải là ảnh đục, được giữ khi chuyển trang cho tới khi bỏ tệp hoặc đổi ảnh); bảng so sánh bản chất, tham số, thời gian, ưu nhược điểm |
 | **Thư viện ảnh mẫu** | 11 tình huống kiểm thử tổng hợp chạy offline, có ground truth khi phù hợp |
@@ -112,13 +112,17 @@ Thanh bên có tuỳ chọn **lọc trung vị** 3×3/5×5/7×7 (tự cài đặ
 
 **Tải xuống:** ảnh phân đoạn, bản đồ nhãn, mask nhị phân, ảnh tách nền RGBA (nền trong suốt) dạng PNG; ma trận nhãn
 cụm, ma trận mask 0/1, bảng thống kê cụm, histogram dạng CSV; thông số và kết quả dạng JSON. Tệp được tạo từ đúng kết
-quả đang hiển thị; khi đổi ảnh đầu vào, kết quả cũ bị ẩn để không tải nhầm.
+quả đang hiển thị. Khi đổi ảnh đầu vào, kết quả cũ bị ẩn. Khi đổi thiết lập Otsu, cần chạy lại để tải kết quả.
+Các tab biểu đồ và tải tệp chỉ chuẩn bị nội dung khi mở. Với ảnh đã thu nhỏ, chọn **Thêm PNG kích thước gốc**
+trong trang thuật toán để ánh xạ nhãn và mask bằng láng giềng gần nhất. Cutout RGBA lấy màu từ ảnh nguồn.
+CSV và ZIP so sánh dùng kích thước xử lý. Nếu trình duyệt báo lỗi ghi tệp, chọn vị trí tải xuống có quyền ghi.
 
 ## 3. Định dạng CSV đầu vào
 
 - Ma trận **2 chiều** mức xám: mỗi dòng là một hàng ảnh, mỗi giá trị là **số nguyên trong [0, 255]**.
 - Phân cách bằng dấu phẩy `,` (cũng nhận `;`, tab hoặc khoảng trắng). **Không có dòng tiêu đề.** Mọi dòng cùng số cột.
-- Tệp UTF-8 (có hoặc không có BOM). Tối đa 4 000 000 phần tử.
+- Tệp UTF-8 (có hoặc không có BOM). Tối đa 4.194.304 phần tử.
+- Cho phép một dấu phân cách thừa ở cuối dòng để tương thích với dữ liệu cũ. Ô rỗng có dấu nháy hoặc chỉ chứa khoảng trắng vẫn bị từ chối.
 
 ```
 0,0,255,255
@@ -152,6 +156,8 @@ docs/                          Báo cáo, thuật toán, test case, kịch bản
 ```
 
 ## 5. Tài liệu
+
+Bộ slide [SLIDES.pptx](docs/SLIDES.pptx) có 15 trang trình chiếu. Điền tên nhóm trên trang bìa và thông tin thành viên trong báo cáo trước khi nộp.
 
 | Tệp | Nội dung |
 |---|---|

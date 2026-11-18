@@ -11,7 +11,7 @@ import streamlit as st
 from PIL import Image
 
 from src.processing.filters import MORPH_LABELS
-from src.processing.pipeline import MaskPostprocess, PreparedInput
+from src.processing.pipeline import MaskPostprocess, PreparedInput, original_size_png_files
 from src.utils import visualization as viz
 
 MIN_DISPLAY_SIDE = 256  # ảnh nhỏ hơn được phóng to (nearest) khi HIỂN THỊ để nhìn rõ từng pixel
@@ -59,7 +59,7 @@ def show_image(arr: np.ndarray, caption: str) -> None:
 def source_panels(prep: PreparedInput, with_gray: bool = False) -> list[tuple[np.ndarray, str]]:
     """Ô "Ảnh gốc" (chưa lọc) và, nếu có lọc trung vị, thêm ô ảnh đã lọc mà thuật toán thực sự nhận."""
     k = prep.median_size
-    items = [(prep.original, "Ảnh gốc")]
+    items = [(prep.original, "Ảnh gốc (đã thu nhỏ)" if prep.resize.resized else "Ảnh gốc")]
     if prep.is_filtered:
         items.append((prep.image, f"Sau lọc trung vị {k}×{k} (đầu vào thuật toán)"))
     if with_gray:
@@ -118,7 +118,7 @@ def input_summary(ctx) -> None:
     )
     if prep.resize.resized:
         st.info(f"Ảnh được thu nhỏ để xử lý: **{ow}×{oh} → {pw}×{ph}** (giới hạn cạnh dài trong thanh bên). "
-                f"Mọi kết quả và tệp tải xuống có kích thước {pw}×{ph}.")
+                f"Kết quả trên màn hình và tệp xuất mặc định có kích thước {pw}×{ph}.")
     for note in loaded.notes:
         st.caption("ℹ️ " + note)
 
@@ -137,23 +137,40 @@ def require_input():
     return ctx
 
 
-def cached_export_files(run: dict, key: tuple, build: Callable[[], dict[str, tuple[bytes, str]]]):
+def cached_export_files(run: dict, key: tuple, build: Callable[[], dict[str, tuple[bytes, str]]],
+                        *, cache_key: str = "_export_cache"):
     """Giữ duy nhất một bộ tệp cho kết quả hiện tại; thay foreground thì tạo lại.
 
     Cache nằm trong payload của lần chạy, được bỏ khi chạy lại hoặc đổi đầu vào.
     Lỗi tạo tệp không được biến thành nút tải dữ liệu cũ.
     """
-    cached = run.get("_export_cache")
+    cached = run.get(cache_key)
     if cached is not None and cached["key"] == key:
         return cached["files"]
-    run.pop("_export_cache", None)
+    run.pop(cache_key, None)
     try:
         files = build()
     except (ValueError, OSError, MemoryError) as exc:
         st.error("Không tạo được tệp tải xuống. Hãy kiểm tra kết quả hoặc giảm giới hạn cạnh dài. " + str(exc))
         return None
-    run["_export_cache"] = {"key": key, "files": files}
+    run[cache_key] = {"key": key, "files": files}
     return files
+
+
+def offer_original_size_pngs(ctx, run: dict, key: tuple, prefix: str, mask: np.ndarray,
+                             images: dict[str, np.ndarray]) -> None:
+    if not ctx.prepared.resize.resized:
+        return
+    if not st.checkbox("Thêm PNG kích thước gốc", key=f"{prefix}_export_original",
+                       help="Phóng nhãn/mask bằng láng giềng gần nhất. Ảnh tách nền dùng pixel ảnh nguồn."):
+        run.pop("_original_export_cache", None)
+        return
+    w, h = ctx.prepared.resize.original_size
+    st.caption(f"{w} × {h} px · ranh giới được ánh xạ từ kết quả đã xử lý.")
+    files = cached_export_files(run, key, lambda: original_size_png_files(ctx.loaded.array, mask, prefix, images),
+                                cache_key="_original_export_cache")
+    if files is not None:
+        download_buttons(files, {}, f"{prefix}_original_dl")
 
 
 MORPH_SIZES = (3, 5, 7, 9)

@@ -14,7 +14,7 @@ from src.processing.pipeline import (
     kmeans_outputs,
     run_kmeans,
 )
-from src.processing.postprocessing import cluster_palette_hex
+from src.processing.postprocessing import cluster_palette_hex, colorize_labels
 from src.ui import components as ui
 from src.ui.state import (
     get_result,
@@ -62,8 +62,8 @@ def params_form(is_color: bool, key_prefix: str = "km", *, submit_label: str = "
         restore_widget(key, v)
     with st.form(f"{key_prefix}_form", border=True):
         st.markdown("**Thiết lập K-means**")
-        k = st.slider("Số cụm K", 2, UI_MAX_K, key=f"{key_prefix}_k",
-                      help="Số nhóm màu/mức xám cần chia. K-means không tự xác định K. "
+        k = st.slider("Số cụm K", 1, UI_MAX_K, key=f"{key_prefix}_k",
+                      help="K = 1 tạo một cụm để quan sát tâm trung bình. Muốn tách hai nhóm, hãy chọn K từ 2. "
                            "Bảng màu bản đồ nhãn tự mở rộng theo K.")
         feature_label = st.radio(
             "Đặc trưng phân cụm", list(FEATURE_OPTIONS), key=f"{key_prefix}_feature",
@@ -80,7 +80,7 @@ def params_form(is_color: bool, key_prefix: str = "km", *, submit_label: str = "
             seed = st.number_input("Hạt giống ngẫu nhiên (seed)", 0, 2**31 - 1, step=1, key=f"{key_prefix}_seed")
             tol = st.number_input("Ngưỡng hội tụ", 0.0, 50.0, step=1e-4, format="%.4f",
                                   key=f"{key_prefix}_tol",
-                                  help="Dừng khi tâm cụm dịch chuyển (chuẩn Euclid, thang 0–255) ≤ ngưỡng này.")
+                                  help="Ngưỡng Euclid theo đặc trưng đang dùng (mức xám, RGB hoặc Lab).")
         submitted = st.form_submit_button(submit_label, type="primary", width="stretch")
     for key in keys:
         remember_widget(key)
@@ -137,12 +137,15 @@ def _render_result(ctx, run: dict) -> None:
     m[2].metric("Hội tụ", "Có" if core.converged else "Chưa")
     m[3].metric("SSE (inertia)", ui.compact_number(core.sse), help=f"SSE = {core.sse:,.2f}")
     m[4].metric("Thời gian", f"{core.elapsed_seconds * 1000:.0f} ms", help=TIMING_SCOPE)
-    st.caption(f"Đặc trưng: {FEATURE_NAMES[result.feature]} · khởi tạo {params.init} · "
+    st.caption(f"Lần chạy đã áp dụng · K={params.k} · {FEATURE_NAMES[result.feature]} · khởi tạo {params.init} · "
                f"seed {params.seed} · tối đa {params.max_iter} vòng · tol {params.tol:g}")
     for w in core.warnings:
         st.warning(w)
 
-    tab_seg, tab_fg, tab_stats, tab_dl = st.tabs(["Kết quả phân cụm", "Tách nền (chọn đối tượng)", "Thống kê", "Tải xuống"])
+    tab_seg, tab_fg, tab_stats, tab_dl = st.tabs(
+        ["Kết quả phân cụm", "Tách nền (chọn đối tượng)", "Thống kê", "Tải xuống"],
+        key="km_result_tab", on_change="rerun",
+    )
 
     with tab_fg:
         st.markdown(
@@ -152,7 +155,9 @@ def _render_result(ctx, run: dict) -> None:
         )
         options = list(range(core.k_effective))
         fg_key = f"km_fg_{run['run_id']}"
-        persistent_foreground(run, fg_key, options, default_foreground(result))
+        if fg_key not in st.session_state:
+            initial = run["foreground"] if "foreground" in run else default_foreground(result)
+            persistent_foreground(run, fg_key, options, initial)
         fg = st.multiselect("Cụm làm đối tượng (foreground)", options,
                             format_func=lambda c: f"Cụm {c}", key=fg_key)
         save_foreground(run, fg)
@@ -164,53 +169,74 @@ def _render_result(ctx, run: dict) -> None:
             fg = sorted(set(options) - set(fg))
         post = ui.morphology_controls("km")
     try:
-        out = kmeans_outputs(prep, result, fg, post)
+        out = kmeans_outputs(prep, result, fg, post) if tab_fg.open or tab_dl.open else None
+        label_color = colorize_labels(result.labels) if tab_seg.open else None
     except (ValueError, MemoryError) as exc:
         run.pop("_export_cache", None)
+        run.pop("_original_export_cache", None)
         st.error("Không tạo ảnh kết quả được. Hãy kiểm tra lựa chọn cụm hoặc giảm giới hạn cạnh dài. " + str(exc))
         return
 
-    with tab_seg:
-        ui.show_images([*ui.source_panels(prep), (out.segmented, "Ảnh K-means (màu tâm cụm)"),
-                        (out.label_color, "Bản đồ nhãn cụm")])
-        legend = " ".join(
-            f"<span class='isl-chip'><span class='isl-swatch' style='background:{c}'></span>Cụm {i}</span>"
-            for i, c in enumerate(cluster_palette_hex(core.k_effective))
-        )
-        st.markdown("Chú giải bản đồ nhãn: " + legend, unsafe_allow_html=True)
+    if tab_seg.open:
+        with tab_seg:
+            _show_segmentation(prep, result.segmented, label_color, core.k_effective)
 
-    with tab_fg:
-        if not fg:
-            st.info("Chưa chọn cụm nào: mask rỗng (toàn nền).")
-        if post.operation != "none":
-            ui.show_images([(out.raw_mask, "Mask trước hình thái học"), (out.mask, "Mask sau hình thái học"),
-                            (out.overlay, "Đối tượng tô màu trên ảnh gốc")])
-            ui.show_image(out.cutout_preview, "Ảnh tách nền (nền trắng)")
-        else:
-            ui.show_images([(out.mask, "Mask nhị phân (trắng = đối tượng)"), (out.cutout_preview, "Ảnh tách nền (nền trắng)"),
-                            (out.overlay, "Đối tượng tô màu trên ảnh gốc")])
-        ratio = out.mask.mean() / 255 * 100
-        st.caption(f"Đối tượng chiếm {ratio:.2f}% pixel · nền {100 - ratio:.2f}%.")
-        if ctx.ground_truth is not None:
-            s = compare_masks(out.mask, ctx.ground_truth)
-            st.success(f"So với ground truth của ảnh mẫu: IoU = {s.iou:.4f} · Dice = {s.dice:.4f} · "
-                       f"độ chính xác pixel = {s.pixel_accuracy:.4f}")
+    if tab_fg.open:
+        with tab_fg:
+            _show_foreground(ctx, out, fg, post)
 
-    with tab_stats:
-        st.markdown("**Bảng thống kê cụm**")
-        st.dataframe(pd.DataFrame(cluster_table(result)), hide_index=True, width="stretch")
-        ui.show_figure(viz.cluster_share_figure(core.counts, core.centers))
-        ui.show_figure(viz.sse_figure(core.sse_history))
-        st.caption("SSE = Σ‖x − tâm cụm của x‖², tính sau cập nhật tâm và gán lại nhãn của mỗi vòng Lloyd. "
-                   "Điểm cuối trên biểu đồ bằng SSE của kết quả trả về. "
-                   "Theo lý thuyết, SSE không tăng qua các vòng lặp.")
-        hist = pd.DataFrame({"Vòng lặp": range(1, core.n_iter + 1), "SSE": core.sse_history,
-                             "Độ dịch tâm lớn nhất": core.shift_history})
-        st.dataframe(hist, hide_index=True, width="stretch")
+    if tab_stats.open:
+        with tab_stats:
+            _show_statistics(result)
 
-    with tab_dl:
-        st.caption("Các tệp được tạo từ đúng kết quả đang hiển thị (cùng ảnh, tham số và cụm đối tượng đã chọn).")
-        files = ui.cached_export_files(run, (tuple(sorted(fg)), post),
-                                       lambda: kmeans_export_files(prep, params, result, out))
-        if files is not None:
-            ui.download_buttons(files, DOWNLOAD_LABELS, "km_dl")
+    if tab_dl.open:
+        with tab_dl:
+            st.caption("Các tệp dùng tham số lần chạy ở trên và cụm đối tượng đã chọn.")
+            export_key = (tuple(sorted(fg)), post)
+            files = ui.cached_export_files(run, export_key, lambda: kmeans_export_files(prep, params, result, out))
+            if files is not None:
+                ui.download_buttons(files, DOWNLOAD_LABELS, "km_dl")
+                ui.offer_original_size_pngs(ctx, run, export_key, "kmeans", out.mask,
+                                            {"segmented": out.segmented, "label_map": out.label_color})
+
+
+def _show_segmentation(prep, segmented, label_color, k: int) -> None:
+    ui.show_images([*ui.source_panels(prep), (segmented, "Ảnh K-means (màu tâm cụm)"),
+                    (label_color, "Bản đồ nhãn cụm")])
+    legend = " ".join(
+        f"<span class='isl-chip'><span class='isl-swatch' style='background:{c}'></span>Cụm {i}</span>"
+        for i, c in enumerate(cluster_palette_hex(k))
+    )
+    st.markdown("Chú giải bản đồ nhãn: " + legend, unsafe_allow_html=True)
+
+
+def _show_foreground(ctx, out, fg, post) -> None:
+    if not fg:
+        st.info("Chưa chọn cụm nào: mask rỗng (toàn nền).")
+    if post.operation != "none":
+        ui.show_images([(out.raw_mask, "Mask trước hình thái học"), (out.mask, "Mask sau hình thái học"),
+                        (out.overlay, "Đối tượng tô màu trên ảnh gốc")])
+        ui.show_image(out.cutout_preview, "Ảnh tách nền (nền trắng)")
+    else:
+        ui.show_images([(out.mask, "Mask nhị phân (trắng = đối tượng)"), (out.cutout_preview, "Ảnh tách nền (nền trắng)"),
+                        (out.overlay, "Đối tượng tô màu trên ảnh gốc")])
+    ratio = out.mask.mean() / 255 * 100
+    st.caption(f"Đối tượng chiếm {ratio:.2f}% pixel · nền {100 - ratio:.2f}%.")
+    if ctx.ground_truth is not None:
+        s = compare_masks(out.mask, ctx.ground_truth)
+        st.success(f"So với ground truth của ảnh mẫu: IoU = {s.iou:.4f} · Dice = {s.dice:.4f} · "
+                   f"độ chính xác pixel = {s.pixel_accuracy:.4f}")
+
+
+def _show_statistics(result) -> None:
+    core = result.core
+    st.markdown("**Bảng thống kê cụm**")
+    st.dataframe(pd.DataFrame(cluster_table(result)), hide_index=True, width="stretch")
+    ui.show_figure(viz.cluster_share_figure(core.counts, core.centers))
+    ui.show_figure(viz.sse_figure(core.sse_history))
+    st.caption("SSE = Σ‖x − tâm cụm của x‖², tính sau cập nhật tâm và gán lại nhãn của mỗi vòng Lloyd. "
+               "Điểm cuối trên biểu đồ bằng SSE của kết quả trả về. "
+               "Theo lý thuyết, SSE không tăng qua các vòng lặp.")
+    hist = pd.DataFrame({"Vòng lặp": range(1, core.n_iter + 1), "SSE": core.sse_history,
+                         "Độ dịch tâm lớn nhất": core.shift_history})
+    st.dataframe(hist, hide_index=True, width="stretch")

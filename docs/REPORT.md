@@ -11,7 +11,7 @@ Giảng viên: Nguyễn Xuân Đức
 | *(điền)* | *(điền)* | *(điền)* | *(điền)* |
 | *(điền)* | *(điền)* | *(điền)* | *(điền)* |
 
-> Đề bài yêu cầu nhóm ghi rõ % đóng góp của từng thành viên (Slide0, trang 5).
+> Điền thông tin và tỷ lệ đóng góp của từng thành viên trước khi nộp.
 
 ---
 
@@ -22,27 +22,27 @@ Giảng viên: Nguyễn Xuân Đức
 Phân đoạn ảnh là bước tách ảnh thành các vùng có ý nghĩa, đặc biệt là tách **đối tượng** khỏi **nền**. Giáo trình
 nhận định đây là bước “quan trọng nhất nhưng cũng khó khăn nhất” trong hệ thống xử lý ảnh và là tiền đề cho trích chọn
 đặc trưng, nhận dạng (Chương 5, trang 64). Hai cách tiếp cận cơ bản, dễ giải thích và áp dụng rộng là **phân ngưỡng**
-(Otsu) và **phân cụm** (K-means). Đề tài 3 (Slide0, trang 8; tối đa 8 điểm) yêu cầu cài đặt và so sánh hai phương
-pháp này.
+(Otsu) và **phân cụm** (K-means). Đề tài 3 yêu cầu triển khai cả hai phương pháp để phân đoạn ảnh, tách nền và đối tượng.
 
 ### 1.2 Mục tiêu
 
-1. Tự cài đặt K-means và Otsu bằng Python/NumPy, **không dùng OpenCV** (Slide0, trang 5) và không dùng hàm thuật
+1. Tự cài đặt K-means và Otsu bằng Python/NumPy, **không dùng OpenCV** và không dùng hàm thuật
    toán có sẵn (`sklearn.cluster.KMeans`, `skimage.filters.threshold_otsu`).
 2. Xây dựng ứng dụng cho phép **tải/lưu ảnh (file CSV/ảnh thật), xem kết quả trực quan** (yêu cầu nghiệm thu).
 3. Tách nền và đối tượng bằng cả hai phương pháp; so sánh trên cùng ảnh.
-4. Tự chuẩn bị test case (Slide0, trang 5), kiểm thử tự động, đánh giá định lượng khi có ground truth.
+4. Tự chuẩn bị test case, kiểm thử tự động, đánh giá định lượng khi có ground truth.
 
 ### 1.3 Phạm vi
 
 - Ảnh PNG/JPG/BMP (xám, RGB, có alpha, có EXIF) và ma trận CSV mức xám.
-- K-means với K = 2..8 trên đặc trưng mức xám hoặc RGB; Otsu toàn cục hai lớp trên ảnh xám.
-- Không dùng thông tin không gian (lân cận), không dùng học sâu, chạy hoàn toàn cục bộ.
+- K-means với K từ 1–16 trong giao diện, trên đặc trưng mức xám, RGB hoặc Lab. Otsu toàn cục hai lớp và Multi-Otsu ba lớp trên ảnh xám.
+- Hai thuật toán cốt lõi dùng giá trị pixel. Có thể lọc trung vị trước phân đoạn và áp dụng hình thái học sau khi tạo mask.
+- PNG có thể xuất ở kích thước gốc bằng cách ánh xạ nhãn/mask. CSV và số liệu thuật toán dùng kích thước xử lý.
 
 ### 1.4 Kết quả cần đạt
 
-Ứng dụng Streamlit 7 trang chạy trên Windows; 11 ảnh mẫu offline có ground truth khi phù hợp; 330 kiểm thử tự động;
-báo cáo, slide, kịch bản demo và câu hỏi phản biện.
+Ứng dụng Streamlit 7 trang, 11 mẫu offline, kiểm thử tự động, báo cáo, [slide trình chiếu](SLIDES.pptx), kịch bản demo
+và câu hỏi phản biện.
 
 ---
 
@@ -138,7 +138,7 @@ Chi tiết công thức và quyết định cài đặt: [ALGORITHMS.md](ALGORIT
 | F3 | Chọn cụm làm đối tượng ⇒ mask, ảnh tách nền |
 | F4 | Otsu tự cài đặt; histogram có đường ngưỡng; ngưỡng thủ công để đối chiếu; chọn lớp đối tượng |
 | F5 | So sánh hai thuật toán trên cùng ảnh; IoU/Dice khi có ground truth |
-| F6 | Tải xuống PNG/CSV/JSON đúng với kết quả đang hiển thị |
+| F6 | Tải xuống PNG/CSV/JSON của lần chạy đã áp dụng, có tùy chọn PNG kích thước nguồn khi ảnh đã thu nhỏ |
 
 ### 3.2 Yêu cầu phi chức năng
 
@@ -291,6 +291,17 @@ Trong lần đo 2026-11-05T15:41:08+07:00, ảnh RGB ngẫu nhiên 1024×1024, K
 
 K-means có chi phí gom màu O(N log N), sau đó phụ thuộc U×K×D×số vòng. Otsu dựng histogram và phân ngưỡng O(N), tìm ngưỡng trên 256 mức. Số đo chỉ áp dụng cho máy, dữ liệu và phạm vi đo đã ghi, không bảo đảm thời gian cho mọi ảnh. Giao diện mặc định giới hạn cạnh dài 800 px.
 
+Đối chiếu ngày 19/11/2026 qua API thuật toán trên ảnh xám ngẫu nhiên 3840×2160, seed dữ liệu 42, với trung vị 5 lần
+và peak working set của tiến trình riêng. K-means dùng K=4, K-means++, seed 0, tối đa 3 vòng.
+
+| Thuật toán | Trước cập nhật (ms / MiB) | Sau cập nhật (ms / MiB) |
+|---|---:|---:|
+| K-means xám | 122,30 / 140,6 | 107,18 / 100,8 |
+| Otsu | 61,10 / 107,3 | 60,79 / 99,4 |
+
+Nhãn, tâm và ảnh K-means có cùng SHA-256 trước và sau. Ngưỡng, histogram và ảnh nhị phân Otsu cũng khớp.
+Số đo chỉ gồm thuật toán, ngoài chi phí đọc tệp, giao diện và xuất kết quả.
+
 ### 5.6 So sánh và phân tích
 
 1. **Ảnh hai mức tách biệt** (tròn, chữ nhật, CSV, 10×10): cả hai đạt IoU = 1.
@@ -299,8 +310,8 @@ K-means có chi phí gom màu O(N log N), sau đó phụ thuộc U×K×D×số v
    2 lớp: hình vàng (xám ≈ 187) bị gộp với nền (≈ 234); khối xám 90 bị gộp với nền 35. Đây là ưu điểm rõ nhất của
    K-means: nhiều cụm + dùng màu.
 3. **Nhiễu**: cả hai cùng IoU 0.8397 — do không dùng thông tin lân cận, mọi pixel nhiễu vượt ngưỡng đều bị phân sai.
-   Đây là **trường hợp thất bại chung**; khắc phục bằng lọc trung vị trước khi phân đoạn (giáo trình 3.2.3) hoặc phép
-   toán hình thái (4.4) sau phân đoạn — ngoài phạm vi đề tài.
+   Lọc trung vị trước phân đoạn hoặc phép toán hình thái sau phân đoạn có thể giảm nhiễu. Cần kiểm tra các chi tiết nhỏ
+   bị ảnh hưởng khi áp dụng hai tùy chọn này.
 4. **Tương phản thấp**: η = 0.778, thấp nhất; IoU 0.9532 — hai đỉnh histogram chồng lấn do nhiễu.
 5. **Ảnh xám, K = 2**: SSE/N = σ²_W = σ²_T − σ²_B. Cực tiểu SSE tương đương cực đại phương sai giữa lớp
    cho cùng dữ liệu và bài toán hai lớp. Lloyd có thể dừng ở cực tiểu cục bộ phụ thuộc khởi tạo; Otsu duyệt
@@ -317,12 +328,17 @@ K-means có chi phí gom màu O(N log N), sau đó phụ thuộc U×K×D×số v
 
 ### 5.7 Thử nghiệm với ảnh chụp thật
 
-*Chưa thực hiện trong bản này — nhóm tải ảnh chụp thật của mình lên ứng dụng, ghi tham số và nhận xét vào bảng dưới.*
-Không có ground truth thì chỉ nhận xét trực quan, không ghi IoU.
+Thử nghiệm trên 30 ảnh từ Oxford VGG iSeg gồm 6 ảnh dev và 24 ảnh test. Cấu hình cố định dùng K=5, RGB,
+K-means++, seed 0, cạnh dài tối đa 800 px và gợi ý đối tượng tự động cho cả hai phương pháp.
+Khi tính điểm, bỏ pixel biên chưa chắc chắn mang nhãn trimap 128.
 
-| Ảnh | Kích thước | Phương pháp & tham số | Ngưỡng / K | Thời gian | Nhận xét |
-|---|---|---|---|---|---|
-| *(chờ điền)* | | | | | |
+| Chỉ số trung bình theo ảnh trên 24 ảnh test gốc | K-means | Otsu |
+|---|---:|---:|
+| IoU | 0,2397 | 0,2357 |
+| Dice | 0,3406 | 0,3332 |
+
+Kết quả cho thấy gợi ý tự động còn dễ chọn sai đối tượng trên ảnh phức tạp. Biến thể gain 0,5 được tạo bằng cách
+giảm mức sáng của ảnh gốc. Cách chia tập, cấu hình và điểm từng ảnh có trong [kết quả ảnh thật](results/cr_real_images.md).
 
 ---
 
@@ -333,16 +349,19 @@ Không có ground truth thì chỉ nhận xét trực quan, không ghi IoU.
 - Tự cài đặt K-means (Lloyd, K-means++, cụm rỗng, có trọng số, tính theo khối) và Otsu (từ histogram, xử lý lớp rỗng,
   ngưỡng đồng hạng, ảnh một mức xám) bằng NumPy, không dùng OpenCV.
 - Chứng minh và kiểm chứng số liệu: hàm f(g) ở giáo trình mục 3.1.6 là tiêu chí Otsu.
-- Ứng dụng 7 trang: tải/lưu ảnh thật và CSV, xem kết quả trực quan, tách nền, so sánh, tải 7 loại tệp mỗi thuật toán.
-- 11 test case offline, 330 kiểm thử tự động đều đạt, số liệu thực nghiệm sinh tự động. Bằng chứng mới tại [REVIEW_ROUND2_20261106.md](REVIEW_ROUND2_20261106.md); lượt trước tại [REVIEW_20261106.md](REVIEW_20261106.md).
+- Ứng dụng 7 trang hỗ trợ tải ảnh/CSV, hiển thị, tách nền, so sánh và xuất PNG, CSV, JSON hoặc ZIP.
+- 11 mẫu offline. Lần kiểm tra ngày 19/11/2026 có 560 test pass trên Windows với Python 3.11.7.
+  Kiểm thử trình duyệt bao gồm tải tệp, chạy hai thuật toán, đổi chế độ, mở lại PNG và kiểm tra ZIP.
 
 ### 6.2 Hạn chế
 
 - Cả hai thuật toán không dùng thông tin không gian ⇒ nhạy nhiễu muối tiêu, chiếu sáng không đều.
 - Otsu chỉ 2 lớp toàn cục; K-means cần chọn K, phụ thuộc khởi tạo, và không biết cụm nào là đối tượng — gợi ý theo
   viền ảnh chỉ là heuristic.
-- K-means chậm với ảnh lớn có rất nhiều màu khác nhau (lần đo hiện tại: 3.13 s cho 1024², K=4, tối đa 20 vòng, chưa hội tụ).
-- Bộ dữ liệu là ảnh tổng hợp; chưa đánh giá định lượng trên ảnh thật có ground truth.
+- K-means chậm với ảnh lớn có nhiều màu khác nhau. Lần đo ở mục 5.5 ghi nhận 3,13 giây cho 1024², K=4,
+  tối đa 20 vòng và chưa hội tụ.
+- Điểm trên ảnh thật phụ thuộc tập ảnh và quy tắc chọn đối tượng. Kết quả tổng hợp ở mục 5.4 và ảnh thật ở mục 5.7
+  cần được trình bày cùng cấu hình tương ứng.
 
 ### 6.3 Hướng phát triển
 

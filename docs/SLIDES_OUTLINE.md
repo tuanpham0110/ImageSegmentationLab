@@ -1,21 +1,23 @@
-# Nội dung slide (15 slide, ~10 phút + demo)
+# Nội dung trình chiếu · 15 slide
 
-Hình gợi ý lấy từ `docs/screenshots/` (ảnh chụp thật của ứng dụng) và `docs/figures/` (kết quả thực nghiệm).
+[Bộ slide PowerPoint](SLIDES.pptx) trình bày thuật toán, kết quả và luồng demo. Điền tên nhóm trên trang bìa trước buổi bảo vệ.
 
-| # | Tiêu đề | Nội dung chính | Hình |
-|---|---|---|---|
-| 1 | **Hệ thống phân đoạn ảnh bằng K-means và Otsu** | Bài tập lớn Xử lý ảnh INT13146 — Đề tài 3. Tên nhóm, thành viên, MSSV, **% đóng góp**. GV: Nguyễn Xuân Đức | Logo PTIT |
-| 2 | Bài toán | Phân đoạn = tách ảnh thành nền và đối tượng; bước then chốt trước trích chọn đặc trưng, nhận dạng (giáo trình Ch.5). Yêu cầu: K-means + Otsu, tải/lưu ảnh thật và CSV, xem trực quan | Sơ đồ “ảnh → phân đoạn → mask” |
-| 3 | Mục tiêu và ràng buộc | Tự cài đặt bằng NumPy; **không OpenCV**, không `sklearn`/`skimage`; test case tự chuẩn bị; chạy offline trên Windows | — |
-| 4 | Tổng quan phân đoạn ảnh | Định nghĩa 5.1–5.4 (phủ kín, rời nhau, đồng nhất); ngưỡng (5.2) và phân cụm (6.2.4); cả hai là kỹ thuật toàn thể, chỉ dùng giá trị pixel | — |
-| 5 | K-means: ý tưởng | Pixel = vector (xám hoặc RGB); cực tiểu J = ΣΣ‖x − Z_k‖² (6.9); Z_k = trung bình cụm (6.10) | Ảnh gốc / ảnh K-means / bản đồ nhãn (`02_kmeans_ket_qua.png`) |
-| 6 | K-means: quy trình và cài đặt | Khởi tạo (K-means++/ngẫu nhiên) → gán nhãn → cập nhật tâm → hội tụ. Xử lý cụm rỗng, K > số màu, tính theo khối, **K-means có trọng số trên giá trị phân biệt**; đóng gói uint8/int32 giảm bản sao. Người dùng chọn cụm đối tượng | `04_kmeans_thong_ke.png` |
-| 7 | Otsu: ý tưởng | Histogram → σ²_B(t) = ω₀ω₁(μ₀ − μ₁)² → t* = argmax. **f(g) ở giáo trình 3.1.6 = σ²_B** (chứng minh 1 dòng) | Công thức + chứng minh |
-| 8 | Otsu: quy trình và cài đặt | cumsum, O(N + 256), lớp rỗng, đồng hạng: chọn **phần tử thuộc argmax gần floor trung bình nhất**. Phản ví dụ cực đại rời nhau; ảnh một mức xám có mask tự động rỗng; ví dụ giáo trình t* = 1 | `05_otsu_histogram.png`, `07_kien_thuc_otsu.png` |
-| 9 | Kiến trúc hệ thống | 4 tầng: UI (Streamlit) → pipeline → xử lý ảnh → thuật toán (chỉ NumPy). Chữ ký đầu vào chống tải nhầm kết quả cũ | Sơ đồ khối (REPORT 3.3) |
-| 10 | Giao diện phần mềm | 7 trang; thanh bên dùng chung; 7 loại tệp tải xuống mỗi thuật toán | `01_tong_quan.png`, `09_tai_xuong.png` |
-| 11 | Demo K-means | K = 2 → 4 → 5 trên ảnh nhiều hình màu; chọn cụm đối tượng | (demo trực tiếp) `03_kmeans_tach_nen.png` |
-| 12 | Demo Otsu | Histogram, t* = 148, so với ngưỡng thủ công | (demo trực tiếp) |
-| 13 | So sánh kết quả | Bảng IoU: hai mức 1.0 / 1.0; nhiều màu **1.0 / 0.80**; nhiều mức xám **1.0 / 0.67**; nhiễu 0.84 / 0.84; tương phản thấp 0.95 / 0.95. Thời gian và phạm vi đo lấy từ `docs/results/experiment_results.md`; xám K=2 có SSE/N = σ²_W | `06_so_sanh.png`, `docs/figures/multi_shapes_color.png`, `gray_levels_objects.png` |
-| 14 | Kiểm thử và đánh giá | 11 mẫu tổng hợp; **330 kiểm thử Pytest PASS**; Chromium upload và tải PNG/CSV, kiểm tra viewport 1440/768/390 px. Phụ thuộc K và seed (SSE chênh 10.8×); ảnh chụp thật của nhóm chưa có | `docs/REVIEW_ROUND2_20261106.md`, `docs/figures/noisy_circle.png` |
-| 15 | Kết luận | Otsu: nhanh, không tham số, tối ưu toàn cục, chỉ 2 lớp/xám. K-means: dùng màu, nhiều vùng, cần K, cục bộ, cần chọn cụm. Hạn chế chung: không dùng lân cận. Hướng phát triển: lọc trung vị, hình thái, Otsu nhiều ngưỡng/cục bộ, đặc trưng (x, y) | — |
+| Slide | Nội dung |
+|---:|---|
+| 1 | Đề tài 3, học phần INT13146 và nhóm thực hiện |
+| 2 | Ảnh/CSV đầu vào, các yêu cầu chính và đầu ra |
+| 3 | Luồng nhập, tiền xử lý, phân đoạn, tách nền và xuất |
+| 4 | Lloyd, khoảng cách Euclid, centroid và SSE có trọng số |
+| 5 | K, khởi tạo, seed, cụm rỗng và hội tụ |
+| 6 | Ma trận tính tay 2×3 đối chiếu K-means và Otsu |
+| 7 | Histogram, phương sai giữa lớp, quy ước ngưỡng và phá hòa |
+| 8 | Chọn lớp đối tượng, quy ước 0/255 và cutout RGBA |
+| 9 | Thực nghiệm ảnh nhiều vật thể màu, IoU và nguyên nhân khác biệt |
+| 10 | Thực nghiệm ảnh nhiễu và tùy chọn tiền/hậu xử lý |
+| 11 | Kết quả 24 ảnh test Oxford VGG iSeg và giới hạn tự động |
+| 12 | Độ phức tạp, giới hạn ảnh xử lý và thời điểm tạo tệp |
+| 13 | 560 test tự động và các ca kiểm thử trình duyệt |
+| 14 | Thao tác demo K-means, Otsu, so sánh và lưu |
+| 15 | Điều kiện sử dụng của hai phương pháp và nội dung phản biện |
+
+Dùng [kịch bản demo](DEMO_SCRIPT.md) để thực hành 5–7 phút. Số liệu và phạm vi đo có trong [báo cáo](REPORT.md).

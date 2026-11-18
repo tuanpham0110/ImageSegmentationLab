@@ -21,6 +21,7 @@ def render() -> None:
 #### 2. Định dạng CSV
 - Ma trận **2 chiều** mức xám: mỗi dòng là một hàng ảnh, mỗi giá trị là **số nguyên 0–255**.
 - Phân cách bằng dấu phẩy `,` (cũng nhận `;`, tab hoặc khoảng trắng); **không có dòng tiêu đề**; mọi dòng cùng số cột.
+- Tối đa 4.194.304 ô. Có thể có một dấu phân cách thừa ở cuối dòng. Ô rỗng có dấu nháy hoặc chứa khoảng trắng bị báo lỗi.
 - Ví dụ 3×4:
 ```
 0,0,255,255
@@ -30,7 +31,7 @@ def render() -> None:
 - Lỗi được báo kèm vị trí dòng/cột: ký tự không phải số, số thập phân, giá trị ngoài [0, 255], dòng thiếu cột, ô trống.
 
 #### 3. K-means
-1. Chọn **K** (2–16), vector đặc trưng (RGB, Lab hoặc mức xám), cách khởi tạo, số vòng lặp tối đa, ngưỡng hội tụ, seed.
+1. Chọn **K** (1–16), vector đặc trưng (RGB, Lab hoặc mức xám), cách khởi tạo, số vòng lặp tối đa, ngưỡng hội tụ, seed.
 2. Bấm **Chạy K-means**. Thay đổi tham số không tự chạy lại — chỉ chạy khi bấm nút.
 3. Tab **Tách nền**: chọn cụm làm đối tượng (mặc định là gợi ý theo viền ảnh, không phải kết luận của thuật toán).
 4. Tab **Thống kê**: tâm cụm, số pixel, tỷ lệ, SSE theo vòng lặp.
@@ -40,6 +41,7 @@ def render() -> None:
 2. Ở **Đối tượng (foreground) là**, chọn *Lớp tối (≤ t)* nếu đối tượng tối trên nền sáng, *Lớp sáng (> t)*
    cho đối tượng sáng, hoặc *Gợi ý theo viền ảnh*. Gợi ý có thể sai khi đối tượng phủ viền ảnh.
 3. Bấm **Chạy Otsu**; xem histogram (đường đỏ là t*) và đồ thị σ²_B(t).
+   Đổi phương pháp, cực tính, ngưỡng đang dùng hoặc hậu xử lý thì cần chạy lại để tải kết quả.
 4. Nếu ảnh chỉ có một mức xám, Otsu báo không hợp lệ và mask tự động rỗng; có thể dùng chế độ thủ công để đối chiếu.
 
 #### 5. So sánh
@@ -66,6 +68,9 @@ def render() -> None:
 
 Trình duyệt xử lý nơi lưu và xác nhận ghi đè. Bấm tải không chạy lại thuật toán hoặc thay đổi kết quả.
 Kiểm tra tệp trong mục tải xuống của trình duyệt. Nếu tạo tệp thất bại, trang hiển thị lỗi.
+Với ảnh đã thu nhỏ, tab Tải xuống của từng thuật toán có **Thêm PNG kích thước gốc**.
+Nhãn và mask được ánh xạ bằng láng giềng gần nhất. Ảnh tách nền lấy màu gốc theo mask đã ánh xạ.
+Các tệp CSV và ZIP so sánh dùng kích thước xử lý.
 
 Thời gian hiển thị tính từ ảnh đã tiền xử lý đến nhãn/ảnh tâm hoặc ảnh nhị phân; loại trừ đọc tệp,
 chuyển xám/resize, chọn đối tượng, biểu đồ và xuất tệp.

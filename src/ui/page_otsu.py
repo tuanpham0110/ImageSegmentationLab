@@ -119,23 +119,26 @@ def render() -> None:
         st.button("Khôi phục mặc định", on_click=_reset_defaults, key="otsu_reset", width="stretch")
         st.caption(f"Ảnh màu được chuyển xám bằng: {GRAY_METHODS[prep.gray_method]} (đổi ở thanh bên).")
 
+    kind = "multi" if classes == CLASS_MODES[1] else "binary"
+    manual = int(manual_t) if mode == MODES[1] and kind == "binary" else None
+    chosen_polarity = POLARITY_OPTIONS[polarity] if kind == "binary" else None
+    settings = (kind, manual, chosen_polarity, post)
     if submitted:
         try:
             with st.spinner("Đang phân ngưỡng…"):
-                if classes == CLASS_MODES[1]:
+                if kind == "multi":
                     result, labels = run_multi_otsu(prep)
                     run_id = st.session_state.get("otsu_run_id", 0) + 1
                     st.session_state["otsu_run_id"] = run_id
                     payload = {"kind": "multi", "result": result, "labels": labels, "post": post, "run_id": run_id}
                 else:
-                    manual = int(manual_t) if mode == MODES[1] else None
-                    out = run_otsu(prep, polarity=POLARITY_OPTIONS[polarity], manual_threshold=manual, postprocess=post)
+                    out = run_otsu(prep, polarity=chosen_polarity, manual_threshold=manual, postprocess=post)
                     payload = {"kind": "binary", "out": out}
         except (ValueError, MemoryError) as exc:
             st.session_state.pop(RESULT_KEY, None)
             st.error("Không phân ngưỡng được ảnh. Hãy kiểm tra dữ liệu hoặc giảm giới hạn cạnh dài. " + str(exc))
             return
-        store_result(RESULT_KEY, ctx.signature, payload)
+        store_result(RESULT_KEY, ctx.signature, {**payload, "settings": settings})
         if payload["kind"] == "multi":
             r = payload["result"]
             st.toast(f"Multi-Otsu: (t1, t2) = {r.thresholds} ({r.elapsed_seconds * 1000:.1f} ms).",
@@ -152,13 +155,17 @@ def render() -> None:
                 st.warning("Ảnh đầu vào đã thay đổi — kết quả cũ đã bị ẩn. Hãy bấm **Chạy Otsu** lại.")
             ui.show_images(ui.source_panels(prep, with_gray=True))
             return
+        pending = run.get("settings") != settings
+        if pending:
+            st.warning("Thiết lập đã đổi. Đang xem lần chạy trước. Bấm Chạy Otsu để cập nhật và tải kết quả.")
         if run.get("kind") == "multi":
-            _render_multi(ctx, run)
+            _render_multi(ctx, run, pending)
         else:
-            _render_result(ctx, run["out"], run)
+            _render_result(ctx, run, pending)
 
 
-def _render_result(ctx, out, run: dict | None = None) -> None:
+def _render_result(ctx, run: dict, pending: bool) -> None:
+    out = run["out"]
     prep, r = ctx.prepared, out.result
     m = ui.metric_columns(5, "otsu")
     m[0].metric("Ngưỡng Otsu t*", r.threshold if r.valid else f"{r.threshold} (không hợp lệ)")
@@ -173,60 +180,65 @@ def _render_result(ctx, out, run: dict | None = None) -> None:
     for w in out.warnings:
         st.warning(w)
 
-    tab_res, tab_hist, tab_dl = st.tabs(["Kết quả phân ngưỡng", "Histogram & phương sai", "Tải xuống"])
-    with tab_res:
-        ui.show_images([*ui.source_panels(prep, with_gray=True), (out.binary, f"Ảnh nhị phân (> {out.threshold_used})")])
-        if out.postprocess.operation != "none":
-            ui.show_images([(out.raw_mask, "Mask trước hình thái học"), (out.mask, "Mask sau hình thái học"),
-                            (out.overlay, "Đối tượng tô màu trên ảnh gốc")])
-            ui.show_image(out.cutout_preview, "Ảnh tách nền (nền trắng)")
-        else:
-            ui.show_images([(out.mask, "Mask đối tượng"), (out.cutout_preview, "Ảnh tách nền (nền trắng)"),
-                            (out.overlay, "Đối tượng tô màu trên ảnh gốc")])
-        if ctx.ground_truth is not None:
-            s = compare_masks(out.mask, ctx.ground_truth)
-            st.success(f"So với ground truth của ảnh mẫu: IoU = {s.iou:.4f} · Dice = {s.dice:.4f} · "
-                       f"độ chính xác pixel = {s.pixel_accuracy:.4f}")
+    tab_res, tab_hist, tab_dl = st.tabs(["Kết quả phân ngưỡng", "Histogram & phương sai", "Tải xuống"],
+                                       key="otsu_result_tab", on_change="rerun")
+    if tab_res.open:
+        with tab_res:
+            ui.show_images([*ui.source_panels(prep, with_gray=True), (out.binary, f"Ảnh nhị phân (> {out.threshold_used})")])
+            if out.postprocess.operation != "none":
+                ui.show_images([(out.raw_mask, "Mask trước hình thái học"), (out.mask, "Mask sau hình thái học"),
+                                (out.overlay, "Đối tượng tô màu trên ảnh gốc")])
+                ui.show_image(out.cutout_preview, "Ảnh tách nền (nền trắng)")
+            else:
+                ui.show_images([(out.mask, "Mask đối tượng"), (out.cutout_preview, "Ảnh tách nền (nền trắng)"),
+                                (out.overlay, "Đối tượng tô màu trên ảnh gốc")])
+            if ctx.ground_truth is not None:
+                s = compare_masks(out.mask, ctx.ground_truth)
+                st.success(f"So với ground truth của ảnh mẫu: IoU = {s.iou:.4f} · Dice = {s.dice:.4f} · "
+                           f"độ chính xác pixel = {s.pixel_accuracy:.4f}")
 
-    with tab_hist:
-        manual = out.threshold_used if out.mode == "manual" else None
-        ui.show_figure(viz.histogram_figure(r.histogram, r.threshold if r.valid else None, manual))
-        ui.show_figure(viz.variance_figure(r.between_class_variance, r.valid_thresholds, r.threshold if r.valid else None))
-        if r.valid:
-            stats = pd.DataFrame([
-                {"Lớp": f"C0 (≤ {r.threshold})", "Trọng số ω": round(r.weight0, 5), "Trung bình μ": round(r.mean0, 3),
-                 "Số pixel": int(r.histogram[: r.threshold + 1].sum())},
-                {"Lớp": f"C1 (> {r.threshold})", "Trọng số ω": round(r.weight1, 5), "Trung bình μ": round(r.mean1, 3),
-                 "Số pixel": int(r.histogram[r.threshold + 1 :].sum())},
-            ])
-            st.dataframe(stats, hide_index=True, width="stretch")
-            st.caption(f"σ²_B(t*) = {r.max_variance:.3f} · σ²_T = {r.total_variance:.3f}. "
-                       + (f"Có {len(r.tied_thresholds)} ngưỡng đồng hạng ({min(r.tied_thresholds)}–{max(r.tied_thresholds)}), "
-                          "chọn một cực đại gần floor(trung bình) nhất; các khoảng có thể rời nhau."
-                          if len(r.tied_thresholds) > 1 else "Ngưỡng cực đại là duy nhất."))
-        with st.expander("Bảng histogram đầy đủ (256 mức)"):
-            levels = np.arange(256)
-            st.caption(f"Đủ 256 mức xám, gồm cả mức có h(g) = 0; ảnh có {np.count_nonzero(r.histogram)} mức xuất hiện. "
-                       "σ²_B(g) = 0 tại ngưỡng làm một lớp rỗng (không hợp lệ).")
-            st.dataframe(pd.DataFrame({"Mức xám g": levels, "h(g)": r.histogram,
-                                       "σ²_B(g)": np.round(r.between_class_variance, 4)}),
-                         hide_index=True, width="stretch", height=260)
+    if tab_hist.open:
+        with tab_hist:
+            manual = out.threshold_used if out.mode == "manual" else None
+            ui.show_figure(viz.histogram_figure(r.histogram, r.threshold if r.valid else None, manual))
+            ui.show_figure(viz.variance_figure(r.between_class_variance, r.valid_thresholds, r.threshold if r.valid else None))
+            if r.valid:
+                stats = pd.DataFrame([
+                    {"Lớp": f"C0 (≤ {r.threshold})", "Trọng số ω": round(r.weight0, 5), "Trung bình μ": round(r.mean0, 3),
+                     "Số pixel": int(r.histogram[: r.threshold + 1].sum())},
+                    {"Lớp": f"C1 (> {r.threshold})", "Trọng số ω": round(r.weight1, 5), "Trung bình μ": round(r.mean1, 3),
+                     "Số pixel": int(r.histogram[r.threshold + 1 :].sum())},
+                ])
+                st.dataframe(stats, hide_index=True, width="stretch")
+                st.caption(f"σ²_B(t*) = {r.max_variance:.3f} · σ²_T = {r.total_variance:.3f}. "
+                           + (f"Có {len(r.tied_thresholds)} ngưỡng đồng hạng ({min(r.tied_thresholds)}–{max(r.tied_thresholds)}), "
+                              "chọn một cực đại gần floor(trung bình) nhất; các khoảng có thể rời nhau."
+                              if len(r.tied_thresholds) > 1 else "Ngưỡng cực đại là duy nhất."))
+            with st.expander("Bảng histogram đầy đủ (256 mức)"):
+                levels = np.arange(256)
+                st.caption(f"Đủ 256 mức xám, gồm cả mức có h(g) = 0; ảnh có {np.count_nonzero(r.histogram)} mức xuất hiện. "
+                           "σ²_B(g) = 0 tại ngưỡng làm một lớp rỗng (không hợp lệ).")
+                st.dataframe(pd.DataFrame({"Mức xám g": levels, "h(g)": r.histogram,
+                                           "σ²_B(g)": np.round(r.between_class_variance, 4)}),
+                             hide_index=True, width="stretch", height=260)
 
-    with tab_dl:
-        st.caption("Các tệp được tạo từ đúng kết quả đang hiển thị.")
-        files = ui.cached_export_files({} if run is None else run,
-                                       (out.mode, out.threshold_used, out.polarity, out.postprocess),
-                                       lambda: otsu_export_files(prep, out))
-        if files is not None:
-            ui.download_buttons(files, DOWNLOAD_LABELS, "otsu_dl")
+    if tab_dl.open and not pending:
+        with tab_dl:
+            export_key = run["settings"]
+            files = ui.cached_export_files(run, export_key, lambda: otsu_export_files(prep, out))
+            if files is not None:
+                ui.download_buttons(files, DOWNLOAD_LABELS, "otsu_dl")
+                ui.offer_original_size_pngs(ctx, run, export_key, "otsu", out.mask, {"binary": out.binary})
 
 
-def _render_multi(ctx, run: dict) -> None:
+def _render_multi(ctx, run: dict, pending: bool) -> None:
     prep, r, labels, post = ctx.prepared, run["result"], run["labels"], run["post"]
     t1, t2 = r.thresholds
     options = [0, 1, 2]
     fg_key = f"otsu_multi_fg_{run['run_id']}"
-    persistent_foreground(run, fg_key, options, default_multi_otsu_foreground(labels))
+    if fg_key not in st.session_state:
+        initial = run["foreground"] if "foreground" in run else default_multi_otsu_foreground(labels)
+        persistent_foreground(run, fg_key, options, initial)
 
     m = ui.metric_columns(5, "multi-otsu")
     m[0].metric("Ngưỡng t1", t1)
@@ -251,37 +263,42 @@ def _render_multi(ctx, run: dict) -> None:
         return
     m[3].metric("Đối tượng", f"{out.foreground_ratio * 100:.1f}%")
 
-    tab_res, tab_hist, tab_dl = st.tabs(["Kết quả 3 lớp", "Histogram", "Tải xuống"])
-    with tab_res:
-        ui.show_images([*ui.source_panels(prep, with_gray=True), (out.label_color, "Bản đồ 3 lớp")])
-        st.markdown("Chú giải: " + legend, unsafe_allow_html=True)
-        if not fg:
-            st.info("Chưa chọn lớp nào: mask rỗng (toàn nền).")
-        if post.operation != "none":
-            ui.show_images([(out.raw_mask, "Mask trước hình thái học"), (out.mask, "Mask sau hình thái học"),
-                            (out.overlay, "Đối tượng tô màu trên ảnh gốc")])
-            ui.show_image(out.cutout_preview, "Ảnh tách nền (nền trắng)")
-        else:
-            ui.show_images([(out.mask, "Mask đối tượng"), (out.cutout_preview, "Ảnh tách nền (nền trắng)"),
-                            (out.overlay, "Đối tượng tô màu trên ảnh gốc")])
-        if ctx.ground_truth is not None:
-            s = compare_masks(out.mask, ctx.ground_truth)
-            st.success(f"So với ground truth của ảnh mẫu: IoU = {s.iou:.4f} · Dice = {s.dice:.4f} · "
-                       f"độ chính xác pixel = {s.pixel_accuracy:.4f}")
+    tab_res, tab_hist, tab_dl = st.tabs(["Kết quả 3 lớp", "Histogram", "Tải xuống"],
+                                       key="multiotsu_result_tab", on_change="rerun")
+    if tab_res.open:
+        with tab_res:
+            ui.show_images([*ui.source_panels(prep, with_gray=True), (out.label_color, "Bản đồ 3 lớp")])
+            st.markdown("Chú giải: " + legend, unsafe_allow_html=True)
+            if not fg:
+                st.info("Chưa chọn lớp nào: mask rỗng (toàn nền).")
+            if post.operation != "none":
+                ui.show_images([(out.raw_mask, "Mask trước hình thái học"), (out.mask, "Mask sau hình thái học"),
+                                (out.overlay, "Đối tượng tô màu trên ảnh gốc")])
+                ui.show_image(out.cutout_preview, "Ảnh tách nền (nền trắng)")
+            else:
+                ui.show_images([(out.mask, "Mask đối tượng"), (out.cutout_preview, "Ảnh tách nền (nền trắng)"),
+                                (out.overlay, "Đối tượng tô màu trên ảnh gốc")])
+            if ctx.ground_truth is not None:
+                s = compare_masks(out.mask, ctx.ground_truth)
+                st.success(f"So với ground truth của ảnh mẫu: IoU = {s.iou:.4f} · Dice = {s.dice:.4f} · "
+                           f"độ chính xác pixel = {s.pixel_accuracy:.4f}")
 
-    with tab_hist:
-        ui.show_figure(viz.multi_histogram_figure(r.histogram, r.thresholds))
-        st.dataframe(pd.DataFrame([
-            {"Lớp": f"Lớp {k}", "Trọng số ω": round(r.class_weights[k], 5),
-             "Trung bình μ": None if np.isnan(r.class_means[k]) else round(r.class_means[k], 3),
-             "Số pixel": r.class_counts[k]} for k in range(3)
-        ]), hide_index=True, width="stretch")
-        st.caption(f"σ²_B(t1, t2) = {r.max_variance:.3f} · σ²_T = {r.total_variance:.3f}. "
-                   "Tìm kiếm vét cạn trên mọi cặp t1 < t2 bằng tổng tích luỹ: O(256²), không phụ thuộc kích thước ảnh."
-                   + (f" Có {r.n_tied} cặp ngưỡng đồng hạng." if r.n_tied > 1 else ""))
+    if tab_hist.open:
+        with tab_hist:
+            ui.show_figure(viz.multi_histogram_figure(r.histogram, r.thresholds))
+            st.dataframe(pd.DataFrame([
+                {"Lớp": f"Lớp {k}", "Trọng số ω": round(r.class_weights[k], 5),
+                 "Trung bình μ": None if np.isnan(r.class_means[k]) else round(r.class_means[k], 3),
+                 "Số pixel": r.class_counts[k]} for k in range(3)
+            ]), hide_index=True, width="stretch")
+            st.caption(f"σ²_B(t1, t2) = {r.max_variance:.3f} · σ²_T = {r.total_variance:.3f}. "
+                       "Tìm kiếm vét cạn trên mọi cặp t1 < t2 bằng tổng tích luỹ: O(256²), không phụ thuộc kích thước ảnh."
+                       + (f" Có {r.n_tied} cặp ngưỡng đồng hạng." if r.n_tied > 1 else ""))
 
-    with tab_dl:
-        st.caption("Các tệp được tạo từ đúng kết quả đang hiển thị.")
-        files = ui.cached_export_files(run, (tuple(sorted(fg)), post), lambda: multi_otsu_export_files(prep, out))
-        if files is not None:
-            ui.download_buttons(files, MULTI_DOWNLOAD_LABELS, "otsu_multi_dl")
+    if tab_dl.open and not pending:
+        with tab_dl:
+            export_key = (tuple(fg), post)
+            files = ui.cached_export_files(run, export_key, lambda: multi_otsu_export_files(prep, out))
+            if files is not None:
+                ui.download_buttons(files, MULTI_DOWNLOAD_LABELS, "otsu_multi_dl")
+                ui.offer_original_size_pngs(ctx, run, export_key, "multiotsu", out.mask, {"label_map": out.label_color})

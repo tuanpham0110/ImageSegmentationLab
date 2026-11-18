@@ -20,7 +20,7 @@ from src.processing.pipeline import (
     run_kmeans,
     run_otsu,
 )
-from src.utils.image_io import load_image_bytes, load_path, parse_csv_matrix, to_png_bytes
+from src.utils.image_io import load_image_bytes, load_mask_bytes, load_path, parse_csv_matrix, to_png_bytes
 from src.utils.metrics import compare_masks
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -181,11 +181,19 @@ def test_no_opencv_or_library_algorithms_imported():
 # ----------------------- Kiểm thử giao diện (Streamlit AppTest) -----------------------
 
 AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
+_RESULT_TABS = {"kmeans": "km_result_tab", "otsu": "otsu_result_tab", "compare": "cmp_result_tab"}
 
 
-def _app(page: str):
+def _select_result_tab(at, page: str, tab: str) -> None:
+    at.session_state[_RESULT_TABS[page]] = tab
+    at.run()
+
+
+def _app(page: str, tab: str | None = None):
     at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=60)
     at.session_state["_test_page"] = page
+    if tab is not None:
+        at.session_state[_RESULT_TABS[page]] = tab
     return at
 
 
@@ -202,6 +210,8 @@ def test_kmeans_page_run_button_and_downloads():
     run[0].click().run()
     assert not at.exception
     assert any("Số vòng lặp" in m.label for m in at.metric)
+    assert not at.get("download_button")
+    _select_result_tab(at, "kmeans", "Tải xuống")
     downloads = at.get("download_button")
     assert len(downloads) == 7
     assert {d.proto.label for d in downloads} >= {"⬇ Ảnh phân đoạn (PNG)", "⬇ Mask nhị phân (PNG)", "⬇ Ma trận nhãn cụm (CSV)"}
@@ -215,15 +225,81 @@ def test_kmeans_page_run_button_and_downloads():
 
 
 def test_otsu_page_shows_threshold():
-    at = _app("otsu").run()
+    at = _app("otsu", "Tải xuống").run()
     [b for b in at.button if b.label.startswith("Chạy Otsu")][0].click().run()
     assert not at.exception
     assert any(m.label.startswith("Ngưỡng Otsu") for m in at.metric)
     assert len(at.get("download_button")) == 7
 
 
+def test_kmeans_ui_can_run_one_cluster():
+    at = _app("kmeans").run()
+    at.slider(key="km_k").set_value(1)
+    next(b for b in at.button if b.label == "Chạy K-means").click().run()
+    assert not at.exception
+    result = at.session_state["km_result"]["result"]
+    assert result.core.k_effective == 1 and np.all(result.labels == 0)
+    expected = at.session_state["_input_ctx"].prepared.image.mean(axis=(0, 1))
+    np.testing.assert_allclose(result.centers[0], expected)
+
+
+def test_otsu_mode_change_blocks_previous_downloads_until_rerun():
+    at = _app("otsu", "Tải xuống").run()
+    next(b for b in at.button if b.label == "Chạy Otsu").click().run()
+    assert len(at.get("download_button")) == 7
+    at.radio(key="otsu_classes").set_value("3 lớp — Multi-Otsu (2 ngưỡng)").run()
+    assert not at.get("download_button")
+    assert any("Thiết lập đã đổi" in warning.value for warning in at.warning)
+    next(b for b in at.button if b.label == "Chạy Otsu").click().run()
+    at.session_state["multiotsu_result_tab"] = "Tải xuống"
+    at.run()
+    assert not at.exception and len(at.get("download_button")) == 5
+    assert "multiotsu_labels.csv" in at.session_state["otsu_result"]["_export_cache"]["files"]
+
+
+def test_exported_otsu_mask_csv_roundtrips_at_ui_processing_limit():
+    from src.ui.state import MAX_SIDE_OPTIONS
+
+    side = max(MAX_SIDE_OPTIONS)
+    pixels = np.zeros((side, side), np.uint8)
+    pixels[:, side // 2:] = 255
+    prepared = prepare_input(load_image_bytes(to_png_bytes(pixels), "large.png"), side)
+    out = run_otsu(prepared)
+    data, _ = otsu_export_files(prepared, out)["otsu_binary_matrix.csv"]
+    np.testing.assert_array_equal(load_mask_bytes(data, "otsu_binary_matrix.csv"), pixels)
+
+
+def test_original_size_otsu_png_uses_source_pixels_and_preserves_mask_labels():
+    h, w = 129, 260
+    pixels = np.zeros((h, w, 3), np.uint8)
+    pixels[:, :w // 2, 1] = 160
+    pixels[:, :w // 2, 2] = np.arange(h, dtype=np.uint8)[:, None] % 3
+    pixels[:, w // 2:, 0] = 25
+    at = _app("otsu", "Tải xuống")
+    at.session_state["input_source"] = "Tải tệp lên"
+    at.session_state["_test_upload"] = ("wide.png", to_png_bytes(pixels))
+    at.session_state["max_side"] = 128
+    at.run()
+    at.radio(key="otsu_polarity").set_value("Lớp sáng (> t)")
+    next(b for b in at.button if b.label == "Chạy Otsu").click().run()
+    assert "_original_export_cache" not in at.session_state["otsu_result"]
+    at.checkbox(key="otsu_export_original").set_value(True).run()
+    assert not at.exception
+    run = at.session_state["otsu_result"]
+    full = run["_original_export_cache"]["files"]
+    with Image.open(io.BytesIO(full["otsu_cutout_original.png"][0])) as saved:
+        cutout = np.asarray(saved)
+    with Image.open(io.BytesIO(full["otsu_mask_original.png"][0])) as saved:
+        mask = np.asarray(saved)
+    assert run["out"].mask.shape != (h, w)
+    assert cutout.shape == (h, w, 4)
+    np.testing.assert_array_equal(cutout[..., :3], pixels)
+    np.testing.assert_array_equal(cutout[..., 3], mask)
+    assert np.all(mask[:, :w // 2] == 255) and np.all(mask[:, w // 2:] == 0)
+
+
 def test_compare_page_without_ground_truth_does_not_invent_scores():
-    at = _app("compare")
+    at = _app("compare", "Đánh giá")
     at.session_state["sample_id"] = "rgb_regions"  # ảnh mẫu không có ground truth
     at.run()
     [b for b in at.button if b.label.startswith("Chạy K-means")][0].click()
@@ -235,7 +311,7 @@ def test_compare_page_without_ground_truth_does_not_invent_scores():
 
 
 def test_compare_page_with_ground_truth_reports_iou():
-    at = _app("compare")
+    at = _app("compare", "Đánh giá")
     at.session_state["sample_id"] = "circle_black_on_white"
     at.run()
     at.slider(key="cmp_k").set_value(2)
@@ -382,7 +458,7 @@ def test_rerender_reuses_current_decoded_image(monkeypatch):
 
 
 def test_input_change_releases_results_and_returning_to_old_image_does_not_restore_downloads():
-    at = _app("kmeans").run()
+    at = _app("kmeans", "Tải xuống").run()
     next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
     assert len(at.get("download_button")) == 7
     assert "_export_cache" in at.session_state["km_result"]
@@ -398,7 +474,7 @@ def test_input_change_releases_results_and_returning_to_old_image_does_not_resto
 
 def test_upload_filename_change_invalidates_export_metadata():
     data = (DATA / "sample_images" / "bright_rect_on_dark.png").read_bytes()
-    at = _app("otsu")
+    at = _app("otsu", "Tải xuống")
     at.session_state["input_source"] = "Tải tệp lên"
     at.session_state["_test_upload"] = ("first.png", data)
     at.run()
@@ -407,6 +483,7 @@ def test_upload_filename_change_invalidates_export_metadata():
     at.run()
     assert not at.exception and len(at.get("download_button")) == 0
     next(b for b in at.button if b.label.startswith("Chạy Otsu")).click().run()
+    _select_result_tab(at, "otsu", "Tải xuống")
     files = at.session_state["otsu_result"]["_export_cache"]["files"]
     assert json.loads(files["otsu_stats.json"][0])["anh"] == "second.png"
 
@@ -423,6 +500,8 @@ def test_kmeans_exports_are_reused_until_foreground_changes(monkeypatch):
     monkeypatch.setattr(page_kmeans, "kmeans_export_files", tracked)
     at = _app("kmeans").run()
     next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
+    assert not calls
+    _select_result_tab(at, "kmeans", "Tải xuống")
     at.run()
     assert not at.exception and len(calls) == 1
     at.multiselect[0].set_value([]).run()
@@ -446,9 +525,12 @@ def test_otsu_exports_are_reused_until_a_new_run(monkeypatch):
     monkeypatch.setattr(page_otsu, "otsu_export_files", tracked)
     at = _app("otsu").run()
     next(b for b in at.button if b.label.startswith("Chạy Otsu")).click().run()
+    assert not calls
+    _select_result_tab(at, "otsu", "Tải xuống")
     at.run()
     assert not at.exception and len(calls) == 1
     at.radio(key="otsu_mode").set_value("Thủ công (đối chiếu)").run()
+    assert len(calls) == 1 and not at.get("download_button")
     at.slider(key="otsu_manual_t").set_value(50)
     next(b for b in at.button if b.label.startswith("Chạy Otsu")).click().run()
     assert not at.exception and len(calls) == 2
@@ -466,7 +548,7 @@ def test_export_failure_is_visible_and_does_not_offer_stale_files(monkeypatch, p
     def fail(*args):
         raise OSError("Lỗi mã hoá kiểm thử")
 
-    at = _app(page).run()
+    at = _app(page, "Tải xuống").run()
     monkeypatch.setattr(module, function, fail)
     label = "Chạy Otsu" if page == "otsu" else "Chạy K-means"
     next(b for b in at.button if b.label.startswith(label)).click().run()
@@ -480,7 +562,7 @@ def test_export_failure_is_visible_and_does_not_offer_stale_files(monkeypatch, p
 def test_decode_memory_failure_clears_input_and_existing_downloads(monkeypatch):
     from src.ui import sidebar
 
-    at = _app("otsu").run()
+    at = _app("otsu", "Tải xuống").run()
     next(b for b in at.button if b.label.startswith("Chạy Otsu")).click().run()
     assert len(at.get("download_button")) == 7
 
@@ -589,7 +671,7 @@ def test_plot_is_closed_even_when_streamlit_rendering_fails(monkeypatch):
 def test_postprocessing_memory_error_is_visible_without_downloads(monkeypatch, page):
     import importlib
 
-    at = _app(page).run()
+    at = _app(page, "Tải xuống").run()
     next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
 
     def fail(*args, **kwargs):
@@ -687,7 +769,7 @@ def test_compare_16bit_transparent_input_and_all_white_16bit_ground_truth():
     image_bytes, gt_bytes = io.BytesIO(), io.BytesIO()
     Image.fromarray(raw).save(image_bytes, "PNG", transparency=1000)
     Image.fromarray(np.full(raw.shape, 65535, np.uint16)).save(gt_bytes, "PNG")
-    at = _app("compare").run()
+    at = _app("compare", "Đánh giá").run()
     at.radio(key="input_source").set_value("Tải tệp lên").run()
     at.file_uploader(key="uploader").set_value(("depth.png", image_bytes.getvalue(), "image/png")).run()
     next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
@@ -724,12 +806,15 @@ def test_uploaded_ground_truth_is_decoded_once_until_the_file_changes(monkeypatc
 
 # ---------------- Hồi quy: giữ lựa chọn người dùng khi chuyển trang ----------------
 
-def _navigate(at, page: str):
+def _navigate(at, page: str, tab: str | None = None):
     at.session_state["_test_page"] = page
+    if tab is not None:
+        at.session_state[_RESULT_TABS[page]] = tab
     return at.run()
 
 
 def _km_export(at) -> dict:
+    _select_result_tab(at, "kmeans", "Tải xuống")
     files = at.session_state["km_result"]["_export_cache"]["files"]
     return json.loads(files["kmeans_stats.json"][0])
 
@@ -766,7 +851,7 @@ def test_compare_polarity_and_foreground_survive_navigation():
     at.radio(key="cmp_otsu_polarity").set_value("Lớp sáng (> t)").run()
     at.multiselect[0].set_value([1]).run()
     _navigate(at, "guide")
-    _navigate(at, "compare")
+    _navigate(at, "compare", "Đánh giá")
     assert not at.exception
     assert at.radio(key="cmp_otsu_polarity").value == "Lớp sáng (> t)"
     assert at.session_state["cmp_result"]["otsu"].polarity == "bright"
@@ -795,7 +880,7 @@ def test_new_kmeans_run_starts_from_suggested_foreground():
 
 
 def test_otsu_histogram_table_lists_all_256_levels():
-    at = _app("otsu").run()
+    at = _app("otsu", "Histogram & phương sai").run()
     next(b for b in at.button if b.label.startswith("Chạy Otsu")).click().run()
     tables = [df.value for df in at.dataframe if "Mức xám g" in df.value.columns]
     assert tables and list(tables[0]["Mức xám g"]) == list(range(256))
@@ -820,7 +905,7 @@ def _opposite_gt() -> bytes:
 
 
 def _compare_with_uploaded_gt(run_first: bool = True):
-    at = _app("compare")
+    at = _app("compare", "Đánh giá")
     at.session_state["sample_id"] = "circle_black_on_white"
     at.run()
     if run_first:
@@ -835,7 +920,7 @@ def test_uploaded_ground_truth_survives_navigation():
     before = _iou_rows(at)
     assert before is not None and before["K-means"] < 0.5  # GT đảo ngược: khác hẳn GT mẫu (IoU = 1)
     _navigate(at, "guide")
-    _navigate(at, "compare")
+    _navigate(at, "compare", "Đánh giá")
     assert not at.exception
     assert _gt_source(at) == "Tính trên ground truth tải lên (opposite_gt.png)."
     assert _iou_rows(at) == before
@@ -848,7 +933,7 @@ def test_uploaded_ground_truth_survives_navigation():
 def test_uploaded_ground_truth_before_first_run_survives_navigation():
     at = _compare_with_uploaded_gt(run_first=False)
     _navigate(at, "theory")
-    _navigate(at, "compare")
+    _navigate(at, "compare", "Đánh giá")
     next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
     assert not at.exception
     assert _gt_source(at) == "Tính trên ground truth tải lên (opposite_gt.png)."
@@ -857,7 +942,7 @@ def test_uploaded_ground_truth_before_first_run_survives_navigation():
 def test_explicit_removal_of_uploaded_ground_truth_returns_to_sample_ground_truth():
     at = _compare_with_uploaded_gt()
     _navigate(at, "guide")
-    _navigate(at, "compare")
+    _navigate(at, "compare", "Đánh giá")
     next(b for b in at.button if b.label == "Bỏ ground truth tải lên").click().run()
     assert not at.exception
     assert "cmp_uploaded_gt" not in at.session_state
@@ -900,7 +985,7 @@ def test_transparent_ground_truth_upload_is_rejected_without_fallback_scores():
 def _compare_with_transparent_gt():
     rgba = np.zeros((4, 4, 4), np.uint8)
     rgba[1:3, 1:3] = (255, 255, 255, 255)
-    at = _app("compare")
+    at = _app("compare", "Đánh giá")
     at.session_state["sample_id"] = "circle_black_on_white"
     at.run()
     next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
@@ -911,7 +996,7 @@ def _compare_with_transparent_gt():
 def test_failed_ground_truth_upload_survives_navigation():
     at = _compare_with_transparent_gt()
     _navigate(at, "guide")
-    _navigate(at, "compare")
+    _navigate(at, "compare", "Đánh giá")
     assert not at.exception
     assert any("vùng trong suốt" in e.value for e in at.error)
     assert _iou_rows(at) is None  # không quay về GT mẫu với IoU = 1.0
@@ -923,7 +1008,7 @@ def test_failed_ground_truth_upload_survives_navigation():
 def test_failed_ground_truth_is_cleared_by_explicit_removal():
     at = _compare_with_transparent_gt()
     _navigate(at, "guide")
-    _navigate(at, "compare")
+    _navigate(at, "compare", "Đánh giá")
     next(b for b in at.button if b.label == "Bỏ ground truth tải lên").click().run()
     assert not at.exception and not at.error
     assert "cmp_uploaded_gt" not in at.session_state

@@ -74,6 +74,7 @@ def test_csv_conversion_preserves_valid_noncanonical_integer_notation(text):
 def compare_app():
     app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=60)
     app.session_state["_test_page"] = "compare"
+    app.session_state["cmp_result_tab"] = "Tải xuống"
     app.run()
     next(b for b in app.button if b.label.startswith("Chạy K-means")).click().run()
     assert not app.exception

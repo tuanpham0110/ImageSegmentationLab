@@ -110,7 +110,8 @@ QUALITATIVE = [
     ("Phụ thuộc tham số", "Cao: K và khởi tạo ảnh hưởng kết quả; có thể rơi vào cực tiểu địa phương.",
      "Thấp: kết quả xác định duy nhất từ histogram."),
     ("Ưu điểm", "Dùng được màu sắc; tách được nhiều vùng; tổng quát.", "Rất nhanh O(N + 256); tối ưu toàn cục; không cần tham số."),
-    ("Hạn chế", "Phải chọn K; chậm hơn O(N·K·D·số vòng); bản thân thuật toán không dùng thông tin không gian "
+    ("Hạn chế", "Phải chọn K; vòng lặp có chi phí O(U·K·D·số vòng) với U là số giá trị pixel phân biệt; "
+     "bản thân thuật toán không dùng thông tin không gian "
                 "(bù bằng lọc trung vị trước và hình thái học sau).",
      "Kém khi histogram không có đỉnh rõ, đối tượng nhỏ, chiếu sáng không đều; không dùng màu; "
      "không dùng thông tin không gian."),
@@ -185,32 +186,42 @@ def _render(ctx, run, uploaded_gt) -> None:
 
     options = list(range(km.core.k_effective))
     fg_key = f"cmp_fg_{run['run_id']}"
-    persistent_foreground(run, fg_key, options, default_foreground(km))
+    if fg_key not in st.session_state:
+        initial = run["foreground"] if "foreground" in run else default_foreground(km)
+        persistent_foreground(run, fg_key, options, initial)
     fg = st.multiselect("Cụm K-means làm đối tượng", options,
                         format_func=lambda c: f"Cụm {c}", key=fg_key,
                         help="Mặc định là gợi ý theo viền ảnh; hãy chỉnh cho đúng đối tượng.")
     save_foreground(run, fg)
+    _result_tabs(ctx, run, fg, otsu, uploaded_gt)
+
+
+def _result_tabs(ctx, run, fg, otsu, uploaded_gt) -> None:
+    prep, km = ctx.prepared, run["km"]
+    images, masks, scores, downloads = st.tabs(
+        ["Kết quả phân đoạn", "Đối chiếu mask", "Đánh giá", "Tải xuống"],
+        key="cmp_result_tab", on_change="rerun",
+    )
+    if images.open:
+        with images:
+            _segmented_images(prep, km, otsu)
+        return
     try:
         out = kmeans_outputs(prep, km, fg)
     except (ValueError, MemoryError) as exc:
         run.pop("_export_cache", None)
         st.error("Không tạo ảnh kết quả được. Hãy kiểm tra lựa chọn cụm hoặc giảm giới hạn cạnh dài. " + str(exc))
         return
-
-    _result_tabs(ctx, run, out, otsu, uploaded_gt)
-
-
-def _result_tabs(ctx, run, out, otsu, uploaded_gt) -> None:
-    prep, km = ctx.prepared, run["km"]
-    images, masks, scores, downloads = st.tabs(["Kết quả phân đoạn", "Đối chiếu mask", "Đánh giá", "Tải xuống"])
-    with images:
-        _segmented_images(prep, km, out, otsu)
-    with masks:
-        _mask_comparison(out, otsu)
-    with scores:
-        _scores(ctx, run, out, otsu, uploaded_gt)
-        _current_image_analysis(prep, km, out, otsu)
-        _comparison_table(run)
+    if masks.open:
+        with masks:
+            _mask_comparison(out, otsu)
+        return
+    if scores.open:
+        with scores:
+            _scores(ctx, run, out, otsu, uploaded_gt)
+            _current_image_analysis(prep, km, out, otsu)
+            _comparison_table(run)
+        return
     with downloads:
         st.caption("Tệp ZIP chứa toàn bộ ảnh PNG, ma trận CSV và tham số JSON của hai kết quả đang hiển thị.")
         files = ui.cached_export_files(
@@ -227,9 +238,9 @@ def _result_tabs(ctx, run, out, otsu, uploaded_gt) -> None:
             }, "cmp_dl")
 
 
-def _segmented_images(prep, km, out, otsu) -> None:
+def _segmented_images(prep, km, otsu) -> None:
     st.markdown("##### Kết quả trực tiếp của từng thuật toán")
-    ui.show_images([*ui.source_panels(prep), (out.segmented, f"K-means: {km.core.k_effective} cụm"),
+    ui.show_images([*ui.source_panels(prep), (km.segmented, f"K-means: {km.core.k_effective} cụm"),
                     (otsu.binary, f"Otsu: nhị phân (t* = {otsu.result.threshold})")])
     st.caption("Lưu ý: K-means cho ảnh nhiều cụm, Otsu cho ảnh 2 lớp — hai ảnh trên không cùng loại nên chỉ so sánh trực quan. "
                "Tab Đối chiếu mask và Đánh giá dùng **mask nhị phân** của cả hai.")

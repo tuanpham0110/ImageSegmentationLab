@@ -206,7 +206,9 @@ def apply_threshold(gray: np.ndarray, threshold: int) -> np.ndarray:
     if (isinstance(threshold, (bool, np.bool_)) or not isinstance(threshold, (int, np.integer))
             or not 0 <= int(threshold) <= 255):
         raise ValueError("Ngưỡng phải là số nguyên trong [0, 255].")
-    return np.where(_validate_gray(gray) > int(threshold), 255, 0).astype(np.uint8)
+    binary = (_validate_gray(gray) > int(threshold)).astype(np.uint8)
+    binary *= 255
+    return binary
 
 
 def segment_image_otsu(gray: np.ndarray, manual_threshold: int | None = None) -> tuple[OtsuResult, np.ndarray]:

@@ -492,7 +492,7 @@ def unique_pixels(features: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndar
         pixels = features[:, 0].astype(np.uint8, copy=False)
         histogram = np.bincount(pixels, minlength=256)
         levels = np.flatnonzero(histogram)
-        lookup = np.zeros(256, dtype=np.intp)
+        lookup = np.zeros(256, dtype=np.uint8)
         lookup[levels] = np.arange(levels.size)
         return levels.astype(np.float64)[:, None], lookup[pixels], histogram[levels]
     # Tối đa 24 bit RGB, vừa int32. Không tạo thêm ma trận int64 N×D.
