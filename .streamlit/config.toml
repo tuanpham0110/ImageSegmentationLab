@@ -1,33 +1,33 @@
 [theme]
 base = "light"
-primaryColor = "#1877f2"
-backgroundColor = "#f5f7fb"
-secondaryBackgroundColor = "#f0f3f8"
-textColor = "#182230"
-font = "Arial"
-headingFont = "Arial"
-codeFont = "Arial"
+primaryColor = "#086b5e"
+backgroundColor = "#f4f6f2"
+secondaryBackgroundColor = "#eaf0eb"
+textColor = "#122b27"
+font = "sans-serif"
+headingFont = "sans-serif"
+codeFont = "monospace"
 baseFontSize = 15
 headingFontSizes = ["1.9rem", "1.5rem", "1.2rem", "1.05rem", "1rem", "0.9rem"]
 headingFontWeights = [700, 700, 600, 600, 600, 600]
 metricValueFontSize = "1.35rem"
 metricValueFontWeight = 600
-borderColor = "#e3e8ef"
+borderColor = "#d6e1da"
 baseRadius = "12px"
 buttonRadius = "8px"
 showWidgetBorder = true
 showSidebarBorder = true
-dataframeHeaderBackgroundColor = "#f0f3f8"
-dataframeHeaderTextColor = "#344054"
+dataframeHeaderBackgroundColor = "#eaf0eb"
+dataframeHeaderTextColor = "#29483f"
 paddingTop = "1rem"
 paddingBottom = "3rem"
 
 [theme.sidebar]
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f5f7fb"
-borderColor = "#e3e8ef"
-textColor = "#344054"
-primaryColor = "#1877f2"
+backgroundColor = "#fcfdfb"
+secondaryBackgroundColor = "#edf2ed"
+borderColor = "#d6e1da"
+textColor = "#29483f"
+primaryColor = "#086b5e"
 paddingTop = "0.5rem"
 paddingBottom = "1.5rem"
 

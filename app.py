@@ -1,4 +1,4 @@
-"""IMAGE SEGMENTATION LAB — điểm khởi chạy Streamlit.
+"""Image Segmentation Studio — điểm khởi chạy Streamlit.
 
 Chạy:  python -m streamlit run app.py
 """
@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-st.set_page_config(page_title="Phân đoạn ảnh · K-means & Otsu", page_icon=":material/blur_on:", layout="wide",
+st.set_page_config(page_title="Image Segmentation Studio", page_icon=":material/blur_on:", layout="wide",
                    initial_sidebar_state="auto")
 
 from src.ui import (  # noqa: E402
@@ -50,6 +50,7 @@ def main() -> None:
     nav = st.navigation({"Thực hành": pages[:4], "Tra cứu & tài liệu": pages[4:]})
     render_input_sidebar()
     test_page = st.session_state.get("_test_page")  # chỉ dùng khi kiểm thử tự động (AppTest)
+    st.session_state["_studio_page"] = test_page if test_page in PAGES else nav.url_path
     if test_page in PAGES:
         PAGES[test_page][0]()
     else:

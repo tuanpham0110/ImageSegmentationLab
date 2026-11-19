@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -91,7 +92,7 @@ def params_form(is_color: bool, key_prefix: str = "km", *, submit_label: str = "
 
 
 def render() -> None:
-    ui.page_header("Phân đoạn bằng K-means", "Chọn số cụm, điều chỉnh đặc trưng và quan sát các vùng màu trong ảnh.")
+    ui.page_header("Phân đoạn bằng K-means", "Gom các pixel theo màu hoặc độ sáng rồi chọn cụm để tách đối tượng.")
     ctx = ui.require_input()
     if ctx is None:
         return
@@ -101,10 +102,10 @@ def render() -> None:
     left, right = ui.workspace("kmeans")
     with left:
         params = params_form(prep.is_color)
-        st.button("Khôi phục mặc định", on_click=_reset_defaults, width="stretch")
+        st.button("Khôi phục mặc định", on_click=_reset_defaults, type="tertiary", width="stretch")
     if params is not None:
         try:
-            with right, st.spinner("Đang phân cụm K-means…"):
+            with right, st.spinner("Đang phân cụm K-means…", show_time=True):
                 result = run_kmeans(prep, params)
         except (ValueError, MemoryError) as exc:
             st.session_state.pop(RESULT_KEY, None)
@@ -121,9 +122,7 @@ def render() -> None:
     run = get_result(RESULT_KEY, ctx.signature)
     with right:
         if run is None:
-            if has_stale_result(RESULT_KEY, ctx.signature):
-                st.warning("Ảnh đầu vào đã thay đổi — kết quả cũ đã bị ẩn. Hãy bấm **Chạy K-means** lại.")
-            ui.show_images(ui.source_panels(prep))
+            ui.result_empty(prep, "Chạy K-means", stale=has_stale_result(RESULT_KEY, ctx.signature))
             return
         _render_result(ctx, run)
 
@@ -148,11 +147,9 @@ def _render_result(ctx, run: dict) -> None:
     )
 
     with tab_fg:
-        st.markdown(
-            "K-means chỉ chia pixel thành các **cụm** — thuật toán **không biết** cụm nào là đối tượng. "
-            "Hãy chọn một hoặc nhiều cụm làm đối tượng (foreground). Lựa chọn mặc định chỉ là **gợi ý**: "
-            "cụm xuất hiện ở viền ảnh nhiều hơn ở vùng trung tâm được coi là nền."
-        )
+        if tab_fg.open:
+            st.caption("Chọn một cụm để xem mask riêng, hoặc chọn nhiều cụm để tạo một mask chung. "
+                       "Lựa chọn ban đầu là gợi ý theo viền ảnh.")
         options = list(range(core.k_effective))
         fg_key = f"km_fg_{run['run_id']}"
         if fg_key not in st.session_state:
@@ -170,7 +167,6 @@ def _render_result(ctx, run: dict) -> None:
         post = ui.morphology_controls("km")
     try:
         out = kmeans_outputs(prep, result, fg, post) if tab_fg.open or tab_dl.open else None
-        label_color = colorize_labels(result.labels) if tab_seg.open else None
     except (ValueError, MemoryError) as exc:
         run.pop("_export_cache", None)
         run.pop("_original_export_cache", None)
@@ -179,7 +175,7 @@ def _render_result(ctx, run: dict) -> None:
 
     if tab_seg.open:
         with tab_seg:
-            _show_segmentation(prep, result.segmented, label_color, core.k_effective)
+            _show_segmentation(prep, result)
 
     if tab_fg.open:
         with tab_fg:
@@ -200,26 +196,45 @@ def _render_result(ctx, run: dict) -> None:
                                             {"segmented": out.segmented, "label_map": out.label_color})
 
 
-def _show_segmentation(prep, segmented, label_color, k: int) -> None:
-    ui.show_images([*ui.source_panels(prep), (segmented, "Ảnh K-means (màu tâm cụm)"),
-                    (label_color, "Bản đồ nhãn cụm")])
-    legend = " ".join(
-        f"<span class='isl-chip'><span class='isl-swatch' style='background:{c}'></span>Cụm {i}</span>"
-        for i, c in enumerate(cluster_palette_hex(k))
+def _show_segmentation(prep, result) -> None:
+    original, *processed = ui.source_panels(prep)
+    ui.show_images([original, (result.segmented, "Ảnh K-means (màu tâm cụm)")])
+    st.markdown("**Màu tâm cụm**")
+    colors = result.centers_rgb if result.centers_rgb is not None else np.repeat(result.centers, 3, axis=1)
+    colors = np.clip(np.round(colors), 0, 255).astype(np.uint8)
+    counts = result.core.counts
+    total = counts.sum()
+    swatches = "".join(
+        f"<span class='isl-chip'><span class='isl-swatch' aria-hidden='true' style='background:#{r:02x}{g:02x}{b:02x}'></span>"
+        f"Cụm {i} · {count / total:.1%}</span>"
+        for i, ((r, g, b), count) in enumerate(zip(colors, counts))
     )
-    st.markdown("Chú giải bản đồ nhãn: " + legend, unsafe_allow_html=True)
+    st.html(f"<div class='isl-palette' aria-label='Màu tâm cụm và tỷ lệ pixel'>{swatches}</div>")
+
+    details = st.expander("Bản đồ nhãn cụm", key="km_label_preview", icon=":material/layers:", on_change="rerun")
+    if details.open:
+        with details:
+            try:
+                label_color = colorize_labels(result.labels)
+            except (ValueError, MemoryError) as exc:
+                st.error("Không tạo ảnh kết quả được. " + str(exc))
+                return
+            ui.show_images([(label_color, "Bản đồ nhãn cụm"), *processed])
+            legend = "".join(
+                f"<span class='isl-chip'><span class='isl-swatch' aria-hidden='true' style='background:{c}'></span>Cụm {i}</span>"
+                for i, c in enumerate(cluster_palette_hex(result.core.k_effective))
+            )
+            st.html(f"<div class='isl-palette' aria-label='Chú giải bản đồ nhãn'>{legend}</div>")
 
 
 def _show_foreground(ctx, out, fg, post) -> None:
     if not fg:
         st.info("Chưa chọn cụm nào: mask rỗng (toàn nền).")
+    mask_caption = "Mask sau hình thái học" if post.operation != "none" else "Mask nhị phân (trắng = đối tượng)"
+    ui.show_images([(out.mask, mask_caption), (out.cutout_preview, "Ảnh tách nền (nền trắng)"),
+                    (out.overlay, "Đối tượng tô màu trên ảnh gốc")], columns=3)
     if post.operation != "none":
-        ui.show_images([(out.raw_mask, "Mask trước hình thái học"), (out.mask, "Mask sau hình thái học"),
-                        (out.overlay, "Đối tượng tô màu trên ảnh gốc")])
-        ui.show_image(out.cutout_preview, "Ảnh tách nền (nền trắng)")
-    else:
-        ui.show_images([(out.mask, "Mask nhị phân (trắng = đối tượng)"), (out.cutout_preview, "Ảnh tách nền (nền trắng)"),
-                        (out.overlay, "Đối tượng tô màu trên ảnh gốc")])
+        ui.show_images([(out.raw_mask, "Mask trước hình thái học")])
     ratio = out.mask.mean() / 255 * 100
     st.caption(f"Đối tượng chiếm {ratio:.2f}% pixel · nền {100 - ratio:.2f}%.")
     if ctx.ground_truth is not None:

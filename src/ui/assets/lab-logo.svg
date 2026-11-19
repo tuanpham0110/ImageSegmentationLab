@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="300" height="58" viewBox="0 0 300 58">
-  <rect x="0" y="5" width="48" height="48" rx="12" fill="#1877f2"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="254" height="58" viewBox="0 0 254 58">
+  <rect x="0" y="5" width="48" height="48" rx="12" fill="#086b5e"/>
   <path d="M13 18h9v9h-9zm13 0h9v9h-9zM13 31h9v9h-9z" fill="#fff"/>
-  <path d="M26 31h9v9h-9z" fill="#a8d0ff"/>
-  <text x="62" y="27" fill="#182230" font-family="Arial, Segoe UI, sans-serif" font-weight="700" font-size="22">Phân đoạn ảnh</text>
-  <text x="62" y="46" fill="#667085" font-family="Arial, Segoe UI, sans-serif" font-size="13">K-means &amp; Otsu · PTIT</text>
+  <path d="M26 31h9v9h-9z" fill="#a5debe"/>
+  <text x="61" y="27" fill="#122b27" font-family="Arial, Segoe UI, sans-serif" font-weight="700" font-size="17">Segmentation Studio</text>
+  <text x="61" y="45" fill="#4d645b" font-family="Arial, Segoe UI, sans-serif" font-size="12">K-means &amp; Otsu · PTIT</text>
 </svg>

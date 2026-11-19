@@ -16,12 +16,12 @@ matplotlib.rcParams.update({
     "mathtext.fontset": "dejavusans",
 })
 
-TEXT_PRIMARY = "#182230"
-TEXT_SECONDARY = "#667085"
-GRID = "#e3e8ef"
-SERIES_MAIN = "#1877f2"
-ACCENT = "#e34948"
-NEUTRAL = "#8c959f"
+TEXT_PRIMARY = "#122b27"
+TEXT_SECONDARY = "#49625a"
+GRID = "#d6e1da"
+SERIES_MAIN = "#086b5e"
+ACCENT = "#bc4338"
+NEUTRAL = "#879a94"
 
 
 def _style(ax, title: str, xlabel: str, ylabel: str) -> None:

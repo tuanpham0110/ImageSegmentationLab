@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from html import escape
+
 import streamlit as st
 
 from src.ui import components as ui
-from src.ui.state import DATA_DIR, load_manifest, thumbnail
+from src.ui.state import DATA_DIR, get_context, load_manifest, thumbnail
 from src.utils.image_io import InputError
+
+FEATURE_LABELS = {"rgb": "RGB", "lab": "Lab", "gray": "mức xám"}
 
 
 def _use_sample(sid: str) -> None:
@@ -17,10 +21,7 @@ def _use_sample(sid: str) -> None:
 
 
 def render() -> None:
-    ui.page_header("Thư viện ảnh mẫu", "Bộ test case tổng hợp (sinh bằng NumPy/Pillow), chạy offline, có ground truth khi phù hợp.")
-    notice = st.session_state.pop("_library_notice", None)
-    if notice:
-        st.success(f"Đã chọn mẫu **{notice}**. Mở trang K-means, Otsu hoặc So sánh để xử lý.")
+    ui.page_header("Thư viện ảnh mẫu", "Chọn mẫu tổng hợp để thử các vùng màu, mức xám và ảnh có nhiễu.")
     try:
         samples = load_manifest()
     except InputError as exc:
@@ -29,22 +30,49 @@ def render() -> None:
     if not samples:
         st.error("Không tìm thấy data/samples.json. Chạy: `python scripts/generate_samples.py`.")
         return
-    st.caption("Tất cả là ảnh tổng hợp, không phải ảnh chụp thật. Có thể tải ảnh chụp của bạn ở thanh bên.")
+
+    ctx = get_context()
+    selected = ctx.sample if ctx is not None else None
+    notice = st.session_state.pop("_library_notice", None)
+    if selected is not None and selected["id"] == notice:
+        st.success(f"Đã chọn mẫu {selected['title']}.")
+        pages = st.session_state["_nav_pages"]
+        with st.container(horizontal=True, gap="small", key="library-next"):
+            st.page_link(pages["kmeans"], label="Phân cụm K-means", icon=":material/palette:")
+            st.page_link(pages["otsu"], label="Phân ngưỡng Otsu", icon=":material/contrast:")
+            st.page_link(pages["compare"], label="So sánh kết quả", icon=":material/compare:")
+
     with st.container(key="library-grid"):
-        for row in range(0, len(samples), 2):
-            cols = st.columns(2, gap="medium")
-            for col, s in zip(cols, samples[row : row + 2]):
-                with col, st.container(border=True, height="stretch", key=f"sample-card-{s['id']}"):
-                    try:
-                        st.image(thumbnail(str(DATA_DIR / s["file"])), width="stretch", alt=s["title"])
-                    except (InputError, OSError, MemoryError) as exc:
-                        st.error(f"Không đọc được ảnh mẫu: {exc}")
-                    st.markdown(f"**{s['title']}**")
-                    chips = [s["kind"].upper(), "có ground truth" if s["ground_truth"] else "không có ground truth",
-                             f"gợi ý K = {s['suggested']['k']}", f"đặc trưng {s['suggested']['feature']}"]
-                    st.markdown("".join(f"<span class='isl-chip'>{c}</span>" for c in chips), unsafe_allow_html=True)
-                    st.caption(f"**Mục đích:** {s['purpose']}")
-                    st.caption(f"**Kỳ vọng:** {s['expected']}")
-                    st.space("stretch")
-                    st.button("Dùng ảnh này", key=f"use_{s['id']}", on_click=_use_sample, args=(s["id"],),
-                              width="stretch")
+        for sample in samples:
+            _sample_card(sample, selected is not None and sample["id"] == selected["id"])
+
+
+def _sample_card(sample: dict, selected: bool) -> None:
+    sid, title = sample["id"], sample["title"]
+    path = DATA_DIR / sample["file"]
+    with st.container(border=True, height="stretch", key=f"sample-card-{sid}"):
+        try:
+            image = thumbnail(str(path), size=320)
+        except (InputError, OSError, MemoryError) as exc:
+            st.error(f"Không đọc được ảnh mẫu: {exc}")
+            image = None
+        else:
+            st.image(image, width="stretch", alt=title)
+
+        kind = path.suffix.removeprefix(".").upper()
+        reference = "Có mask tham chiếu" if sample["ground_truth"] else "Đánh giá trực quan"
+        status = "<span class='isl-sample-current'>Ảnh đang dùng</span>" if selected else ""
+        st.html(
+            f"<p class='isl-sample-meta'>{escape(kind)} · {reference}</p>{status}"
+            f"<h2 class='isl-sample-heading'>{escape(title)}</h2>"
+        )
+        st.caption(sample["purpose"])
+        with st.expander("Tham số và kết quả dự kiến"):
+            suggested = sample["suggested"]
+            st.caption(f"K-means · K = {suggested['k']} · {FEATURE_LABELS[suggested['feature']]}")
+            st.markdown(sample["expected"])
+        st.space("stretch")
+        st.button(
+            "Dùng ảnh này", key=f"use_{sid}", on_click=_use_sample, args=(sid,),
+            icon=":material/arrow_forward:", width="stretch", disabled=image is None,
+        )

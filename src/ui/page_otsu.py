@@ -55,6 +55,13 @@ def polarity_caption(out) -> str:
     return f"Đối tượng = {side}{how}."
 
 
+def show_threshold_warnings(warnings: list[str], prefix: str = "") -> None:
+    """Render partition warnings here and leave threshold ties to the threshold details."""
+    for message in warnings:
+        if "ngưỡng cùng đạt cực đại" not in message:
+            st.warning(prefix + message)
+
+
 DOWNLOAD_LABELS = {
     "otsu_binary.png": "⬇ Ảnh nhị phân (PNG)",
     "otsu_mask.png": "⬇ Mask đối tượng (PNG)",
@@ -80,7 +87,7 @@ def _reset_defaults() -> None:
 
 
 def render() -> None:
-    ui.page_header("Phân ngưỡng Otsu", "Tách đối tượng theo độ sáng, xem histogram và đối chiếu ngưỡng tự động.")
+    ui.page_header("Phân ngưỡng Otsu", "Tìm ngưỡng từ histogram mức xám rồi chọn lớp sáng hoặc tối để tách đối tượng.")
     ctx = ui.require_input()
     if ctx is None:
         return
@@ -116,7 +123,7 @@ def render() -> None:
             submitted = st.button("Chạy Otsu", type="primary", width="stretch")
         for k in DEFAULTS:
             remember_widget(k)
-        st.button("Khôi phục mặc định", on_click=_reset_defaults, key="otsu_reset", width="stretch")
+        st.button("Khôi phục mặc định", on_click=_reset_defaults, key="otsu_reset", type="tertiary", width="stretch")
         st.caption(f"Ảnh màu được chuyển xám bằng: {GRAY_METHODS[prep.gray_method]} (đổi ở thanh bên).")
 
     kind = "multi" if classes == CLASS_MODES[1] else "binary"
@@ -125,7 +132,7 @@ def render() -> None:
     settings = (kind, manual, chosen_polarity, post)
     if submitted:
         try:
-            with st.spinner("Đang phân ngưỡng…"):
+            with right, st.spinner("Đang phân ngưỡng…", show_time=True):
                 if kind == "multi":
                     result, labels = run_multi_otsu(prep)
                     run_id = st.session_state.get("otsu_run_id", 0) + 1
@@ -136,13 +143,15 @@ def render() -> None:
                     payload = {"kind": "binary", "out": out}
         except (ValueError, MemoryError) as exc:
             st.session_state.pop(RESULT_KEY, None)
-            st.error("Không phân ngưỡng được ảnh. Hãy kiểm tra dữ liệu hoặc giảm giới hạn cạnh dài. " + str(exc))
+            right.error("Không phân ngưỡng được ảnh. Hãy kiểm tra dữ liệu hoặc giảm giới hạn cạnh dài. " + str(exc))
             return
         store_result(RESULT_KEY, ctx.signature, {**payload, "settings": settings})
         if payload["kind"] == "multi":
             r = payload["result"]
-            st.toast(f"Multi-Otsu: (t1, t2) = {r.thresholds} ({r.elapsed_seconds * 1000:.1f} ms).",
-                     icon="✅" if r.valid else "⚠️")
+            if r.valid:
+                st.toast(f"Multi-Otsu: (t1, t2) = {r.thresholds} ({r.elapsed_seconds * 1000:.1f} ms).", icon="✅")
+            else:
+                st.toast("Multi-Otsu không tìm được hai ngưỡng để chia ba lớp.", icon="⚠️")
         elif out.mode == "otsu" and not out.result.valid:
             st.toast("Otsu không chia được hai lớp; mask tự động được để trống.", icon="⚠️")
         else:
@@ -151,9 +160,7 @@ def render() -> None:
     run = get_result(RESULT_KEY, ctx.signature)
     with right:
         if run is None:
-            if has_stale_result(RESULT_KEY, ctx.signature):
-                st.warning("Ảnh đầu vào đã thay đổi — kết quả cũ đã bị ẩn. Hãy bấm **Chạy Otsu** lại.")
-            ui.show_images(ui.source_panels(prep, with_gray=True))
+            ui.result_empty(prep, "Chạy Otsu", with_gray=True, stale=has_stale_result(RESULT_KEY, ctx.signature))
             return
         pending = run.get("settings") != settings
         if pending:
@@ -174,28 +181,16 @@ def _render_result(ctx, run: dict, pending: bool) -> None:
     m[3].metric("Đối tượng", f"{out.foreground_ratio * 100:.1f}%", help="Tỷ lệ pixel đối tượng; phần còn lại là nền.")
     m[4].metric("Thời gian", f"{r.elapsed_seconds * 1000:.2f} ms", help=TIMING_SCOPE)
     st.caption(f"Quy ước: pixel > {out.threshold_used} → 255 (lớp C1, sáng). " + polarity_caption(out))
-    st.caption("Kết quả lần chạy gần nhất · "
-               + ("Ngưỡng thủ công" if out.mode == "manual" else "Otsu tự động")
-               + ". Đổi thiết lập rồi bấm Chạy Otsu để cập nhật.")
-    for w in out.warnings:
-        st.warning(w)
+    if not pending and (r.valid or out.mode == "manual"):
+        ui.run_state("Kết quả đã sẵn sàng", detail="Ngưỡng thủ công" if out.mode == "manual" else "Otsu tự động")
+    show_threshold_warnings(out.warnings)
 
     tab_res, tab_hist, tab_dl = st.tabs(["Kết quả phân ngưỡng", "Histogram & phương sai", "Tải xuống"],
                                        key="otsu_result_tab", on_change="rerun")
     if tab_res.open:
         with tab_res:
-            ui.show_images([*ui.source_panels(prep, with_gray=True), (out.binary, f"Ảnh nhị phân (> {out.threshold_used})")])
-            if out.postprocess.operation != "none":
-                ui.show_images([(out.raw_mask, "Mask trước hình thái học"), (out.mask, "Mask sau hình thái học"),
-                                (out.overlay, "Đối tượng tô màu trên ảnh gốc")])
-                ui.show_image(out.cutout_preview, "Ảnh tách nền (nền trắng)")
-            else:
-                ui.show_images([(out.mask, "Mask đối tượng"), (out.cutout_preview, "Ảnh tách nền (nền trắng)"),
-                                (out.overlay, "Đối tượng tô màu trên ảnh gốc")])
-            if ctx.ground_truth is not None:
-                s = compare_masks(out.mask, ctx.ground_truth)
-                st.success(f"So với ground truth của ảnh mẫu: IoU = {s.iou:.4f} · Dice = {s.dice:.4f} · "
-                           f"độ chính xác pixel = {s.pixel_accuracy:.4f}")
+            _show_segmentation(prep, out.binary, f"Ảnh nhị phân (> {out.threshold_used})", "otsu")
+            _show_mask(ctx, out, out.postprocess)
 
     if tab_hist.open:
         with tab_hist:
@@ -222,8 +217,11 @@ def _render_result(ctx, run: dict, pending: bool) -> None:
                                            "σ²_B(g)": np.round(r.between_class_variance, 4)}),
                              hide_index=True, width="stretch", height=260)
 
-    if tab_dl.open and not pending:
+    if tab_dl.open:
         with tab_dl:
+            if pending:
+                st.info("Bấm Chạy Otsu để tạo tệp theo thiết lập hiện tại.")
+                return
             export_key = run["settings"]
             files = ui.cached_export_files(run, export_key, lambda: otsu_export_files(prep, out))
             if files is not None:
@@ -241,19 +239,19 @@ def _render_multi(ctx, run: dict, pending: bool) -> None:
         persistent_foreground(run, fg_key, options, initial)
 
     m = ui.metric_columns(5, "multi-otsu")
-    m[0].metric("Ngưỡng t1", t1)
-    m[1].metric("Ngưỡng t2", t2 if r.valid else f"{t2} (không hợp lệ)")
+    m[0].metric("Ngưỡng t1", t1 if r.valid else f"{t1} (dự phòng)")
+    m[1].metric("Ngưỡng t2", t2 if r.valid else f"{t2} (dự phòng)")
     m[2].metric("Độ tách η", f"{r.separability:.3f}", help="η = σ²_B(t1, t2) / σ²_T, trong [0, 1].")
     m[4].metric("Thời gian", f"{r.elapsed_seconds * 1000:.2f} ms", help=TIMING_SCOPE)
     st.caption(f"Quy ước: lớp 0 = {{g ≤ {t1}}}, lớp 1 = {{{t1} < g ≤ {t2}}}, lớp 2 = {{g > {t2}}}.")
-    for w in r.warnings:
-        st.warning(w)
+    show_threshold_warnings(r.warnings)
 
-    st.markdown("Multi-Otsu chia ảnh thành **3 lớp** theo mức xám nhưng không biết lớp nào là đối tượng. "
-                "Lựa chọn mặc định là **gợi ý** theo viền ảnh/vùng trung tâm.")
-    legend = " ".join(f"<span class='isl-chip'><span class='isl-swatch' style='background:{c}'></span>Lớp {i}</span>"
+    if not pending and r.valid:
+        ui.run_state("Kết quả đã sẵn sàng", detail="Multi-Otsu · ba lớp mức xám")
+    legend = "".join(f"<span class='isl-chip'><span class='isl-swatch' aria-hidden='true' style='background:{c}'></span>Lớp {i}</span>"
                       for i, c in enumerate(cluster_palette_hex(3)))
-    fg = st.multiselect("Lớp làm đối tượng (foreground)", options, format_func=lambda c: f"Lớp {c}", key=fg_key)
+    fg = st.multiselect("Lớp làm đối tượng (foreground)", options, format_func=lambda c: f"Lớp {c}", key=fg_key,
+                        help="Chọn một hoặc nhiều lớp. Lựa chọn ban đầu là gợi ý theo viền ảnh.")
     save_foreground(run, fg)
     try:
         out = multi_otsu_outputs(prep, r, labels, fg, post)
@@ -267,25 +265,19 @@ def _render_multi(ctx, run: dict, pending: bool) -> None:
                                        key="multiotsu_result_tab", on_change="rerun")
     if tab_res.open:
         with tab_res:
-            ui.show_images([*ui.source_panels(prep, with_gray=True), (out.label_color, "Bản đồ 3 lớp")])
-            st.markdown("Chú giải: " + legend, unsafe_allow_html=True)
+            caption = "Bản đồ 3 lớp" if r.valid else "Bản đồ lớp (dự phòng)"
+            _show_segmentation(prep, out.label_color, caption, "multiotsu")
+            st.html(f"<div class='isl-palette' aria-label='Chú giải bản đồ ba lớp'>{legend}</div>")
             if not fg:
                 st.info("Chưa chọn lớp nào: mask rỗng (toàn nền).")
-            if post.operation != "none":
-                ui.show_images([(out.raw_mask, "Mask trước hình thái học"), (out.mask, "Mask sau hình thái học"),
-                                (out.overlay, "Đối tượng tô màu trên ảnh gốc")])
-                ui.show_image(out.cutout_preview, "Ảnh tách nền (nền trắng)")
-            else:
-                ui.show_images([(out.mask, "Mask đối tượng"), (out.cutout_preview, "Ảnh tách nền (nền trắng)"),
-                                (out.overlay, "Đối tượng tô màu trên ảnh gốc")])
-            if ctx.ground_truth is not None:
-                s = compare_masks(out.mask, ctx.ground_truth)
-                st.success(f"So với ground truth của ảnh mẫu: IoU = {s.iou:.4f} · Dice = {s.dice:.4f} · "
-                           f"độ chính xác pixel = {s.pixel_accuracy:.4f}")
+            _show_mask(ctx, out, post)
 
     if tab_hist.open:
         with tab_hist:
-            ui.show_figure(viz.multi_histogram_figure(r.histogram, r.thresholds))
+            if r.valid:
+                ui.show_figure(viz.multi_histogram_figure(r.histogram, r.thresholds))
+            else:
+                ui.show_figure(viz.histogram_figure(r.histogram, title="Histogram 256 mức xám (thiếu ba lớp phân biệt)"))
             st.dataframe(pd.DataFrame([
                 {"Lớp": f"Lớp {k}", "Trọng số ω": round(r.class_weights[k], 5),
                  "Trung bình μ": None if np.isnan(r.class_means[k]) else round(r.class_means[k], 3),
@@ -295,10 +287,35 @@ def _render_multi(ctx, run: dict, pending: bool) -> None:
                        "Tìm kiếm vét cạn trên mọi cặp t1 < t2 bằng tổng tích luỹ: O(256²), không phụ thuộc kích thước ảnh."
                        + (f" Có {r.n_tied} cặp ngưỡng đồng hạng." if r.n_tied > 1 else ""))
 
-    if tab_dl.open and not pending:
+    if tab_dl.open:
         with tab_dl:
+            if pending:
+                st.info("Bấm Chạy Otsu để tạo tệp theo thiết lập hiện tại.")
+                return
             export_key = (tuple(fg), post)
             files = ui.cached_export_files(run, export_key, lambda: multi_otsu_export_files(prep, out))
             if files is not None:
                 ui.download_buttons(files, MULTI_DOWNLOAD_LABELS, "otsu_multi_dl")
                 ui.offer_original_size_pngs(ctx, run, export_key, "multiotsu", out.mask, {"label_map": out.label_color})
+
+
+def _show_segmentation(prep, image, caption: str, key: str) -> None:
+    original, *processed = ui.source_panels(prep, with_gray=True)
+    ui.show_images([original, (image, caption)])
+    details = st.expander("Ảnh xám và tiền xử lý", key=f"{key}_input_details", icon=":material/tune:", on_change="rerun")
+    if details.open:
+        with details:
+            ui.show_images(processed)
+
+
+def _show_mask(ctx, out, post) -> None:
+    mask_caption = "Mask đối tượng" if post.operation == "none" else "Mask sau hình thái học"
+    st.markdown("**Đối tượng đã tách**")
+    ui.show_images([(out.mask, mask_caption), (out.cutout_preview, "Ảnh tách nền (nền trắng)"),
+                    (out.overlay, "Đối tượng tô màu trên ảnh gốc")], columns=3)
+    if post.operation != "none":
+        ui.show_image(out.raw_mask, "Mask trước hình thái học")
+    if ctx.ground_truth is not None:
+        s = compare_masks(out.mask, ctx.ground_truth)
+        st.success(f"So với ground truth của ảnh mẫu: IoU = {s.iou:.4f} · Dice = {s.dice:.4f} · "
+                   f"độ chính xác pixel = {s.pixel_accuracy:.4f}")

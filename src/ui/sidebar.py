@@ -39,16 +39,19 @@ def render_input_sidebar() -> None:
         if st.session_state.get("sample_id") not in sample_ids:
             st.session_state["sample_id"] = default_sample
 
-    with st.sidebar:
+    with st.sidebar, st.container(key="sidebar-input", gap="small"):
+        st.html("<h2 class='isl-sidebar-label'>Ảnh đầu vào</h2>")
         if manifest_error:
             st.error(manifest_error)
-        st.html("<div class='isl-sidebar-label'>Ảnh đầu vào</div>")
         source = st.radio("Nguồn dữ liệu", SOURCES, key="input_source", horizontal=True, label_visibility="collapsed")
 
         data = name = sample = gt_bytes = None
         if source == "Ảnh mẫu":
             if not samples:
-                set_context(None, "Không có ảnh mẫu. Chạy `python scripts/generate_samples.py` để tạo.")
+                message = "Không có ảnh mẫu. Chọn Tải tệp lên để dùng ảnh hoặc CSV trên máy."
+                set_context(None, message)
+                if not manifest_error:
+                    st.warning(message)
                 return
             titles = {s["id"]: s["title"] for s in samples}
             sid = st.selectbox("Chọn ảnh mẫu", sample_ids, key="sample_id", format_func=lambda i: titles[i])
@@ -64,14 +67,19 @@ def render_input_sidebar() -> None:
                 st.error(message)
                 return
         else:
-            uploaded = st.file_uploader("Ảnh PNG/JPG/BMP hoặc ma trận CSV", type=["png", "jpg", "jpeg", "bmp", "csv"],
-                                        key="uploader")
+            uploaded = st.file_uploader(
+                "Ảnh PNG/JPG/BMP hoặc ma trận CSV",
+                type=["png", "jpg", "jpeg", "bmp", "csv"],
+                key="uploader",
+                help="Kéo thả hoặc chọn một tệp. Ảnh tối đa 40 triệu pixel, tệp tối đa 30 MB.",
+            )
             injected = st.session_state.get("_test_upload")  # chỉ dùng trong kiểm thử tự động (AppTest)
             if uploaded is not None:
                 data, name = uploaded.getvalue(), uploaded.name
             elif injected is not None:
                 name, data = injected
 
+        status = st.empty()
         with st.expander("Tiền xử lý ảnh", icon=":material/tune:"):
             st.select_slider("Cạnh dài tối đa (pixel)", MAX_SIDE_OPTIONS, key="max_side",
                              help="Ảnh lớn hơn được thu nhỏ (giữ tỉ lệ) trước khi xử lý để tránh treo máy.")
@@ -79,12 +87,11 @@ def render_input_sidebar() -> None:
                          format_func=lambda m: GRAY_METHODS[m])
             st.selectbox("Lọc trung vị khử nhiễu", list(MEDIAN_OPTIONS), key="median_size",
                          format_func=lambda k: MEDIAN_OPTIONS[k],
-                         help="Lọc phi tuyến (giáo trình Chương 4): thay mỗi pixel bằng trung vị cửa sổ k×k. "
-                              "Khử nhiễu hạt trước Otsu/K-means — hai thuật toán theo từng điểm, không dùng pixel lân cận.")
+                         help="Thay mỗi pixel bằng trung vị trong vùng k×k để giảm nhiễu trước khi phân đoạn.")
 
         if data is None:
             set_context(None, None)
-            st.info("Chưa có tệp. Kéo thả ảnh hoặc CSV vào ô trên.")
+            status.caption("Kéo thả ảnh hoặc CSV vào ô tải tệp để bắt đầu.")
             return
         try:
             ctx = build_context(data, name, int(st.session_state["max_side"]), st.session_state["gray_method"],
@@ -92,13 +99,19 @@ def render_input_sidebar() -> None:
         except MemoryError:
             message = "Không đủ bộ nhớ để đọc ảnh. Hãy thu nhỏ ảnh trước khi tải lên hoặc giải phóng RAM rồi thử lại."
             set_context(None, message)
-            st.error(message)
+            status.error(message)
             return
         except (InputError, ValueError) as exc:
             set_context(None, str(exc))
-            st.error(str(exc))
+            status.error(str(exc))
             return
         set_context(ctx)
-        w, h = ctx.prepared.resize.processed_size
-        st.html("<div class='isl-input-status'><span class='isl-status-dot'></span>"
-                f"<div><strong title='{escape(name, quote=True)}'>{escape(name)}</strong><p>Sẵn sàng · {w} × {h} pixel</p></div></div>")
+        resize = ctx.prepared.resize
+        width, height = resize.original_size
+        processed_width, processed_height = resize.processed_size
+        details = f"<p>Đã thu nhỏ để xử lý · {processed_width} × {processed_height} px</p>" if resize.resized else ""
+        status.html(
+            "<div class='isl-input-status' role='status'><span class='isl-status-dot' aria-hidden='true'></span>"
+            f"<div><strong title='{escape(name, quote=True)}'>{escape(name)}</strong>"
+            f"<p>Sẵn sàng · {escape(ctx.loaded.file_format)} · {width} × {height} px</p>{details}</div></div>"
+        )

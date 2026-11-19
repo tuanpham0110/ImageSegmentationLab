@@ -15,6 +15,12 @@ from src.processing.pipeline import MaskPostprocess, PreparedInput, original_siz
 from src.utils import visualization as viz
 
 MIN_DISPLAY_SIDE = 256  # ảnh nhỏ hơn được phóng to (nearest) khi HIỂN THỊ để nhìn rõ từng pixel
+METHOD_PAGES = {
+    "kmeans": ("K-means", ":material/palette:"),
+    "otsu": ("Otsu", ":material/contrast:"),
+    "compare": ("So sánh", ":material/compare:"),
+}
+
 
 def inject_css() -> None:
     # Read on rerun so a running app also picks up stylesheet changes.
@@ -22,7 +28,13 @@ def inject_css() -> None:
 
 
 def page_header(title: str, subtitle: str) -> None:
-    st.html(f"<header class='isl-page-header'><div class='isl-eyebrow'>Image Segmentation Lab</div>"
+    current = st.session_state.get("_studio_page")
+    if current in METHOD_PAGES:
+        pages = st.session_state["_nav_pages"]
+        with st.container(horizontal=True, gap="xsmall", key="method-navigation"):
+            for key, (label, icon) in METHOD_PAGES.items():
+                st.page_link(pages[key], label=label, icon=icon)
+    st.html(f"<header class='isl-page-header'>"
             f"<h1 class='isl-page-title'>{escape(title)}</h1><p class='isl-subtitle'>{escape(subtitle)}</p></header>")
 
 
@@ -33,9 +45,9 @@ def metric_columns(count: int, key: str):
 
 
 def workspace(key: str):
-    """Giữ đủ chỗ cho tham số; xếp dọc khi vùng nội dung không còn đủ rộng."""
+    """Hai vùng bố cục, dùng chung cho các trang thực hành."""
     with st.container(horizontal=True, gap="small", key=f"workspace-{key}"):
-        return st.container(width=300, key=f"controls-{key}"), st.container(key=f"results-{key}")
+        return st.container(key=f"controls-{key}"), st.container(key=f"results-{key}")
 
 
 def _for_display(arr: np.ndarray) -> tuple[np.ndarray, bool]:
@@ -50,10 +62,13 @@ def _for_display(arr: np.ndarray) -> tuple[np.ndarray, bool]:
 
 def show_image(arr: np.ndarray, caption: str) -> None:
     disp, scaled = _for_display(arr)
-    h, w = np.asarray(arr).shape[:2]
-    cap = f"{caption} · {w}×{h}" + (" (phóng to để hiển thị)" if scaled else "")
-    with st.container(border=True, key=None):
-        st.image(disp, caption=cap, width="stretch", alt=caption)
+    h, w = arr.shape[:2]
+    label = escape(caption)
+    note = " title='Ảnh được phóng to để hiển thị'" if scaled else ""
+    with st.container(border=True):
+        st.html(f"<div class='isl-frame-heading'><strong>{label}</strong>"
+                f"<span{note}>{w}×{h} px</span></div>")
+        st.image(disp, width="stretch", alt=caption)
 
 
 def source_panels(prep: PreparedInput, with_gray: bool = False) -> list[tuple[np.ndarray, str]]:
@@ -67,14 +82,30 @@ def source_panels(prep: PreparedInput, with_gray: bool = False) -> list[tuple[np
     return items
 
 
-def show_images(items: list[tuple[np.ndarray, str]]) -> None:
-    # Hai ảnh mỗi hàng vẫn đọc rõ khi nằm trong cột kết quả.
-    for start in range(0, len(items), 2):
-        row = items[start:start + 2]
+def show_images(items: list[tuple[np.ndarray, str]], *, columns: int = 2) -> None:
+    """Đặt các ảnh cần đối chiếu trên cùng hàng khi vùng kết quả đủ rộng."""
+    for start in range(0, len(items), columns):
+        row = items[start:start + columns]
         cols = st.columns(len(row), gap="small")
         for col, (arr, cap) in zip(cols, row):
             with col:
                 show_image(arr, cap)
+
+
+def run_state(label: str, *, tone: str = "ready", detail: str = "") -> None:
+    description = f"<span>{escape(detail)}</span>" if detail else ""
+    st.html(f"<div class='isl-run-state' data-tone='{escape(tone, quote=True)}' role='status'>"
+            f"<i aria-hidden='true'></i><strong>{escape(label)}</strong>{description}</div>")
+
+
+def result_empty(prep: PreparedInput, action: str, *, with_gray: bool = False, stale: bool = False) -> None:
+    if stale:
+        st.warning(f"Ảnh đầu vào đã thay đổi, kết quả cũ đã được ẩn. Bấm **{action}** để cập nhật.")
+    else:
+        with st.container(border=True, key="workbench-empty"):
+            st.subheader("Chưa có kết quả")
+            st.caption(f"Chọn thiết lập và bấm **{action}**.")
+    show_images(source_panels(prep, with_gray=with_gray))
 
 
 def show_figure(fig) -> None:
@@ -108,8 +139,8 @@ def input_summary(ctx) -> None:
     pw, ph = prep.resize.processed_size
     chans = "RGB · 3 kênh" if loaded.is_color else "Mức xám · 1 kênh"
     filename = escape(loaded.source_name, quote=True)
-    cells = [("Định dạng", loaded.file_format), ("Kích thước", f"{ow} × {oh} px"),
-             ("Không gian màu", chans), ("Dung lượng", human_bytes(loaded.file_bytes))]
+    cells = [("Kích thước gốc", f"{ow} × {oh} px"),
+             ("Định dạng", f"{loaded.file_format} · {chans}"), ("Dung lượng", human_bytes(loaded.file_bytes))]
     st.html(
         "<dl class='isl-input-summary' aria-label='Thông tin ảnh đầu vào'>"
         f"<div class='isl-file-cell'><dt>Ảnh đang sử dụng</dt><dd title='{filename}'>{filename}</dd></div>"
@@ -133,7 +164,9 @@ def require_input():
         return None
     ctx = get_context()
     if ctx is None:
-        st.info("Hãy chọn ảnh mẫu hoặc tải ảnh/CSV lên ở thanh bên trái.")
+        with st.container(border=True, key="input-empty"):
+            st.subheader("Thêm ảnh để bắt đầu")
+            st.info("Hãy chọn ảnh mẫu hoặc tải ảnh/CSV lên ở thanh bên trái.")
     return ctx
 
 
@@ -204,17 +237,18 @@ def reset_morphology(key_prefix: str) -> None:
 
 def download_buttons(files: dict[str, tuple[bytes, str]], labels: dict[str, str], key_prefix: str) -> None:
     """Hiển thị các nút tải xuống theo lưới 2 cột, đủ chỗ cho tên tệp."""
-    st.caption("Trình duyệt xử lý vị trí lưu và xác nhận ghi đè tệp.")
-    names = list(files.keys())
-    if names and names[0].endswith(".zip"):
-        name = names.pop(0)
-        _download_file(name, files[name], labels.get(name, name), key_prefix, primary=True)
-    for row_start in range(0, len(names), 2):
-        row = names[row_start:row_start + 2]
-        cols = st.columns(len(row))
-        for col, name in zip(cols, row):
-            with col:
-                _download_file(name, files[name], labels.get(name, name), key_prefix)
+    with st.container(key=f"exports-{key_prefix}"):
+        st.caption("Vị trí lưu và lỗi ghi tệp được hiển thị trong mục Tải xuống của trình duyệt.")
+        names = list(files)
+        if names and names[0].endswith(".zip"):
+            name = names.pop(0)
+            _download_file(name, files[name], labels.get(name, name), key_prefix, primary=True)
+        for row_start in range(0, len(names), 2):
+            row = names[row_start:row_start + 2]
+            cols = st.columns(len(row), gap="small")
+            for col, name in zip(cols, row):
+                with col:
+                    _download_file(name, files[name], labels.get(name, name), key_prefix)
 
 
 def _download_file(name: str, file: tuple[bytes, str], label: str, key_prefix: str, *, primary: bool = False) -> None:

@@ -17,7 +17,7 @@ from src.processing.pipeline import (
 )
 from src.ui import components as ui
 from src.ui.page_kmeans import params_form
-from src.ui.page_otsu import POLARITY_HELP, POLARITY_OPTIONS, polarity_caption
+from src.ui.page_otsu import POLARITY_HELP, POLARITY_OPTIONS, polarity_caption, show_threshold_warnings
 from src.ui.state import (
     clear_uploaded_gt,
     get_result,
@@ -108,7 +108,7 @@ QUALITATIVE = [
      "Hai lớp sáng/tối (trang Otsu có thêm Multi-Otsu 3 lớp); cần chọn lớp đối tượng."),
     ("Tham số", "K, khởi tạo, seed, số vòng lặp, ngưỡng hội tụ.", "Không có tham số (chỉ chọn lớp sáng/tối là đối tượng)."),
     ("Phụ thuộc tham số", "Cao: K và khởi tạo ảnh hưởng kết quả; có thể rơi vào cực tiểu địa phương.",
-     "Thấp: kết quả xác định duy nhất từ histogram."),
+     "Quy tắc chọn ngưỡng cho kết quả tái lập với cùng histogram."),
     ("Ưu điểm", "Dùng được màu sắc; tách được nhiều vùng; tổng quát.", "Rất nhanh O(N + 256); tối ưu toàn cục; không cần tham số."),
     ("Hạn chế", "Phải chọn K; vòng lặp có chi phí O(U·K·D·số vòng) với U là số giá trị pixel phân biệt; "
      "bản thân thuật toán không dùng thông tin không gian "
@@ -121,7 +121,7 @@ QUALITATIVE = [
 
 
 def render() -> None:
-    ui.page_header("So sánh thuật toán", "Cùng một ảnh đầu vào được xử lý bằng K-means và Otsu.")
+    ui.page_header("So sánh thuật toán", "Đặt ảnh gốc cạnh kết quả K-means và Otsu trên cùng một đầu vào.")
     ctx = ui.require_input()
     if ctx is None:
         return
@@ -131,17 +131,19 @@ def render() -> None:
     left, right = ui.workspace("compare")
     with left:
         params = params_form(prep.is_color, key_prefix="cmp", submit_label="Chạy K-means & Otsu")
-        restore_widget("cmp_otsu_polarity", "Gợi ý theo viền ảnh")
-        st.radio("Otsu: đối tượng là", list(POLARITY_OPTIONS), key="cmp_otsu_polarity", help=POLARITY_HELP)
-        remember_widget("cmp_otsu_polarity")
-        uploaded_gt = _ground_truth_uploader(ctx)
+        with st.container(border=True, key="cmp-otsu-controls"):
+            restore_widget("cmp_otsu_polarity", "Gợi ý theo viền ảnh")
+            st.radio("Otsu: đối tượng là", list(POLARITY_OPTIONS), key="cmp_otsu_polarity", help=POLARITY_HELP)
+            remember_widget("cmp_otsu_polarity")
+        with st.expander("Ảnh tham chiếu", icon=":material/fact_check:"):
+            uploaded_gt = _ground_truth_uploader(ctx)
     if params is not None:
         try:
-            with st.spinner("Đang chạy K-means…"):
+            with right, st.spinner("Đang chạy K-means…", show_time=True):
                 km = run_kmeans(prep, params)
         except (ValueError, MemoryError) as exc:
             st.session_state.pop(RESULT_KEY, None)
-            st.error("Không chạy được K-means. Hãy kiểm tra tham số hoặc giảm giới hạn cạnh dài. " + str(exc))
+            right.error("Không chạy được K-means. Hãy kiểm tra tham số hoặc giảm giới hạn cạnh dài. " + str(exc))
             return
         else:
             store_result(RESULT_KEY, ctx.signature, {"params": params, "km": km,
@@ -151,10 +153,7 @@ def render() -> None:
     run = get_result(RESULT_KEY, ctx.signature)
     with right:
         if run is None:
-            if has_stale_result(RESULT_KEY, ctx.signature):
-                st.warning("Ảnh đầu vào đã thay đổi — hãy bấm **Chạy K-means** để so sánh lại.")
-            st.info("Chọn tham số rồi bấm **Chạy K-means** — Otsu được chạy cùng lúc trên cùng ảnh.")
-            ui.show_images(ui.source_panels(prep))
+            ui.result_empty(prep, "Chạy K-means & Otsu", stale=has_stale_result(RESULT_KEY, ctx.signature))
             return
         _render(ctx, run, uploaded_gt)
 
@@ -168,40 +167,42 @@ def _render(ctx, run, uploaded_gt) -> None:
         if otsu is None or otsu.polarity != polarity:
             run.pop("otsu", None)
             run.pop("_export_cache", None)
-            otsu = run_otsu(prep, polarity=polarity)
+            with st.spinner("Đang phân ngưỡng Otsu…", show_time=True):
+                otsu = run_otsu(prep, polarity=polarity)
             run["otsu"] = otsu
     except (ValueError, MemoryError) as exc:
         st.error("Không phân ngưỡng được ảnh. Hãy giảm giới hạn cạnh dài hoặc kiểm tra dữ liệu. " + str(exc))
         return
     for warning in km.core.warnings:
         st.warning("K-means: " + warning)
-    for warning in otsu.warnings:
-        st.warning("Otsu: " + warning)
+    show_threshold_warnings(otsu.warnings, prefix="Otsu: ")
     metrics = ui.metric_columns(4, "compare")
     metrics[0].metric("K-means · số cụm", km.core.k_effective)
     metrics[1].metric("Otsu · ngưỡng", otsu.result.threshold if otsu.result.valid else "Không hợp lệ")
     metrics[2].metric("K-means · thời gian", f"{km.core.elapsed_seconds * 1000:.1f} ms", help=TIMING_SCOPE)
     metrics[3].metric("Otsu · thời gian", f"{otsu.result.elapsed_seconds * 1000:.2f} ms", help=TIMING_SCOPE)
-    st.caption("Đổi cụm đối tượng hoặc cực tính để cập nhật mask. Đổi tham số K-means rồi bấm chạy để phân cụm lại.")
-
-    options = list(range(km.core.k_effective))
-    fg_key = f"cmp_fg_{run['run_id']}"
-    if fg_key not in st.session_state:
-        initial = run["foreground"] if "foreground" in run else default_foreground(km)
-        persistent_foreground(run, fg_key, options, initial)
-    fg = st.multiselect("Cụm K-means làm đối tượng", options,
-                        format_func=lambda c: f"Cụm {c}", key=fg_key,
-                        help="Mặc định là gợi ý theo viền ảnh; hãy chỉnh cho đúng đối tượng.")
-    save_foreground(run, fg)
-    _result_tabs(ctx, run, fg, otsu, uploaded_gt)
+    convergence = "hội tụ" if km.core.converged else "chưa hội tụ"
+    st.caption(f"K-means · {km.feature.upper()} · {km.core.n_iter} vòng · {convergence} · seed {run['params'].seed}. "
+               + polarity_caption(otsu))
+    _result_tabs(ctx, run, otsu, uploaded_gt)
 
 
-def _result_tabs(ctx, run, fg, otsu, uploaded_gt) -> None:
+def _result_tabs(ctx, run, otsu, uploaded_gt) -> None:
     prep, km = ctx.prepared, run["km"]
     images, masks, scores, downloads = st.tabs(
         ["Kết quả phân đoạn", "Đối chiếu mask", "Đánh giá", "Tải xuống"],
         key="cmp_result_tab", on_change="rerun",
     )
+    with masks:
+        options = list(range(km.core.k_effective))
+        fg_key = f"cmp_fg_{run['run_id']}"
+        if fg_key not in st.session_state:
+            initial = run["foreground"] if "foreground" in run else default_foreground(km)
+            persistent_foreground(run, fg_key, options, initial)
+        fg = st.multiselect("Cụm K-means làm đối tượng", options,
+                            format_func=lambda c: f"Cụm {c}", key=fg_key,
+                            help="Mặc định là gợi ý theo viền ảnh. Đổi cụm tại đây để cập nhật mask và tệp tải xuống.")
+        save_foreground(run, fg)
     if images.open:
         with images:
             _segmented_images(prep, km, otsu)
@@ -220,7 +221,8 @@ def _result_tabs(ctx, run, fg, otsu, uploaded_gt) -> None:
         with scores:
             _scores(ctx, run, out, otsu, uploaded_gt)
             _current_image_analysis(prep, km, out, otsu)
-            _comparison_table(run)
+            with st.expander("Đặc điểm và tham số hai phương pháp", icon=":material/tune:"):
+                _comparison_table(run)
         return
     with downloads:
         st.caption("Tệp ZIP chứa toàn bộ ảnh PNG, ma trận CSV và tham số JSON của hai kết quả đang hiển thị.")
@@ -239,20 +241,25 @@ def _result_tabs(ctx, run, fg, otsu, uploaded_gt) -> None:
 
 
 def _segmented_images(prep, km, otsu) -> None:
-    st.markdown("##### Kết quả trực tiếp của từng thuật toán")
-    ui.show_images([*ui.source_panels(prep), (km.segmented, f"K-means: {km.core.k_effective} cụm"),
-                    (otsu.binary, f"Otsu: nhị phân (t* = {otsu.result.threshold})")])
-    st.caption("Lưu ý: K-means cho ảnh nhiều cụm, Otsu cho ảnh 2 lớp — hai ảnh trên không cùng loại nên chỉ so sánh trực quan. "
-               "Tab Đối chiếu mask và Đánh giá dùng **mask nhị phân** của cả hai.")
+    original, *processed = ui.source_panels(prep)
+    threshold = f"t* = {otsu.result.threshold}" if otsu.result.valid else "không có ngưỡng hợp lệ"
+    ui.show_images([original, (km.segmented, f"K-means · {km.core.k_effective} cụm"),
+                    (otsu.binary, f"Otsu · nhị phân ({threshold})")], columns=3)
+    st.caption("Mở **Đối chiếu mask** để so sánh hai vùng đối tượng trên cùng quy ước trắng là đối tượng.")
+    if processed:
+        details = st.expander("Ảnh đầu vào sau lọc", key="cmp_input_details", icon=":material/tune:", on_change="rerun")
+        if details.open:
+            with details:
+                ui.show_images(processed)
 
 
 def _mask_comparison(out, otsu) -> None:
-    st.markdown("##### So sánh mask đối tượng")
     ui.show_images([(out.mask, "Mask K-means"), (otsu.mask, "Mask Otsu"),
-                    (_agreement_map(out.mask, otsu.mask), "Khác biệt hai mask")])
+                    (_agreement_map(out.mask, otsu.mask), "Khác biệt hai mask")], columns=3)
     legend = [("#ffffff", "cả hai là đối tượng"), ("#eb6834", "chỉ K-means"), ("#2a78d6", "chỉ Otsu"), ("#000000", "cả hai là nền")]
-    st.markdown("".join(f"<span class='isl-chip'><span class='isl-swatch' style='background:{c};border:1px solid #8c959f'>"
-                        f"</span>{t}</span>" for c, t in legend), unsafe_allow_html=True)
+    swatches = "".join(f"<span class='isl-chip'><span class='isl-swatch' aria-hidden='true' style='background:{c}'></span>"
+                       f"{t}</span>" for c, t in legend)
+    st.html(f"<div class='isl-palette' aria-label='Chú giải khác biệt hai mask'>{swatches}</div>")
     agree = compare_masks(out.mask, otsu.mask)
     st.caption(f"Mức trùng khớp giữa hai mask (không phải độ chính xác): IoU = {agree.iou:.4f}, "
                f"tỷ lệ pixel cùng nhãn = {agree.pixel_accuracy:.4f}.")
@@ -282,7 +289,7 @@ def _scores(ctx, run, out, otsu, uploaded_gt) -> None:
     else:
         for name, t in (("K-means", km.core.elapsed_seconds), ("Otsu", otsu.result.elapsed_seconds)):
             rows.append({"Phương pháp": name, "Thời gian (ms)": round(t * 1000, 2)})
-        st.info("Không có ground truth nên **không tính** IoU/Dice/độ chính xác. Có thể tải lên ground-truth mask ở cột trái.")
+        st.info("Không có ground truth nên **không tính** IoU/Dice/độ chính xác. Tải mask trong mục **Ảnh tham chiếu** để tính điểm.")
     st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
 
 
@@ -291,11 +298,11 @@ def _comparison_table(run) -> None:
     km, otsu = run["km"], run.get("otsu")
     if otsu is None:
         return
-    st.markdown("#### Đặc điểm và kết quả của hai phương pháp")
+    threshold = f"t* = {otsu.result.threshold}. " if otsu.result.valid else ""
     qual = [("Tham số lần chạy này",
              f"K = {km.core.k_effective}, đặc trưng {km.feature}, {run['params'].init}, seed {run['params'].seed}, "
              f"{km.core.n_iter} vòng ({'hội tụ' if km.core.converged else 'chưa hội tụ'})",
-             f"t* = {otsu.result.threshold}; {polarity_caption(otsu)}"),
+             threshold + polarity_caption(otsu)),
             ("Thời gian đo được", f"{km.core.elapsed_seconds * 1000:.1f} ms", f"{otsu.result.elapsed_seconds * 1000:.2f} ms")]
     st.table(pd.DataFrame(qual + QUALITATIVE, columns=["Tiêu chí", "K-means", "Otsu"]).set_index("Tiêu chí"))
 
@@ -314,6 +321,9 @@ def _current_image_analysis(prep, km, out, otsu) -> None:
         st.write(f"Hai lớp Otsu có độ sáng trung bình {r.mean0:.2f} và {r.mean1:.2f} "
                  f"(chênh {r.mean1 - r.mean0:.2f}/255), chiếm {r.weight0:.1%} và {r.weight1:.1%} pixel. "
                  f"Độ tách histogram η = {r.separability:.3f}; đây không phải xác suất phân đoạn đúng.")
+        if len(r.tied_thresholds) > 1:
+            st.caption(f"Có {len(r.tied_thresholds)} ngưỡng đồng hạng. Otsu chọn t = {r.threshold} "
+                       "trong nhóm ngưỡng cực đại theo quy tắc gần phần nguyên của trung bình nhất.")
         # Phân vị rời rạc từ histogram: không cần sắp xếp lại toàn bộ ảnh.
         lo, hi = np.searchsorted(np.cumsum(r.histogram), np.array([0.05, 0.95]) * r.histogram.sum())
         if hi - lo <= 32 and r.mean1 - r.mean0 <= 32:
