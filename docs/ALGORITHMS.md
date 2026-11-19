@@ -68,7 +68,7 @@ Kiểm thử `test_sse_is_non_increasing` xác nhận SSE không tăng.
 
 | Vấn đề | Cách xử lý |
 |---|---|
-| Khoảng cách | Tính trực tiếp Σ_d(x_d − c_d)² theo từng tâm và **khối 262 144 điểm**, tránh triệt tiêu số do khai triển bình phương khi dữ liệu có độ lệch lớn. Bộ nhớ tạm O(B·D), không tạo ma trận N×K×D; tổng RAM còn gồm ảnh, nhãn, dữ liệu phân biệt và các mảng tạm khác |
+| Khoảng cách | Tính trực tiếp Σ_d(x_d − c_d)² theo từng tâm, mặc định mỗi khối tối đa **65 536 điểm**. Dùng lại vùng đệm giữa các tâm và khối. Phép trừ trực tiếp tránh triệt tiêu số khi dữ liệu có độ lệch lớn. Bộ nhớ đệm là O(B·D); tổng RAM còn gồm ảnh, nhãn, dữ liệu phân biệt và các mảng tạm khác |
 | Khởi tạo K-means++ **[bổ sung]** | Arthur & Vassilvitskii (2007), *k-means++: The Advantages of Careful Seeding*, SODA. Tâm đầu ngẫu nhiên; tâm tiếp theo chọn với xác suất ∝ w(x)·D(x)², D(x) = khoảng cách tới tâm gần nhất đã chọn |
 | Khởi tạo ngẫu nhiên | Chọn K giá trị **phân biệt** (tránh hai tâm trùng nhau ngay từ đầu) |
 | Giới hạn K | Thuật toán nhận mọi K ≥ 1 (không có chặn trên). Bản đồ nhãn dùng 8 màu cố định, từ cụm thứ 9 sinh màu bằng bước góc pha tỉ lệ vàng trong HSV (`cluster_palette_hex`). Giao diện đặt thanh trượt 2–16 cho tiện thao tác |
@@ -150,6 +150,7 @@ giáo trình ghi 1.66 do làm tròn m(g) trước khi tính.
 
 | Vấn đề | Cách xử lý |
 |---|---|
+| Histogram | Đếm bằng `np.bincount` trên tối đa 65 536 pixel mỗi khối, cộng dồn theo 256 mức. Ảnh nhỏ dùng một lần đếm. Kích thước vùng đệm chuyển kiểu chỉ số phụ thuộc kích thước khối |
 | Lớp rỗng (ω₀ = 0 hoặc ω₁ = 0) | t đó không hợp lệ, σ²_B = 0, không chia cho 0. Xác định bằng số pixel tích luỹ **nguyên** (không phụ thuộc sai số float) |
 | Ảnh một mức xám | Không có t hợp lệ ⇒ `valid = False`, cảnh báo, t = mức xám đó; mask tự động luôn rỗng dù chọn lớp sáng/tối. Chế độ thủ công vẫn cho chọn lớp có chủ đích |
 | Nhiều t cùng cực đại | Tập cực đại được xác định **chính xác bằng số hữu tỉ** (σ²_B = (N·m₀ − M·c₀)² / (N²·c₀·c₁) với số nguyên), không so `==` số thực: ví dụ ảnh [0, 1, 1, 2] có t = 0 và t = 1 cùng σ²_B = 1/3. Chọn **phần tử trong tập cực đại gần floor(trung bình) nhất**, hoà chọn phần tử nhỏ hơn. Với một đoạn liên tục, kết quả vẫn là floor(trung bình). Không lấy trung bình bên ngoài tập cực đại |

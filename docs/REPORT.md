@@ -199,8 +199,8 @@ Xem README mục 4. Tổng cộng 5 module thuật toán/xử lý, 4 module ti�
 
 ### 4.3 Cài đặt K-means (`src/algorithms/kmeans.py`)
 
-- `assign_labels`: tính trực tiếp Σ_d(x_d − c_d)² theo từng tâm và khối 262 144 điểm để tránh triệt tiêu số.
-  Bộ nhớ tạm O(B·D); đây không phải giới hạn tổng RAM của ứng dụng.
+- `assign_labels` tính trực tiếp Σ_d(x_d − c_d)² theo từng tâm, mặc định theo khối tối đa 65 536 điểm.
+  Dùng lại vùng đệm O(B·D) giữa các tâm và khối. Tổng RAM còn gồm ảnh, nhãn và các mảng dữ liệu khác.
 - `kmeans`: Lloyd có trọng số; cập nhật tâm bằng `np.bincount`; xử lý cụm rỗng; giảm K khi thiếu giá trị phân biệt;
   sắp cụm theo độ sáng trước khi gán nhãn cuối (hoà chọn chỉ số nhỏ nhất); lưu lịch sử SSE, độ dịch tâm và tâm. Kiểm tra K, seed, tol, max_iter,
   chunk_size trước xử lý. Nếu gán nhãn cuối còn cụm rỗng thì báo chưa hội tụ, không vượt giới hạn vòng lặp.
@@ -211,7 +211,7 @@ Xem README mục 4. Tổng cộng 5 module thuật toán/xử lý, 4 module ti�
 
 ### 4.4 Cài đặt Otsu (`src/algorithms/otsu.py`)
 
-- `compute_histogram`: `np.bincount(minlength=256)`.
+- `compute_histogram` dùng `np.bincount(minlength=256)` theo khối để giới hạn vùng đệm chuyển kiểu chỉ số.
 - `otsu_from_histogram`: tính ω₀, μ bằng `cumsum`; σ²_B chỉ tại ngưỡng hợp lệ (số pixel tích luỹ nguyên 0 < c₀ < N);
   ngưỡng đồng hạng ⇒ chọn phần tử trong tập cực đại gần floor(trung bình) nhất; ảnh một mức xám ⇒ `valid = False`; trả về ω₀, ω₁, μ₀, μ₁, σ²_T, η.
 - `apply_threshold`: pixel > t ⇒ 255; từ chối ngưỡng không nguyên và ảnh sai miền giá trị.

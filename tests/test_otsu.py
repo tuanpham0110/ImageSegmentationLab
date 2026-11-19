@@ -155,6 +155,17 @@ def test_histogram_counts():
     assert h[0] == 2 and h[7] == 3 and h[255] == 1
 
 
+def test_strided_image_crosses_histogram_block_boundary():
+    source = np.random.default_rng(7).integers(0, 256, (513, 513), dtype=np.uint8)
+    original = source.copy()
+    img = source[::-2, ::2]  # 66.049 pixel, không liên tục và vượt một khối đếm.
+    expected = np.bincount(img.ravel(), minlength=256)
+    result, binary = segment_image_otsu(img)
+    np.testing.assert_array_equal(result.histogram, expected)
+    np.testing.assert_array_equal(binary, np.where(img > result.threshold, np.uint8(255), np.uint8(0)))
+    np.testing.assert_array_equal(source, original)
+
+
 def test_invalid_inputs():
     with pytest.raises(ValueError):
         compute_histogram(np.zeros((4, 4, 3), np.uint8))

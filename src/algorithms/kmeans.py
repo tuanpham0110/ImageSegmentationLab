@@ -20,7 +20,7 @@ from src.utils.color_space import lab_to_rgb, rgb_to_lab
 
 # Số điểm xử lý mỗi lần khi tính ma trận khoảng cách, để bộ nhớ tạm luôn nhỏ:
 # Mỗi khối chỉ giữ hiệu N×D và khoảng cách tới một tâm, không tạo N×K×D.
-DEFAULT_CHUNK_SIZE = 262_144
+DEFAULT_CHUNK_SIZE = 65_536
 
 # K-means tổng quát chạy với mọi K >= 1 (K thực tế bị chặn bởi số giá trị phân biệt của dữ liệu).
 # Không có chặn trên trong thuật toán; giao diện tự đặt giới hạn thanh trượt cho tiện dùng.
@@ -155,24 +155,32 @@ def assign_labels(
     return labels, min_sq
 
 
+def _squared_distance(block: np.ndarray, center: np.ndarray, diff: np.ndarray, out: np.ndarray) -> None:
+    np.subtract(block, center, out=diff)
+    np.einsum("nd,nd->n", diff, diff, out=out)
+
+
 def _assign_labels(data: np.ndarray, centers: np.ndarray, chunk_size: int) -> tuple[np.ndarray, np.ndarray]:
     """Đường nội bộ cho float64 đã kiểm tra; không lặp lại kiểm tra N×D ở mỗi vòng Lloyd."""
     n = data.shape[0]
     labels = np.empty(n, dtype=np.int32)
     min_sq = np.empty(n, dtype=np.float64)
+    size = min(n, chunk_size)
+    diff = np.empty_like(data[:size])
+    distance = np.empty(size, dtype=np.float64)
+    better = np.empty(size, dtype=bool)
     for start in range(0, n, chunk_size):
-        block = data[start : start + chunk_size]
-        diff = block - centers[0]
-        best = np.einsum("nd,nd->n", diff, diff)
-        block_labels = np.zeros(block.shape[0], dtype=np.int32)
+        stop = min(start + chunk_size, n)
+        length = stop - start
+        block, best, block_labels = data[start:stop], min_sq[start:stop], labels[start:stop]
+        scratch, d2, closer = diff[:length], distance[:length], better[:length]
+        block_labels.fill(0)
+        _squared_distance(block, centers[0], scratch, best)
         for j in range(1, centers.shape[0]):
-            center = centers[j]
-            diff = block - center
-            d2 = np.einsum("nd,nd->n", diff, diff)
-            np.copyto(block_labels, j, where=d2 < best)  # Hoà thì giữ chỉ số nhỏ hơn.
+            _squared_distance(block, centers[j], scratch, d2)
+            np.less(d2, best, out=closer)
+            np.copyto(block_labels, j, where=closer)  # Hoà thì giữ chỉ số nhỏ hơn.
             np.minimum(best, d2, out=best)
-        labels[start : start + chunk_size] = block_labels
-        min_sq[start : start + chunk_size] = best
     return labels, min_sq
 
 
@@ -189,7 +197,8 @@ def _sample_index(prob_mass: np.ndarray, rng: np.random.Generator) -> int:
     return min(idx, prob_mass.size - 1)
 
 
-def _init_kmeans_pp(data: np.ndarray, weights: np.ndarray, k: int, rng: np.random.Generator) -> np.ndarray:
+def _init_kmeans_pp(data: np.ndarray, weights: np.ndarray, k: int, rng: np.random.Generator,
+                    chunk_size: int) -> np.ndarray:
     """Khởi tạo K-means++ (Arthur & Vassilvitskii, 2007) — kiến thức bổ sung ngoài giáo trình.
 
     Tâm đầu tiên chọn ngẫu nhiên; mỗi tâm tiếp theo được chọn với xác suất tỉ lệ với
@@ -199,27 +208,44 @@ def _init_kmeans_pp(data: np.ndarray, weights: np.ndarray, k: int, rng: np.rando
     """
     centers = np.empty((k, data.shape[1]), dtype=np.float64)
     centers[0] = data[_sample_index(weights, rng)]
-    diff = data - centers[0]
-    closest = np.einsum("nd,nd->n", diff, diff)
+    if k == 1:
+        return centers
+    n = data.shape[0]
+    size = min(n, chunk_size)
+    closest = np.empty(n, dtype=np.float64)
+    mass = np.empty_like(closest)
+    diff = np.empty_like(data[:size])
+    distance = np.empty(size, dtype=np.float64)
+    for start in range(0, n, size):
+        block = data[start:start + size]
+        _squared_distance(block, centers[0], diff[:len(block)], closest[start:start + size])
     for j in range(1, k):
-        mass = weights * closest
+        np.multiply(weights, closest, out=mass)
         total_mass = mass.sum()
         if not np.isfinite(total_mass) or total_mass <= 0:
             # k_eff đã được chặn bởi số điểm phân biệt. Khối lượng bằng 0/Inf
             # ở đây là mất khả năng biểu diễn số học, không phải thiếu điểm.
             raise ValueError(NUMERIC_RANGE_ERROR)
         centers[j] = data[_sample_index(mass, rng)]
-        diff = data - centers[j]
-        np.minimum(closest, np.einsum("nd,nd->n", diff, diff), out=closest)
+        if j + 1 < k:
+            for start in range(0, n, size):
+                block = data[start:start + size]
+                best = closest[start:start + size]
+                d2 = distance[:len(block)]
+                _squared_distance(block, centers[j], diff[:len(block)], d2)
+                np.minimum(best, d2, out=best)
     return centers
 
 
 def _weighted_means(x: np.ndarray, labels: np.ndarray, w: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
     """(trung bình có trọng số mỗi cụm (k, D), tổng trọng số mỗi cụm (k,)); cụm rỗng cho NaN."""
-    counts = np.bincount(labels, weights=w, minlength=k)
+    indices = labels.astype(np.intp, copy=False)
+    counts = np.bincount(indices, weights=w, minlength=k)
     means = np.empty((k, x.shape[1]), dtype=np.float64)
+    weighted = np.empty_like(w)
     for d in range(x.shape[1]):
-        sums = np.bincount(labels, weights=w * x[:, d], minlength=k)
+        np.multiply(w, x[:, d], out=weighted)
+        sums = np.bincount(indices, weights=weighted, minlength=k)
         if not np.all(np.isfinite(sums)):
             raise ValueError(NUMERIC_RANGE_ERROR)
         with np.errstate(invalid="ignore", divide="ignore"):
@@ -230,11 +256,11 @@ def _weighted_means(x: np.ndarray, labels: np.ndarray, w: np.ndarray, k: int) ->
 def _assign_by_brightness(x: np.ndarray, centers: np.ndarray, chunk_size: int, order_weights=None):
     """Gán nhãn, phá hoà khoảng cách theo thứ tự độ sáng của tâm (quy tắc của kết quả báo cáo).
 
-    Trả về (nhãn theo chỉ số tâm nội bộ, nhãn theo thứ tự độ sáng, khoảng cách bình phương).
+    Trả về (thứ tự tâm, nhãn theo thứ tự độ sáng, khoảng cách bình phương).
     """
     rank = _relabel_by_brightness(centers, order_weights)
     sorted_labels, min_sq = _assign_labels(x, centers[rank], chunk_size)
-    return rank.astype(np.int32)[sorted_labels], sorted_labels, min_sq
+    return rank, sorted_labels, min_sq
 
 
 def _max_shift(a: np.ndarray, b: np.ndarray) -> float:
@@ -256,7 +282,6 @@ def _relabel_by_brightness(centers: np.ndarray, order_weights: np.ndarray | None
     return np.argsort(key, kind="stable")
 
 
-@_checked_arithmetic
 def kmeans(
     data: np.ndarray,
     k: int,
@@ -291,6 +316,12 @@ def kmeans(
     Returns:
         KMeansResult — nhãn được sắp xếp sao cho cụm 0 có tâm tối nhất.
     """
+    return _kmeans(data, k, max_iter, tol, seed, init, chunk_size, weights, order_weights)
+
+
+@_checked_arithmetic
+def _kmeans(data: np.ndarray, k: int, max_iter: int, tol: float, seed: int | None, init: str, chunk_size: int,
+            weights: np.ndarray | None, order_weights: np.ndarray | None, *, already_unique: bool = False) -> KMeansResult:
     _validate_params(k, max_iter, tol, init, chunk_size, seed)
     k = int(k)
     max_iter = int(max_iter)
@@ -325,38 +356,31 @@ def kmeans(
     rng = np.random.default_rng(seed)
     warnings: list[str] = []
 
-    distinct = unique_rows(x)
+    distinct = x if already_unique else unique_rows(x)
     k_eff = min(k, distinct.shape[0])
     if k_eff < k:
         warnings.append(
             f"Dữ liệu chỉ có {distinct.shape[0]} giá trị phân biệt nên K được giảm từ {k} xuống {k_eff}."
         )
 
-    centers = _init_kmeans_pp(x, w, k_eff, rng) if init == "kmeans++" else _init_random(distinct, k_eff, rng)
+    centers = (_init_kmeans_pp(x, w, k_eff, rng, chunk_size) if init == "kmeans++"
+               else _init_random(distinct, k_eff, rng))
     del distinct  # Chỉ cần các giá trị phân biệt để chặn K và khởi tạo.
 
     sse_history: list[float] = []
     shift_history: list[float] = []
     centers_history: list[np.ndarray] = [centers.copy()]
     converged = False
-    n_iter = 0
     n_empty_events = 0
 
-    pending = None  # phép gán đã tính ở bước kiểm tra hội tụ, dùng lại cho vòng sau / kết quả cuối
-    final_sorted = None
-    initial_sse = 0.0
-    for it in range(1, max_iter + 1):
-        n_iter = it
-        # Bước 1: gán nhãn theo tâm gần nhất. Hoà khoảng cách được phá theo thứ tự độ sáng
-        # của tâm — đúng quy tắc của bước gán nhãn cuối — nên tâm tính ra ở vòng này khớp
-        # với nhãn trả về. Chỉ số tâm nội bộ không đổi để lịch sử tâm theo dõi đúng từng cụm.
-        labels, _, min_sq = pending if pending is not None else _assign_by_brightness(x, centers, chunk_size, order_weights)
-        pending = None
-        if it == 1:
-            initial_sse = _weighted_sse(w, min_sq)
-
-        # Bước 2: cập nhật tâm = trung bình (có trọng số) các điểm trong cụm, dùng np.bincount theo từng chiều
-        new_centers, counts = _weighted_means(x, labels, w, k_eff)
+    rank, labels, min_sq = _assign_by_brightness(x, centers, chunk_size, order_weights)
+    current_sse = initial_sse = _weighted_sse(w, min_sq)
+    for n_iter in range(1, max_iter + 1):
+        # Gán nhãn theo thứ tự độ sáng. Chỉ đổi thứ tự K tâm và số đếm sau
+        # khi tính trung bình để lịch sử giữ đúng định danh tâm qua các vòng.
+        sorted_centers, sorted_counts = _weighted_means(x, labels, w, k_eff)
+        inverse_rank = np.argsort(rank)
+        new_centers, counts = sorted_centers[inverse_rank], sorted_counts[inverse_rank]
 
         # Xử lý cụm rỗng: đặt tâm vào điểm xa tâm hiện tại của nó nhất (điểm "khó" nhất).
         empty = np.flatnonzero(counts == 0)
@@ -378,21 +402,27 @@ def kmeans(
         if not np.all(np.isfinite(new_centers)):
             raise ValueError(NUMERIC_RANGE_ERROR)
         shift = _max_shift(new_centers, centers)
+        changed = shift != 0.0 or not np.array_equal(new_centers, centers)
         shift_history.append(shift)
         centers = new_centers
         centers_history.append(centers.copy())
         # SSE của vòng i ứng với tâm ĐÃ cập nhật và nhãn gần nhất theo tâm đó.
-        # Dùng lại phép gán này ở vòng sau và khi trả kết quả; không tính hai lần.
-        pending = _assign_by_brightness(x, centers, chunk_size, order_weights)
-        sse_history.append(_weighted_sse(w, pending[2]))
-        final_sorted = pending[1:]
+        # Tâm không đổi cho cùng phép gán. Các vòng khác dùng phép gán mới để
+        # ghi SSE, kiểm tra hội tụ và làm đầu vào cho vòng kế tiếp.
+        if changed:
+            del labels, min_sq
+            rank, labels, min_sq = _assign_by_brightness(x, centers, chunk_size, order_weights)
+            current_sse = _weighted_sse(w, min_sq)
+        sse_history.append(current_sse)
         if shift <= tol and empty.size == 0:
             # Chỉ dừng khi tâm đúng là trung bình cụm theo phép gán nhãn trả về (với tol > 0, điểm
-            # sát biên có thể còn đổi cụm). Nếu chưa, lặp tiếp; phép gán này được dùng lại ở vòng sau.
-            means, check_counts = _weighted_means(x, pending[0], w, k_eff)
-            if np.all(check_counts > 0) and _max_shift(means, centers) <= tol:
+            # sát biên có thể còn đổi cụm). Tâm không đổi đã thỏa điều đó.
+            if changed:
+                means, check_counts = _weighted_means(x, labels, w, k_eff)
+                converged = bool(np.all(check_counts > 0) and _max_shift(means, centers[rank]) <= tol)
+            else:
                 converged = True
-                final_sorted = pending[1:]
+            if converged:
                 break
 
     if n_empty_events:
@@ -400,13 +430,9 @@ def kmeans(
     if not converged:
         warnings.append(f"Chưa hội tụ sau {max_iter} vòng lặp (độ dịch tâm cuối = {shift_history[-1]:.4g}).")
 
-    # Sắp xếp TRƯỚC khi gán nhãn cuối để quy tắc hoà (chỉ số nhỏ nhất) dùng
-    # đúng thứ tự tâm được báo cáo, kể cả khi dừng sớm do max_iter/tol.
-    order = _relabel_by_brightness(centers, order_weights)
-    centers = centers[order]
-    centers_history = [c[order] for c in centers_history]
-    # Khi hội tụ, phép gán ở bước kiểm tra đã dùng đúng thứ tự này: dùng lại thay vì tính lần nữa.
-    labels, min_sq = final_sorted if final_sorted is not None else _assign_labels(x, centers, chunk_size)
+    # Nhãn ở phép gán cuối đã dùng đúng thứ tự tâm được báo cáo.
+    centers = centers[rank]
+    centers_history = [c[rank] for c in centers_history]
     counts_f = np.bincount(labels, weights=w, minlength=k_eff)
     fits_integer_counts = (np.all(w == np.rint(w)) and total_weight < 2**63
                            and np.all(counts_f < 2**63))
@@ -422,7 +448,7 @@ def kmeans(
         labels=labels,
         centers=centers,
         counts=counts,
-        sse=_weighted_sse(w, min_sq),
+        sse=current_sse,
         n_iter=n_iter,
         converged=converged,
         k_requested=k,
@@ -490,7 +516,10 @@ def unique_pixels(features: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndar
         # Giữ đúng thứ tự tăng dần, counts và inverse như np.unique, không cần
         # sắp xếp N pixel hay tạo mảng packed int32 cho ảnh xám lớn.
         pixels = features[:, 0].astype(np.uint8, copy=False)
-        histogram = np.bincount(pixels, minlength=256)
+        # bincount chuyển chỉ số sang intp; giới hạn bản chuyển kiểu theo khối.
+        histogram = np.bincount(pixels[:DEFAULT_CHUNK_SIZE], minlength=256)
+        for start in range(DEFAULT_CHUNK_SIZE, pixels.size, DEFAULT_CHUNK_SIZE):
+            histogram += np.bincount(pixels[start:start + DEFAULT_CHUNK_SIZE], minlength=256)
         levels = np.flatnonzero(histogram)
         lookup = np.zeros(256, dtype=np.uint8)
         lookup[levels] = np.arange(levels.size)
@@ -545,15 +574,17 @@ def segment_image_kmeans(
         values = rgb_to_lab(values)
         order_weights = LIGHTNESS_ORDER
     # K-means có trọng số trên các giá trị phân biệt == K-means trên toàn bộ pixel
-    core = kmeans(values, k, max_iter=max_iter, tol=tol, seed=seed, init=init, weights=counts,
-                  order_weights=order_weights)
-    core.labels = core.labels[inverse]  # trả nhãn về cho từng pixel
-    labels = core.labels.reshape(h, w)
+    # unique_pixels đã trả các dòng xám/RGB phân biệt theo thứ tự chuẩn.
+    # Lab vẫn sắp các vector chuyển đổi như kmeans tổng quát khi khởi tạo ngẫu nhiên.
+    core = _kmeans(values, k, max_iter, tol, seed, init, DEFAULT_CHUNK_SIZE, counts, order_weights,
+                   already_unique=feature != "lab")
     display = lab_to_rgb(core.centers) if feature == "lab" else core.centers
     palette = np.clip(np.round(display), 0, 255).astype(np.uint8)
-    segmented = palette[labels]
-    if feature == "gray":
-        segmented = segmented[..., 0]
+    # Tra màu trên tập mức xám trước khi mở rộng nhãn cho toàn ảnh.
+    gray_values = palette[core.labels, 0] if feature == "gray" else None
+    core.labels = core.labels[inverse]  # trả nhãn về cho từng pixel
+    labels = core.labels.reshape(h, w)
+    segmented = gray_values[inverse].reshape(h, w) if gray_values is not None else palette[labels]
     # Đo tới kết quả trực tiếp của thuật toán, gồm cả phục hồi nhãn và ảnh tâm.
     core.elapsed_seconds = time.perf_counter() - t0
     return ImageKMeansResult(labels=labels, segmented=segmented, centers=core.centers, feature=feature, core=core,

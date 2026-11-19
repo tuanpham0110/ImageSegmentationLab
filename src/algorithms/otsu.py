@@ -33,6 +33,7 @@ from fractions import Fraction
 import numpy as np
 
 N_LEVELS = 256
+_HISTOGRAM_BLOCK = 65_536
 
 
 @dataclass
@@ -71,8 +72,21 @@ def _validate_gray(gray: np.ndarray) -> np.ndarray:
 
 def compute_histogram(gray: np.ndarray) -> np.ndarray:
     """Histogram 256 mức của ảnh xám uint8 (đếm số pixel có mức xám g — mục 3.1.1 giáo trình)."""
-    arr = _validate_gray(gray)
-    return np.bincount(arr.ravel(), minlength=N_LEVELS).astype(np.int64)
+    return _histogram_uint8(_validate_gray(gray))
+
+
+def _histogram_uint8(gray: np.ndarray) -> np.ndarray:
+    if gray.size <= _HISTOGRAM_BLOCK:
+        return np.bincount(gray.ravel(order="K"), minlength=N_LEVELS).astype(np.int64, copy=False)
+
+    # bincount cần chỉ số intp. Chuyển kiểu từng khối để tránh cấp phát bản sao intp của cả ảnh,
+    # kể cả với ảnh dạng view không liên tục trong bộ nhớ.
+    counts = np.zeros(N_LEVELS, dtype=np.int64)
+    with np.nditer(gray, flags=("external_loop", "buffered"), op_flags=("readonly",),
+                   op_dtypes=(np.intp,), order="K", buffersize=_HISTOGRAM_BLOCK) as blocks:
+        for block in blocks:
+            counts += np.bincount(block, minlength=N_LEVELS)
+    return counts
 
 
 def otsu_from_histogram(hist: np.ndarray) -> OtsuResult:
@@ -206,7 +220,10 @@ def apply_threshold(gray: np.ndarray, threshold: int) -> np.ndarray:
     if (isinstance(threshold, (bool, np.bool_)) or not isinstance(threshold, (int, np.integer))
             or not 0 <= int(threshold) <= 255):
         raise ValueError("Ngưỡng phải là số nguyên trong [0, 255].")
-    binary = (_validate_gray(gray) > int(threshold)).astype(np.uint8)
+    arr = _validate_gray(gray)
+    # So sánh ufunc chọn layout C đối với view broadcast có bước bằng 0.
+    binary = np.empty_like(arr, order="C" if 0 in arr.strides else "K")
+    np.greater(arr, int(threshold), out=binary)
     binary *= 255
     return binary
 
@@ -218,9 +235,10 @@ def segment_image_otsu(gray: np.ndarray, manual_threshold: int | None = None) ->
     lựa chọn foreground, ảnh tách nền, hiển thị hoặc mã hoá tệp xuất.
     """
     t0 = time.perf_counter()
-    result = otsu_threshold(gray)
+    arr = _validate_gray(gray)
+    result = otsu_from_histogram(_histogram_uint8(arr))
     threshold = result.threshold if manual_threshold is None else manual_threshold
-    binary = apply_threshold(gray, threshold)
+    binary = apply_threshold(arr, threshold)
     result.elapsed_seconds = time.perf_counter() - t0
     return result, binary
 
@@ -364,14 +382,18 @@ def apply_multi_threshold(gray: np.ndarray, thresholds: tuple[int, int]) -> np.n
     t1, t2 = int(thresholds[0]), int(thresholds[1])
     if t1 > t2:
         raise ValueError("Ngưỡng phải thoả t1 <= t2.")
-    g = _validate_gray(gray)
-    return (g > t1).astype(np.uint8) + (g > t2).astype(np.uint8)
+    arr = _validate_gray(gray)
+    labels = np.empty_like(arr, order="C" if 0 in arr.strides else "K")
+    np.greater(arr, t1, out=labels)
+    np.add(labels, arr > t2, out=labels)
+    return labels
 
 
 def segment_image_multi_otsu(gray: np.ndarray) -> tuple[MultiOtsuResult, np.ndarray]:
     """Histogram + hai ngưỡng Otsu + ảnh nhãn 3 lớp; cùng phạm vi đo thời gian với Otsu 2 lớp."""
     t0 = time.perf_counter()
-    result = multi_otsu_from_histogram(compute_histogram(gray))
-    labels = apply_multi_threshold(gray, result.thresholds)
+    arr = _validate_gray(gray)
+    result = multi_otsu_from_histogram(_histogram_uint8(arr))
+    labels = apply_multi_threshold(arr, result.thresholds)
     result.elapsed_seconds = time.perf_counter() - t0
     return result, labels
