@@ -1,218 +1,133 @@
-# IMAGE SEGMENTATION LAB
+# Image Segmentation Studio
 
-**Hệ thống phân đoạn ảnh bằng K-means và Thresholding (Otsu)** — Bài tập lớn môn Xử lý ảnh (INT13146),
-Đề tài 3, Học viện Công nghệ Bưu chính Viễn thông.
+**Đề tài 3 · Xử lý ảnh (INT13146) · Học viện Công nghệ Bưu chính Viễn thông**
 
-Ứng dụng Streamlit chạy cục bộ trên Windows: tải ảnh thật (PNG/JPG/BMP) hoặc ma trận CSV, phân đoạn (tách nền và
-đối tượng) bằng **K-means** và **Otsu** tự cài đặt bằng NumPy, xem kết quả trực quan và tải kết quả về máy.
+Ứng dụng Streamlit phân đoạn ảnh và tách nền bằng **K-means** và **Otsu** tự cài đặt bằng NumPy, không dùng OpenCV. Ứng dụng nhận ảnh hoặc ma trận CSV, hiển thị ảnh gốc cùng ảnh kết quả và cho tải mask, ảnh tách nền và số liệu.
 
-- **Không dùng OpenCV**, không dùng `sklearn.cluster.KMeans` hay `skimage.filters.threshold_otsu`.
-- K-means và Otsu nằm trong [src/algorithms/](src/algorithms/), tách biệt hoàn toàn với giao diện.
-- Kiểm thử tự động (Pytest), gồm kiểm thử hồi quy và giao diện bằng Streamlit `AppTest`; CI kiểm tra mỗi push/PR.
-- Không cần Internet, không có API, không có cơ sở dữ liệu.
+## 1. Cài đặt và chạy
 
----
+Cần **Python 3.11 64-bit**, `venv`, `pip` và trình duyệt. Cài thư viện đúng phiên bản trong `requirements.txt`. Các thư viện chính gồm NumPy, Pillow, Streamlit, Matplotlib và pandas. `requirements-dev.txt` chứa thêm công cụ kiểm thử.
 
-## 1. Cài đặt và chạy (Windows PowerShell)
+Giải nén đầy đủ, rồi mở terminal tại thư mục chứa `app.py`. Thư mục này cũng chứa `data/` và `.streamlit/`. Dùng lệnh phù hợp với hệ điều hành.
 
-Môi trường chuẩn: **Python 3.11** (`.python-version`; đã kiểm tra trên Windows với Python 3.11.7).
-`requirements.in` liệt kê dependency trực tiếp; `requirements.txt` khóa toàn bộ dependency runtime.
-`requirements-dev.txt` khóa thêm Pytest, Ruff và pip-tools. Các phiên bản Python khác chưa được chứng nhận với lockfile này.
-Mở PowerShell tại thư mục dự án:
+### Windows PowerShell
+
+Kiểm tra phiên bản Python của dòng đầu là 3.11.x.
 
 ```powershell
+py -3.11 -V
 py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python -m streamlit run app.py
+.\.venv\Scripts\python.exe -m pip install --only-binary=:all: -r requirements.txt
+.\.venv\Scripts\python.exe -m streamlit run app.py --server.address 127.0.0.1
 ```
 
-Trình duyệt tự mở `http://localhost:8501`. Dừng ứng dụng bằng `Ctrl + C`.
-
-**Nếu PowerShell chặn `Activate.ps1`** (lỗi *running scripts is disabled*), không cần kích hoạt môi trường — gọi thẳng
-Python trong `.venv`:
+Nếu `py` không tìm thấy Python nhưng `python -V` trả về 3.11.x, tạo môi trường bằng `python -m venv .venv`. Nếu cả hai lệnh đều trỏ sai phiên bản, gọi trực tiếp tệp `python.exe` của bản CPython 3.11 64-bit đã cài. Đoạn lệnh dưới dùng vị trí cài mặc định cho người dùng hiện tại. Thay đường dẫn nếu Python nằm ở nơi khác.
 
 ```powershell
-py -3.11 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m streamlit run app.py
+$python311 = Join-Path $env:LOCALAPPDATA 'Programs\Python\Python311\python.exe'
+& $python311 -V
+& $python311 -m venv .venv
 ```
 
-Hoặc chỉ cho phép trong cửa sổ hiện tại: `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`.
+### Ubuntu hoặc Linux có Python 3.11
 
-### Chạy kiểm thử
+```bash
+python3.11 -m venv .venv
+./.venv/bin/python -m pip install --only-binary=:all: -r requirements.txt
+./.venv/bin/python -m streamlit run app.py --server.address 127.0.0.1
+```
+
+Mở [http://127.0.0.1:8501](http://127.0.0.1:8501). Dừng máy chủ bằng `Ctrl+C` trong terminal. Các lệnh gọi Python trực tiếp trong môi trường ảo nên có thể chạy ngay bằng PowerShell.
+
+### Cài và chạy ngoại tuyến
+
+Các ảnh mẫu, mask tham chiếu và tệp CSV cần cho demo nằm trong `data/`. Sau khi cài thư viện, ứng dụng phân đoạn và xuất tệp qua máy chủ cục bộ, dùng được khi máy ngắt Internet.
+
+Trên Windows x64 đã cài CPython 3.11, dùng gói `PTIT-DeTai3-Wheels-Windows-x64-Python311.zip` đi kèm. Giải nén hai ZIP vào cùng một thư mục cha để `wheelhouse-win-amd64-py311/` nằm cạnh thư mục dự án. Mở PowerShell trong thư mục dự án, tạo `.venv` theo hướng dẫn trên rồi cài và chạy.
 
 ```powershell
-python -m pip install -r requirements-dev.txt
-python -m pip check
-python -m ruff check app.py src scripts tests
-python -m pytest -v
-# hoặc, không kích hoạt môi trường:
-.\.venv\Scripts\python.exe -m pytest -v
+.\.venv\Scripts\python.exe -m pip install --no-index --find-links '..\wheelhouse-win-amd64-py311' --only-binary=:all: -r requirements.txt
+.\.venv\Scripts\python.exe -m streamlit run app.py --server.address 127.0.0.1
 ```
 
-Tạo lại lockfile khi chủ động cập nhật dependency (bằng Python 3.11):
+Gói Windows cũng có thư viện kiểm thử. Để chạy test ngoại tuyến, thay `requirements.txt` bằng `requirements-dev.txt` trong lệnh cài trên, rồi chạy các lệnh kiểm tra ở mục 4. Trên nền tảng khác, chuẩn bị một thư mục wheel từ máy có mạng với **cùng hệ điều hành, kiến trúc và Python 3.11**. Dùng `python3.11 -m pip download --only-binary=:all: --dest wheelhouse -r requirements.txt` trên Linux rồi trỏ `--find-links` tới thư mục đã chép sang máy đích.
 
-```powershell
-python -m piptools compile --output-file requirements.txt requirements.in
-python -m piptools compile --allow-unsafe --output-file requirements-dev.txt requirements-dev.in
-```
+## 2. Nhập ảnh và chạy demo
 
-CI trong `.github/workflows/ci.yml` chạy trên Windows và Ubuntu, kiểm tra dependency, Ruff, Pytest,
-benchmark smoke và ngăn đưa môi trường ảo vào Git. Trạng thái CI thực tế cần xem sau khi push.
+Chọn dữ liệu ở thanh bên.
 
-### Benchmark và ảnh chụp thật
+- **Ảnh mẫu** mở 11 tình huống tổng hợp có sẵn. Có thể vào **Thư viện ảnh mẫu** và bấm **Dùng ảnh này**.
+- **Tải tệp lên** nhận PNG, JPG/JPEG, BMP và CSV, tối đa 30 MiB mỗi tệp. Ảnh giải mã giới hạn 40 triệu pixel. Mục **Tiền xử lý ảnh** cho chọn cách chuyển xám, lọc trung vị và cạnh dài tối đa. Mặc định ảnh có cạnh dài vượt 800 px được thu nhỏ giữ tỷ lệ. Giới hạn xử lý cao nhất trên giao diện là 2.048 px.
 
-```powershell
-python scripts/benchmark_kmeans.py --sizes 800 1600 2048 --ks 4 16 --repeats 3
-python scripts/benchmark_csv.py
-python scripts/evaluate_real_images.py --fetch --samples 30 --repeats 3
-python scripts/run_experiments.py --skip-figures --repeats 3 --output-dir outputs/review
-python scripts/render_real_examples.py
-```
+### K-means
 
-Ảnh/mask nghiên cứu lấy từ [Oxford VGG iSeg](https://www.robots.ox.ac.uk/~vgg/data/iseg/),
-kiểm tra SHA-256 rồi lưu ở `data/external/` (không đưa vào Git). Báo cáo lưu tại `docs/results/cr_real_images.md`.
-GT có ba mức: 0=nền, 255=đối tượng, 128=biên không chắc chắn và được bỏ qua khi tính chỉ số.
-Chia 6 ảnh dev/24 ảnh test bằng hash tên tệp; giữ K=5 và foreground tự động, không chỉnh theo GT.
-Biến thể giảm sáng 0,5 không đại diện cho ảnh chụp thiếu sáng độc lập.
+1. Chọn mẫu **Nhiều hình màu khác nhau (RGB)**. Mở **K-means**, đặt **Số cụm K** bằng 5, chọn **Màu RGB** và bấm **Chạy K-means**.
+2. Xem ảnh tâm cụm trong **Kết quả phân cụm**. Mở **Tách nền (chọn đối tượng)** để chọn cụm cần giữ hoặc đảo vùng đối tượng. Mở **Thống kê** để xem số pixel, tâm cụm và SSE.
+3. Với ảnh riêng, chọn K từ 1 đến 16. Ảnh màu có thể dùng RGB, Lab hoặc mức xám. **Thiết lập nâng cao** có cách khởi tạo, seed, ngưỡng hội tụ và số vòng tối đa.
 
-Benchmark không đặt ngưỡng thời gian chung cho mọi máy; kết quả đầy đủ và giới hạn xem
-[báo cáo xử lý CR-01–CR-10](docs/CODE_REVIEW_20261108.md).
+### Otsu
 
-### Sinh lại dữ liệu mẫu và chạy lại thực nghiệm (tuỳ chọn)
+1. Chọn mẫu **Hình tròn đen trên nền trắng**. Mở **Phân ngưỡng Otsu**, chọn **Otsu · 2 lớp**, **Tự động** và **Đối tượng tối**, rồi bấm **Chạy Otsu**. Đối với vật thể sáng trên nền tối, chọn **Đối tượng sáng**.
+2. Xem ảnh nhị phân, mask và **Histogram & phương sai**. Ca hình tròn có ngưỡng 127 theo quy tắc chọn ngưỡng đồng hạng. Ở chế độ **Thủ công**, chọn T trong **Ngưỡng thủ công & hậu xử lý**. **Multi-Otsu · 3 lớp** tự tìm hai ngưỡng.
+3. Sau khi đổi thiết lập Otsu, bấm **Chạy Otsu** để cập nhật kết quả tải xuống.
 
-Dữ liệu mẫu đã có sẵn trong `data/`. Nếu muốn tạo lại (kết quả giống hệt vì dùng seed cố định):
+Trang **So sánh thuật toán** chạy cả hai phương pháp trên cùng đầu vào. Mục **Đánh giá** tính IoU/Dice với ảnh mẫu có mask tham chiếu hoặc khi người dùng tải mask nhị phân PNG, BMP hoặc CSV. Mask tải lên cần khớp kích thước ảnh gốc hoặc kích thước xử lý. CSV tham chiếu dùng cặp giá trị 0/1 hoặc 0/255, trong đó giá trị dương là đối tượng.
 
-```powershell
-python scripts\generate_samples.py      # ảnh mẫu, ground truth, CSV -> data/
-python scripts\run_experiments.py       # số liệu thật -> docs/results/, hình -> docs/figures/
-# Chỉ cập nhật số liệu, giữ nguyên các ảnh minh hoạ:
-python scripts\run_experiments.py --skip-figures
-```
+### Định dạng CSV
 
----
+Dùng ma trận mức xám hai chiều, mã hóa UTF-8 có hoặc không BOM. Mỗi hàng có cùng số cột, không có tiêu đề và mỗi ô là giá trị nguyên từ 0 đến 255. Có thể phân cách bằng dấu phẩy, dấu chấm phẩy, tab hoặc khoảng trắng. Giới hạn 4.194.304 ô.
 
-## 2. Chức năng
-
-| Trang | Nội dung |
-|---|---|
-| **Tổng quan** | Giới thiệu đề tài, quy trình xử lý, cách bắt đầu |
-| **K-means** | Chọn K từ 1–16, đặc trưng RGB / **CIE L\*a\*b\*** / mức xám, khởi tạo K-means++/ngẫu nhiên, số vòng lặp, ngưỡng hội tụ và seed. Xem ảnh phân cụm, bản đồ nhãn, bảng tâm cụm và SSE. Chọn cụm đối tượng, xem mask và áp dụng hình thái học khi cần. |
-| **Otsu Thresholding** | Histogram 256 mức với đường ngưỡng t\*, đồ thị σ²_B(t), ảnh xám, ảnh nhị phân, mask, ảnh tách nền; chế độ ngưỡng thủ công để đối chiếu; chọn đối tượng là lớp sáng/tối/gợi ý theo viền ảnh; **Multi-Otsu 3 lớp** (2 ngưỡng, vét cạn O(256²)) cho ảnh nhiều mức xám; hậu xử lý mask bằng hình thái học |
-| **So sánh thuật toán** | Cùng một ảnh: ảnh gốc / K-means / Otsu; so sánh hai mask, bản đồ khác biệt; IoU/Dice **chỉ khi có ground truth** (GT tải lên phải là ảnh đục, được giữ khi chuyển trang cho tới khi bỏ tệp hoặc đổi ảnh); bảng so sánh bản chất, tham số, thời gian, ưu nhược điểm |
-| **Thư viện ảnh mẫu** | 11 tình huống kiểm thử tổng hợp chạy offline, có ground truth khi phù hợp |
-| **Kiến thức thuật toán** | Công thức, giả mã, chứng minh f(g) ở giáo trình mục 3.1.6 chính là σ²_B của Otsu, minh hoạ từng vòng lặp K-means trên ảnh 10×10, đối chiếu ví dụ giáo trình |
-| **Hướng dẫn** | Thao tác, định dạng CSV, danh sách tệp tải xuống |
-
-**Đầu vào được xử lý:** ảnh xám, RGB, có kênh alpha (ghép lên nền trắng), có thẻ EXIF hướng chụp (xoay đúng chiều),
-PNG xám 16-bit (chuẩn hoá tuyến tính về 0–255), PNG màu 16-bit/kênh (giảm về 8 bit bằng byte cao, không giãn tương phản; loại có khoá trong suốt tRNS bị từ chối kèm thông báo), ảnh RGB có R=G=B (xử lý như ảnh xám). Giới hạn: tệp ≤ 30 MB, ≤ 40 triệu pixel;
-ảnh lớn được thu nhỏ theo **“Giới hạn cạnh dài khi xử lý”** (mặc định 800 px) và kích thước thật được ghi rõ trên trang.
-Thanh bên có tuỳ chọn **lọc trung vị** 3×3/5×5/7×7 (tự cài đặt) để khử nhiễu trước khi chạy thuật toán.
-
-**Tải xuống:** ảnh phân đoạn, bản đồ nhãn, mask nhị phân, ảnh tách nền RGBA (nền trong suốt) dạng PNG; ma trận nhãn
-cụm, ma trận mask 0/1, bảng thống kê cụm, histogram dạng CSV; thông số và kết quả dạng JSON. Tệp được tạo từ đúng kết
-quả đang hiển thị. Khi đổi ảnh đầu vào, kết quả cũ bị ẩn. Khi đổi thiết lập Otsu, cần chạy lại để tải kết quả.
-Các tab biểu đồ và tải tệp chỉ chuẩn bị nội dung khi mở. Với ảnh đã thu nhỏ, chọn **Thêm PNG kích thước gốc**
-trong trang thuật toán để ánh xạ nhãn và mask bằng láng giềng gần nhất. Cutout RGBA lấy màu từ ảnh nguồn.
-CSV và ZIP so sánh dùng kích thước xử lý. Nếu trình duyệt báo lỗi ghi tệp, chọn vị trí tải xuống có quyền ghi.
-
-## 3. Định dạng CSV đầu vào
-
-- Ma trận **2 chiều** mức xám: mỗi dòng là một hàng ảnh, mỗi giá trị là **số nguyên trong [0, 255]**.
-- Phân cách bằng dấu phẩy `,` (cũng nhận `;`, tab hoặc khoảng trắng). **Không có dòng tiêu đề.** Mọi dòng cùng số cột.
-- Tệp UTF-8 (có hoặc không có BOM). Tối đa 4.194.304 phần tử.
-- Cho phép một dấu phân cách thừa ở cuối dòng để tương thích với dữ liệu cũ. Ô rỗng có dấu nháy hoặc chỉ chứa khoảng trắng vẫn bị từ chối.
-
-```
+```csv
 0,0,255,255
 0,128,255,255
 0,0,0,255
 ```
 
-Lỗi được báo bằng tiếng Việt kèm vị trí dòng/cột: ký tự không phải số, số thập phân, giá trị ngoài [0, 255],
-ô trống, dòng thiếu/thừa cột. Ví dụ tệp lỗi để demo: `data/sample_csv/invalid_*.csv`.
+Để thử nhập CSV, dùng [ma trận 32×32](data/sample_csv/csv_rectangle_32x32.csv). [CSV có ô không hợp lệ](data/sample_csv/invalid_text.csv) dùng để kiểm tra thông báo vị trí lỗi.
 
-## 4. Cấu trúc dự án
+### Lưu kết quả
 
+Vào tab **Tải xuống** sau khi chạy. Các trang thuật toán xuất PNG ảnh phân đoạn, mask 0/255 hoặc ảnh RGBA nền trong suốt, cùng CSV và JSON thống kê. Trang **So sánh thuật toán** có gói ZIP chứa kết quả của cả hai phương pháp. Trình duyệt quản lý vị trí lưu.
+
+Nếu ảnh đã thu nhỏ, chọn **Thêm PNG kích thước gốc** ở từng trang thuật toán để ánh xạ mask và nhãn về độ phân giải nguồn. CSV và ZIP so sánh dùng kích thước xử lý. Khi đổi ảnh đầu vào, chạy lại để có kết quả tương ứng.
+
+## 3. Cấu trúc dự án
+
+```text
+app.py                    Điểm khởi chạy Streamlit
+.streamlit/config.toml    Cấu hình giao diện và máy chủ
+requirements*.in/.txt     Khai báo và khóa phiên bản thư viện
+src/algorithms/           K-means và Otsu
+src/processing/           Tiền xử lý, tạo mask và xuất kết quả
+src/ui/                   Các trang, CSS và tài nguyên giao diện
+src/utils/                Đọc/ghi tệp, chỉ số và biểu đồ
+data/                     Manifest, ảnh mẫu, CSV và mask tham chiếu
+tests/                    Test thuật toán, I/O và tích hợp Streamlit
+scripts/                  Tạo mẫu, chạy thực nghiệm và đóng gói
+docs/                     Tài liệu thuật toán, test case và demo
 ```
-app.py                         Điểm khởi chạy Streamlit (điều hướng 7 trang)
-requirements.txt  pytest.ini  .streamlit/config.toml
-src/algorithms/kmeans.py       K-means tự cài đặt (Lloyd, K-means++, cụm rỗng, trọng số, histogram ảnh xám, tính theo khối)
-src/algorithms/otsu.py         Otsu tự cài đặt từ histogram (σ²_B, ngưỡng đồng hạng, lớp rỗng)
-src/processing/preprocessing.py  Chuyển xám (BT.601 / trung bình), giới hạn kích thước
-src/processing/postprocessing.py Mask từ cụm, ảnh tách nền RGBA, tô màu nhãn, gợi ý nền theo viền
-src/processing/pipeline.py     Luồng xử lý dùng chung cho giao diện, thực nghiệm và kiểm thử; tạo tệp xuất
-src/utils/image_io.py          Đọc/kiểm tra ảnh và CSV, ghi PNG/CSV/JSON
-src/utils/metrics.py           IoU, Dice, độ chính xác pixel (chỉ dùng với ground truth)
-src/utils/visualization.py     Biểu đồ Matplotlib (histogram, σ²_B, tỷ lệ cụm, SSE)
-src/ui/                        Thanh bên, các trang, thành phần giao diện, quản lý trạng thái
-data/sample_images/ data/sample_csv/ data/ground_truth/ data/samples.json   Dữ liệu demo offline
-scripts/generate_samples.py    Sinh dữ liệu mẫu
-scripts/run_experiments.py     Chạy thực nghiệm, ghi số liệu thật
-tests/                         Kiểm thử thuật toán, I/O, tiền/hậu xử lý, metrics và tích hợp/giao diện (11 tệp)
-docs/                          Báo cáo, thuật toán, test case, kịch bản demo, slide, câu hỏi phản biện,
-                               kết quả thực nghiệm (results/), hình (figures/), ảnh chụp giao diện (screenshots/)
+
+Xem thêm [thuật toán](docs/ALGORITHMS.md), [test case](docs/TEST_CASES.md) và [kịch bản demo](docs/DEMO_SCRIPT.md).
+
+Khi cần đóng gói lại, chạy `python scripts/package_submission.py --output outputs/PTIT-DeTai3-ImageSegmentation.zip` với Python 3.11. Tệp ZIP giữ mã nguồn, cấu hình, tệp khóa phiên bản thư viện, test, dữ liệu mẫu và tài liệu. Môi trường ảo, cache, thư mục `outputs/` và cache dữ liệu nghiên cứu được bỏ qua khi tạo gói.
+
+## 4. Chạy test
+
+Trên Windows, chạy các lệnh sau khi tạo `.venv`.
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install --only-binary=:all: -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe -m ruff check app.py src scripts tests
+.\.venv\Scripts\python.exe -m pytest -q
 ```
 
-## 5. Tài liệu
+Trên Linux, thay `.\.venv\Scripts\python.exe` bằng `./.venv/bin/python`. Pytest có cả test thuật toán, kiểm tra đọc/ghi tệp và kiểm thử giao diện bằng Streamlit `AppTest`. CI được cấu hình cho Windows và Ubuntu.
 
-Bộ slide [SLIDES.pptx](docs/SLIDES.pptx) có 15 trang trình chiếu. Điền tên nhóm trên trang bìa và thông tin thành viên trong báo cáo trước khi nộp.
+## 5. Hạn chế và xử lý sự cố
 
-| Tệp | Nội dung |
-|---|---|
-| [docs/REPORT.md](docs/REPORT.md) | Báo cáo bài tập lớn (6 chương), chuyển sang Word được |
-| [docs/ALGORITHMS.md](docs/ALGORITHMS.md) | Lý thuyết, công thức, giả mã, quyết định cài đặt |
-| [docs/TEST_CASES.md](docs/TEST_CASES.md) | Test case thủ công với kết quả thực tế + danh sách kiểm thử tự động |
-| [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) | Kịch bản demo 5–7 phút |
-| [docs/SLIDES_OUTLINE.md](docs/SLIDES_OUTLINE.md) | Nội dung 15 slide |
-| [docs/QUESTIONS_AND_ANSWERS.md](docs/QUESTIONS_AND_ANSWERS.md) | Câu hỏi phản biện và trả lời |
-| [docs/results/experiment_results.md](docs/results/experiment_results.md) | Số liệu thực nghiệm sinh tự động |
-| [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md) | Phạm vi sửa P0/P1/P2, bằng chứng kiểm thử và các mục nhóm cần bổ sung |
-| [docs/REVIEW_20261106.md](docs/REVIEW_20261106.md) | Review toàn diện ngày 06/11/2026: lỗi, nguyên nhân, sửa trực tiếp và bằng chứng kiểm chứng mới |
-| [docs/REVIEW_ROUND2_20261106.md](docs/REVIEW_ROUND2_20261106.md) | Review tiếp: ảnh/mask 16-bit, quy ước mask, số học K-means, xuất tệp và cache ground truth |
-
-Review source ngày 16/11/2026: **546 test PASS** (mốc trước sửa: 519), 13 kiểm tra trình duyệt PASS và 13 tệp tải
-xuống được đọc lại/đối chiếu, gồm ZIP 14 thành phần. Sửa đọc mask nhãn 0/1, thêm ground truth CSV 0/1 hoặc 0/255
-(từ chối nhãn nhiều cụm), phân tích kết quả theo ảnh hiện tại và sidebar tự thích ứng màn hình nhỏ.
-Gom pixel ảnh xám dùng histogram O(N + 256), giữ nguyên kết quả phân cụm. Bằng chứng chạy mới nằm trong
-`outputs/review_20261116/` (thư mục sinh tự động, không đưa vào Git); có thể chạy lại các lệnh kiểm thử ở trên.
-Đánh giá 30 ảnh thật có mask tham chiếu vẫn cho thấy giới hạn của foreground tự động; không suy từ các ca
-tổng hợp đạt IoU cao rằng hệ thống tách đúng mọi vật thể trong ảnh thật.
-
-Lượt review tiếp ngày 06/11/2026: **295 test PASS**, thêm 46 ca; sửa PNG 16-bit có khóa trong suốt và mask trắng
-16-bit, thống nhất mask bool/0–1/0–255, kiểm tra số học/xuất tệp và ghi đủ cách chuyển xám trong JSON K-means.
-Ground truth tải lên chỉ giải mã lại khi đổi tệp hoặc chạy mới. Xem báo cáo lượt hai để đọc bằng chứng và giới hạn.
-
-Đợt review ngày 06/11/2026 bổ sung xử lý PNG trong suốt dạng `tRNS`, sửa tính khoảng cách và nhãn K-means khi
-hoà khoảng cách, kiểm tra tiền xử lý/metrics, ràng buộc ground truth theo ảnh hiện tại và xử lý lỗi dữ liệu mẫu.
-Kết quả: 249 test PASS; 12 kiểm tra trình duyệt và 6 tệp tải xuống được đối chiếu dữ liệu. Chi tiết và giới hạn
-kiểm chứng nằm trong báo cáo review ở trên.
-
-Sau đợt sửa ngày 05/11/2026: Otsu chọn ngưỡng thuộc tập cực đại kể cả các cực đại rời nhau; ảnh đồng nhất có
-mask tự động rỗng; CSV được kiểm tra chính xác, không làm tròn thập phân thành số nguyên. K-means kiểm tra tham
-số trước khi xử lý và báo rõ nếu dừng sớm còn cụm rỗng. Thời gian UI/JSON/thực nghiệm dùng cùng phạm vi đo.
-Các tệp xuất được tái sử dụng trong lần chạy hiện tại; đổi ảnh/tên tệp hoặc foreground sẽ vô hiệu hoá dữ liệu cũ.
-Streamlit cố định ở phiên bản 1.66.1 đã kiểm thử. Dữ liệu trong `data/` được giữ nguyên.
-
-Đã kiểm tra upload, chạy cả hai thuật toán và đọc lại PNG/CSV tải bằng Chrome; kiểm tra chiều rộng 1440, 768,
-390 px. Ảnh mẫu vẫn là ảnh tổng hợp; ảnh chụp thật của nhóm chưa có để nghiệm thu.
-
-## 6. Xử lý sự cố
-
-| Hiện tượng | Cách xử lý |
-|---|---|
-| `py` không có | Cài Python từ python.org (tích *Add to PATH*), hoặc dùng `python -m venv .venv` |
-| `streamlit` không được nhận ra | Dùng `python -m streamlit run app.py` (không gọi `streamlit` trực tiếp) |
-| Cổng 8501 bận | `python -m streamlit run app.py --server.port 8502` |
-| Chạy chậm với ảnh lớn | Giảm “Giới hạn cạnh dài khi xử lý” ở thanh bên hoặc giảm K |
-| Kết quả biến mất sau khi đổi ảnh | Đúng thiết kế (tránh tải nhầm kết quả cũ) — bấm chạy lại |
-
-## 7. Checklist trước khi nộp
-
-- [ ] `python -m pytest -v` — tất cả PASS trên máy nộp bài
-- [ ] `python -m streamlit run app.py` mở được 7 trang, chạy được K-means và Otsu trên ảnh mẫu và ảnh thật
-- [ ] Đã thử tải ảnh chụp thật của nhóm và ghi nhận kết quả vào Chương 5 của báo cáo (mục còn trống)
-- [ ] Điền tên thành viên, MSSV và **% đóng góp** (yêu cầu của đề) trong `docs/REPORT.md` và slide bìa
-- [ ] Chuyển `docs/REPORT.md` sang Word, chèn hình từ `docs/figures/` và `docs/screenshots/`
-- [ ] Xoá thư mục `.venv/` khi nén mã nguồn để nộp (người chấm cài lại bằng `requirements.txt`)
+- **Chất lượng tách nền.** Gợi ý theo viền ảnh có thể chọn sai đối tượng. Otsu toàn cục kém hiệu quả khi nền và vật thể có mức xám chồng lấn. Ảnh xám đồng nhất không có ngưỡng Otsu hợp lệ. K-means phụ thuộc K, khởi tạo và giới hạn vòng lặp.
+- **Ảnh lớn.** Xử lý diễn ra đồng bộ, nên K lớn hoặc ảnh nhiều màu có thể cần chờ. Giảm **Cạnh dài tối đa (pixel)** trong thanh bên hoặc giảm K khi cần demo nhanh. PNG kích thước gốc ánh xạ kết quả đã xử lý, nên các chi tiết mất khi thu nhỏ không được khôi phục.
+- **Cổng bận hoặc trình duyệt chưa mở.** Bổ sung `--server.port 8502` vào lệnh chạy và mở `http://127.0.0.1:8502`. Nếu Streamlit báo thiếu package, cài lại theo lockfile bằng chính Python trong `.venv`.
+- **Thiếu ảnh mẫu.** Kiểm tra đã giải nén cả thư mục `data/` cạnh `app.py`. Tệp `data/samples.json` và các ảnh, CSV, mask đi kèm phải giữ nguyên bố cục thư mục.
+- **Dữ liệu nghiên cứu.** Cache ảnh Oxford và kết quả benchmark phục vụ thực nghiệm riêng. Các ca demo đi kèm sử dụng dữ liệu tổng hợp.

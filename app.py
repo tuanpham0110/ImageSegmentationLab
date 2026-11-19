@@ -9,10 +9,11 @@ from pathlib import Path
 import streamlit as st
 
 ROOT = Path(__file__).resolve().parent
+ASSETS = ROOT / "src/ui/assets"
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-st.set_page_config(page_title="Image Segmentation Studio", page_icon=":material/blur_on:", layout="wide",
+st.set_page_config(page_title="Image Segmentation Studio", page_icon=str(ASSETS / "lab-icon.svg"), layout="wide",
                    initial_sidebar_state="auto")
 
 from src.ui import (  # noqa: E402
@@ -44,8 +45,7 @@ def main() -> None:
     pages = [st.Page(fn, title=title, icon=icon, default=True) if key == "overview"
              else st.Page(fn, title=title, icon=icon, url_path=key)
              for key, (fn, title, icon) in PAGES.items()]
-    st.logo(str(ROOT / "src/ui/assets/lab-logo.svg"), size="large",
-            icon_image=str(ROOT / "src/ui/assets/lab-icon.svg"))
+    st.logo(str(ASSETS / "lab-logo.svg"), size="large", icon_image=str(ASSETS / "lab-icon.svg"))
     st.session_state["_nav_pages"] = dict(zip(PAGES, pages))
     nav = st.navigation({"Thực hành": pages[:4], "Tra cứu & tài liệu": pages[4:]})
     render_input_sidebar()
