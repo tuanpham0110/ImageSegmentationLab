@@ -1,6 +1,8 @@
 """Kiểm thử đọc/ghi ảnh, CSV và kiểm tra dữ liệu đầu vào."""
 
 import io
+import os
+import stat
 
 import numpy as np
 import pytest
@@ -93,17 +95,45 @@ def test_invalid_file_rejected():
         load_any(b"GIF89a", "anim.gif")
 
 
-@pytest.mark.parametrize("damage", ["idat_crc", "no_iend"])
+@pytest.mark.parametrize("damage", ["idat_crc", "no_iend", "missing_iend_crc", "iend_crc", "iend_length"])
 def test_png_with_damaged_chunk_structure_is_rejected(damage):
     data = bytearray(to_png_bytes(np.arange(12, dtype=np.uint8).reshape(3, 4)))
     if damage == "no_iend":
         del data[-12:]
+    elif damage == "missing_iend_crc":
+        del data[-4:]
+    elif damage == "iend_crc":
+        data[-1] ^= 1
+    elif damage == "iend_length":
+        data[-9] = 1
     else:
         idat = data.index(b"IDAT")
         payload_size = int.from_bytes(data[idat - 4:idat], "big")
         data[idat + 4 + payload_size] ^= 1
     with pytest.raises(InputError, match="tệp hỏng"):
         load_image_bytes(bytes(data), "broken.png")
+
+
+def test_unsupported_tiff_content_is_rejected_even_with_a_png_filename():
+    data = encode(Image.fromarray(np.zeros((2, 3), dtype=np.uint8)), "TIFF")
+    with pytest.raises(InputError, match="định dạng TIFF"):
+        load_image_bytes(data, "wrong_extension.png")
+
+
+def test_writing_png_to_a_read_only_path_preserves_existing_file(tmp_path):
+    target = tmp_path / "result.png"
+    original = to_png_bytes(np.zeros((2, 3), dtype=np.uint8))
+    target.write_bytes(original)
+    target.chmod(stat.S_IREAD)
+    try:
+        if os.access(target, os.W_OK):
+            pytest.skip("Current account can write to the read-only test path")
+        replacement = to_png_bytes(np.full((2, 3), 255, dtype=np.uint8))
+        with pytest.raises(PermissionError):
+            target.write_bytes(replacement)
+        assert target.read_bytes() == original
+    finally:
+        target.chmod(stat.S_IREAD | stat.S_IWRITE)
 
 
 def test_load_path_reports_missing_and_unreadable_input(tmp_path, monkeypatch):

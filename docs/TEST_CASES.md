@@ -1,6 +1,84 @@
 # Test case và kết quả kiểm thử
 
-Các phần: **(A)** test case trình diễn trên dữ liệu mẫu — kết quả thực tế lấy từ `scripts/run_experiments.py`
+## Nghiệm thu Giai đoạn 6 ngày 21/11/2026
+
+Kết quả hiện tại gồm **616 PASS, 0 FAIL, 0 SKIP** trong 45,35 giây trên Windows, Python 3.11.7, NumPy 2.4.6 và
+Streamlit 1.66.1. Ruff và `pip check` đều đạt. Các ca Chrome được thực thi riêng với Chrome headless.
+Mỗi dòng dưới đây là một ca nghiệm thu, có thể đại diện cho nhiều tham số trong Pytest. Tên hàm ở cột thao tác dùng
+để tìm test bằng `pytest -k`. Bảng hiện tại sử dụng 11 mẫu đã có trong `data/`, ma trận nhỏ cố định và ảnh chụp
+`grace_hopper.jpg` có sẵn trong Matplotlib. Các ca tự động chạy ngoại tuyến sau khi đã cài dependency.
+Ca đích chỉ đọc sẽ báo SKIP nếu tài khoản chạy test vẫn có quyền ghi vào tệp đã đặt chỉ đọc.
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q --junitxml=outputs/stage6/pytest.xml
+```
+
+Bằng chứng cục bộ nằm ở `outputs/stage6/pytest.xml`, `outputs/stage6/compare_masks.png` và hai tệp tải từ Chrome
+`outputs/stage6/otsu_mask.png`, `outputs/stage6/otsu_binary_matrix.csv`. Các bảng A–H bên dưới ghi những lần chạy trước.
+
+### Nhóm 1 Kiểm thử thuật toán
+
+| ID | Mục đích | Dữ liệu đầu vào | Thao tác | Kỳ vọng | Thực tế | Trạng thái |
+|---|---|---|---|---|---|---|
+| ALG-01 | Đối chiếu tính tay hai thuật toán | Ma trận `[[0,0,2],[8,10,10]]` | Chạy K=2 xám và Otsu qua pipeline trong `test_hand_computed_gray_matrix_agrees_across_both_algorithms` | Tâm `2/3, 28/3`, SSE `16/3`, ngưỡng Otsu 4, mask chỉ chọn hàng dưới | Tâm, SSE, ngưỡng, phương sai giữa lớp `169/9` và từng pixel mask khớp | PASS |
+| ALG-02 | Ảnh đồng nhất và ngưỡng suy biến | `uniform_gray.png`, toàn 128 | Chạy K yêu cầu 4 và Otsu với cả ba lựa chọn cực tính trong `test_uniform_image_is_handled_without_crash` và `test_uniform_auto_otsu_always_has_empty_foreground` | K giảm về 1, Otsu không tách hai lớp, mask tự động rỗng | K thực tế 1, SSE 0, Otsu `valid=False`, mức dự phòng 128 và mask toàn 0 | PASS |
+| ALG-03 | Vật tối và vật sáng trên nền tương phản | `circle_black_on_white.png`, `bright_rect_on_dark.png` | Chạy K=2 và Otsu theo cấu hình mẫu, so với mask tham chiếu trong `test_reference_samples_keep_expected_segmentation` | Cả hai phương pháp đạt IoU 1 cho cả hai ảnh | Ngưỡng lần lượt 127 và 124, IoU và Dice đều bằng 1 | PASS |
+| ALG-04 | Phân đoạn nhiều mức xám | `gray_levels_objects.png`, bốn mức 35/90/150/215 | Chạy K=4, Otsu hai lớp và kiểm tra Multi-Otsu trong `test_reference_samples_keep_expected_segmentation`, `test_multi_otsu_fixes_gray_levels_sample` | K-means giữ bốn mức, Otsu hai lớp bỏ sót mức thấp nhất của đối tượng | SSE K-means bằng 0, IoU/Dice `1/1`. Otsu t=119, IoU/Dice `0,6667/0,8000` | PASS |
+| ALG-05 | Ảnh tương phản thấp có nhiễu | `low_contrast.png`, nền 130 và vật 150 | Chạy cả hai phương pháp, so mask trong `test_reference_samples_keep_expected_segmentation` | IoU mỗi phương pháp đạt ít nhất 0,95 | Otsu t=139. Cả hai đạt IoU `0,9532` và Dice `0,9761` | PASS |
+| ALG-06 | Gom nhóm màu RGB | `multi_shapes_color.png` và ma trận RGB ba màu | Chạy K=5 và K=3 tương ứng trong `test_reference_samples_keep_expected_segmentation`, `test_three_rgb_colors_recover_exact_partition_and_leave_input_unchanged` | Giữ đủ số cụm, nhãn và màu tâm đúng, ảnh vào giữ nguyên | Mẫu năm màu có K=5, SSE 0, IoU 1. Ma trận ba màu trả đúng từng nhãn | PASS |
+| ALG-07 | Biên hợp lệ của K và seed | Ảnh 320×240, hai vector phân biệt và mảng RGB dùng seed cố định | Thử K=1, K=4 và K=8 trên hai điểm, rồi lặp cùng seed trong `test_kmeans_ui_can_run_one_cluster`, `test_output_shapes_and_pixel_counts_rgb`, `test_k_larger_than_number_of_samples`, `test_seed_reproducibility` | K=1 dùng tâm trung bình, K=4 giữ bốn cụm, K=8 giới hạn ở 2, cùng seed tái lập | Các điều kiện về tâm, K thực tế, nhãn và số đếm đều khớp | PASS |
+| ALG-08 | Tái khởi tạo cụm rỗng và giới hạn vòng lặp | 80 vector 3D có trọng số, seed 42, K=8 | Chạy đến hội tụ và chạy tối đa một vòng trong `test_empty_cluster_is_reinitialised`, `test_final_empty_cluster_is_reported_without_exceeding_iteration_budget` | Báo cụm rỗng, tái khởi tạo khi còn vòng lặp, dừng đúng giới hạn | Khi đủ vòng, hội tụ và mọi cụm có điểm. Ca một vòng dừng đúng, cảnh báo còn cụm rỗng | PASS |
+| ALG-09 | Histogram một đỉnh và tương phản thấp | Ma trận 5×5, mức 100–108, tần suất `1,2,3,4,5,4,3,2,1` | Tính Otsu trong `test_unimodal_low_contrast_histogram_still_has_a_mathematical_optimum` | Cực đại tại 103–104, chọn 103, độ tách bằng `2/3` | t=103, phương sai giữa lớp `8/3`, η=`2/3`, ảnh nhị phân khớp `g > 103` | PASS |
+| ALG-10 | Ngưỡng theo ví dụ giáo trình và đối chiếu độc lập | Ma trận CSV 5×6 và năm ảnh sinh theo seed | So với phép tính tay và vét cạn ngưỡng trong `test_textbook_example_section_3_1_6`, `test_random_images_match_brute_force` | Mẫu giáo trình t=1, kết quả ngẫu nhiên thuộc tập cực đại theo vét cạn | t=1, phương sai `1,6806` sau làm tròn. Năm ca đều khớp đối chiếu | PASS |
+
+### Nhóm 2 Kiểm thử dữ liệu
+
+| ID | Mục đích | Dữ liệu đầu vào | Thao tác | Kỳ vọng | Thực tế | Trạng thái |
+|---|---|---|---|---|---|---|
+| DATA-01 | Ảnh chụp JPEG hợp lệ và ghi thư mục có quyền | `grace_hopper.jpg` từ Matplotlib, RGB 512×600 | Đọc, thu cạnh dài về 120, chạy cả hai, ghi PNG vào `tmp_path` và mở lại trong `test_bundled_real_jpeg_is_segmented_and_saved_to_a_writable_directory` | Hai mask đúng kích thước và miền giá trị, byte ảnh nguồn giữ nguyên | JPEG giải mã đúng RGB 512×600, cả hai mask PNG 102×120, uint8 0/255, mở lại đúng từng pixel | PASS |
+| DATA-02 | CSV hợp lệ và sai cấu trúc | `csv_rectangle_32x32.csv`, `invalid_ragged.csv`, `invalid_text.csv` | Đọc và chạy mẫu hợp lệ. Kiểm tra số cột, ô lỗi trong `test_csv_sample_segmented_by_both`, `test_csv_errors`, `test_alternating_algorithms_preserves_only_results_for_the_current_upload` | Ma trận đúng cỡ, lỗi có vị trí | Mẫu 32×32 cho t=119 và IoU 1 cả hai. CSV lệch số cột báo dòng 2, CSV chữ báo dòng 2 cột 2 | PASS |
+| DATA-03 | Rỗng, sai định dạng và ảnh PNG hỏng | Bytes rỗng, TIFF mang đuôi PNG, PNG thiếu IEND hoặc có CRC sai | Đọc trong `test_invalid_file_rejected`, `test_unsupported_tiff_content_is_rejected_even_with_a_png_filename`, `test_png_with_damaged_chunk_structure_is_rejected` | Trả `InputError` có lý do, gồm CRC hoặc độ dài IEND sai | Từ chối tệp rỗng, nội dung TIFF và cả năm biến thể PNG hỏng | PASS |
+| DATA-04 | Ảnh tối thiểu | PNG 1×1 với mức 0 hoặc 255 | Chạy hai phương pháp và mở lại PNG mask trong `test_one_pixel_image_reaches_both_algorithms_and_exports` | K giảm về 1, Otsu không chia lớp, kết quả giữ kích thước | K=1 với đúng một pixel, Otsu không hợp lệ, hai mask 1×1 đều bằng 0 | PASS |
+| DATA-05 | Ảnh lớn và chặn quá giới hạn | RGB tổng hợp 4000×3000 và ảnh 50×50 với giới hạn test 1000 pixel | Chạy và đọc lại PNG trong `test_large_encoded_rgb_image_is_resized_and_exported_at_reported_size`, kiểm tra `test_too_large_image_rejected` | Ảnh lớn xử lý ở 800×600, đầu vào vượt hạn mức bị từ chối | PNG đều 800×600, IoU hai phương pháp bằng 1 trên fixture. Ca vượt giới hạn trả `InputError` | PASS |
+| DATA-06 | Ghi vào đích chỉ đọc | PNG trong `tmp_path` có thuộc tính chỉ đọc | Ghi ảnh khác vào cùng đường dẫn trong `test_writing_png_to_a_read_only_path_preserves_existing_file` | Hệ điều hành báo `PermissionError`, giữ nguyên byte đích | Trên Windows, nhận đúng lỗi quyền ghi và đích giữ nguyên | PASS |
+| DATA-07 | Từ chối mask tham chiếu sai quy ước | PNG và CSV với các mức `0,128,255`, mask PNG 16 bit | Gọi `test_comparison_rejects_multilevel_mask_without_using_sample_ground_truth`, `test_strict_16bit_ground_truth_checks_native_pixel_values` | Từ chối nhiều mức, chỉ tính điểm với mask nhị phân đúng độ sâu | Cả hai tệp nhiều mức bị từ chối. PNG 16 bit hợp lệ giữ đúng mask, mức trung gian bị từ chối | PASS |
+
+### Nhóm 3 Kiểm thử hệ thống
+
+| ID | Mục đích | Dữ liệu đầu vào | Thao tác | Kỳ vọng | Thực tế | Trạng thái |
+|---|---|---|---|---|---|---|
+| SYS-01 | Luân phiên hai thuật toán và xử lý nhiều ảnh trong một phiên | PNG RGB 320×240, CSV 32×32, PNG xám 10×10 | AppTest tải lần lượt, chạy K-means và Otsu cho từng tệp rồi quay về K-means trong `test_alternating_algorithms_preserves_only_results_for_the_current_upload` | Sáu lượt chạy, dữ liệu xuất chỉ thuộc ảnh đang dùng, quay lại vẫn xem đúng kết quả hiện tại | Sáu lượt xuất khớp chữ ký, tên tệp và kích thước PNG/JSON. Sau mỗi ảnh mới, nút tải chỉ có lại khi chạy | PASS |
+| SYS-02 | Đổi tham số và chạy lại | Mẫu RGB, K=3 → 5, seed 0 → 12, Otsu hai lớp → ba lớp | Chỉnh, kiểm tra cảnh báo, chạy và đặt lại trong `test_kmeans_settings_require_rerun_before_download`, `test_otsu_mode_change_blocks_previous_downloads_until_rerun` | Hiện trạng thái thiết lập mới, ẩn tải kết quả cũ, chạy lại xuất đúng tham số | K và seed mới áp dụng sau nút chạy, khôi phục mặc định tạm ẩn tải. Multi-Otsu xuất đúng bộ tệp | PASS |
+| SYS-03 | Lỗi đầu vào và phục hồi | CSV sai hàng, PNG sai CRC IEND, CSV hợp lệ 32×32 | AppTest luân phiên và Chrome nạp tệp PNG lỗi rồi CSV hợp lệ | Báo vị trí hoặc lỗi cấu trúc, bỏ kết quả cũ, tiếp tục với tệp hợp lệ | AppTest báo dòng 2. Chrome báo lỗi IEND và ẩn tab tải cũ, sau đó Otsu chạy lại với t=119 | PASS |
+| SYS-04 | Xuất và đọc lại các tệp | Mẫu RGB nhiều hình và CSV 32×32 | Mở ZIP, PNG, RGBA, CSV, JSON trong `test_export_files_reopen_with_same_content`. Tải PNG/CSV thật từ Chrome | Tên, kích thước, nhãn, metadata và nội dung nhất quán, ZIP hợp lệ | ZIP có đủ 14 tệp và CRC hợp lệ. PNG tải từ Chrome 32×32. CSV có 32 hàng, mỗi hàng 32 nhãn và khớp mask PNG | PASS |
+| SYS-05 | Lỗi ở bước tạo tệp và khả năng thử lại | `OSError` và `PermissionError` được mô phỏng | Chạy ba trang và phục hồi bộ mã hóa trong `test_export_failure_is_visible_and_recovers_on_retry` | Có lỗi rõ ràng, không cung cấp tệp cũ, thử lại được | Mọi biến thể đều hiện lỗi, ẩn nút tải và khôi phục đúng số nút khi thử lại | PASS |
+
+### Nhóm 4 Kiểm thử kết quả
+
+| ID | Mục đích | Dữ liệu đầu vào | Thao tác | Kỳ vọng | Thực tế | Trạng thái |
+|---|---|---|---|---|---|---|
+| OUT-01 | Kiểm tra kích thước, dtype và miền giá trị | Ma trận 2×3, PNG 1×1, JPEG thật và ảnh RGB lớn | Kiểm tra các đầu ra trong ALG-01, DATA-01, DATA-04, DATA-05 | Ảnh đầu ra cùng kích thước xử lý, `uint8`, mask 0/255 | Các cỡ 3×2, 1×1, 102×120 và 800×600 đều qua kiểm tra theo từng ca | PASS |
+| OUT-02 | IoU/Dice có tham chiếu và chặn suy diễn khi thiếu | Mask tính tay, mẫu hình tròn và mẫu không có ground truth | Chạy `test_mask_scores_match_hand_computed_confusion_matrix`, `test_compare_page_with_ground_truth_reports_iou`, `test_compare_page_without_ground_truth_does_not_invent_scores` | Chỉ số khớp công thức, trang chỉ hiển thị điểm chất lượng khi có tham chiếu hợp lệ | Kết quả tính tay khớp. Trang hiển thị IoU với mask mẫu và bỏ cột IoU/Dice khi thiếu mask | PASS |
+| OUT-03 | Màu khác nhau nhưng trùng mức xám | Hình đỏ 4×4 ở giữa nền xám trên ảnh 8×8, mask tạo từ tọa độ hình | Chạy K=2 RGB, Otsu và đối chiếu pixel bản đồ trong `test_equal_luma_object_scores_and_agreement_map_match_ground_truth` | K-means giữ hình đỏ, Otsu gặp ảnh xám đồng nhất, bản đồ đánh dấu đúng vùng chỉ K-means giữ | K-means IoU/Dice `1/1`, Otsu `0/0`, vùng khác biệt chỉ có đúng 16 pixel cam | PASS |
+| OUT-04 | Đối chiếu trực quan trên trình duyệt | Mẫu `multi_shapes_color.png`, K=5 RGB, Otsu tự động | Chạy Chrome, mở **Đối chiếu mask** và **Đánh giá**, xem ảnh chụp kết quả | Có hai mask, bản đồ khác biệt, chú giải và điểm tham chiếu. Giải thích được vùng nào bị gộp | Chrome hiện đủ ba ảnh và chú giải. Hình tròn vàng tạo vùng cam vì K-means giữ được còn Otsu gộp vào lớp sáng của nền. Với ground truth, IoU/Dice K-means `1/1`, Otsu `0,7964/0,8867` | PASS |
+
+### Kiểm tra thủ công còn lại
+
+| ID | Mục đích | Dữ liệu đầu vào | Thao tác | Kỳ vọng | Thực tế | Trạng thái |
+|---|---|---|---|---|---|---|
+| MAN-01 | Khả năng đọc trên máy chiếu thật | Mẫu nhiều hình màu, máy và máy chiếu dùng khi bảo vệ | Mở ba ảnh, xem ngưỡng, chú giải và thử nút tải từ vị trí người xem | Đọc được nội dung trên màn chiếu, thao tác không cần đổi tỉ lệ hiển thị nhiều lần | Chưa kiểm tra thiết bị trình chiếu thực tế | NOT RUN |
+| MAN-02 | Hộp thoại lưu và thông báo quyền ghi của trình duyệt | Một PNG đã xuất, thư mục người dùng được ghi và thư mục người dùng không được ghi | Chọn hai đích bằng hộp thoại tải xuống của trình duyệt trên máy demo | Đích có quyền lưu thành công, đích bị giới hạn hiện lỗi và cho chọn lại | Đã chạy phép thử OS ở DATA-06 và tải headless ở SYS-04. Chưa thử hộp thoại lưu trên máy demo | NOT RUN |
+
+### Lỗi phát hiện và đã sửa
+
+`DATA-03` phát hiện Pillow đọc được PNG có `IEND` thiếu CRC, sai CRC hoặc khai báo chiều dài khác 0 mặc dù đã gọi
+`verify()`. Ba biến thể này FAIL trên mã cũ. `src/utils/image_io.py` bổ sung xác thực chiều dài và CRC của chunk
+`IEND` tại vị trí Pillow dừng. Cả năm biến thể PNG hỏng đạt sau sửa. Chrome cũng báo lỗi khi nạp một PNG có CRC
+`IEND` sai và tiếp tục được sau khi nạp CSV hợp lệ.
+
+---
+
+Các phần lịch sử: **(A)** test case trình diễn trên dữ liệu mẫu — kết quả thực tế lấy từ `scripts/run_experiments.py`
 (chạy ngày 05/11/2026, Python 3.11.7, NumPy 2.4.6, Windows 10, CPU Intel Family 6 Model 165); **(B)** kiểm tra
 đầu vào/giao diện; **(C)** kiểm thử tự động Pytest; **(D)** hồi quy sau review và kiểm tra Chrome.
 
@@ -115,7 +193,7 @@ Các mảng sinh trong test là dữ liệu tổng hợp để kiểm chứng, k
 | R04 | CSV 400 chữ số 9 | Parser, AppTest và Chrome upload | Báo lỗi đầu vào, không OverflowError | InputError/thông báo ngoài miền; không ngoại lệ chưa bắt | PASS |
 | R05 | CSV 1.00000000000000001 và 255.00000000000000001 | Parser | Không làm tròn để chấp nhận | Từ chối chính xác | PASS |
 | R06 | CSV thiếu dấu nháy, ô quá dài hoặc ô số xuống dòng | Parser/AppTest | InputError | Có lỗi được kiểm soát | PASS |
-| R07 | K=0,9,2.5,-1,True; seed/tol/max_iter sai kiểu | Gọi core | Từ chối trước tính toán | ValueError | PASS |
+| R07 | K=0, 2.5, -1, True hoặc seed/tol/max_iter sai kiểu | Gọi core | Từ chối trước tính toán | ValueError | PASS |
 | R08 | chunk_size=0,-1,1.5,True,None | Gọi gán nhãn và K-means | Không dùng mảng chưa khởi tạo | ValueError trước cấp phát/gán nhãn | PASS |
 | R09 | 80 vector 3D lệch, có trọng số, seed 42 | K=8 random đến hội tụ | Thực sự chạy nhánh cụm rỗng | Có cảnh báo xử lý; hội tụ; counts đều dương | PASS |
 | R10 | Cùng dữ liệu R09, max_iter=1, tol=1000 | Dừng sớm | Không vượt vòng và không báo hội tụ sai | Một vòng; cảnh báo cụm rỗng cuối, converged=False | PASS |

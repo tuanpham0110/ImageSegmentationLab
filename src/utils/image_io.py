@@ -91,6 +91,7 @@ def _composite_alpha(img: Image.Image, notes: list[str], reject_transparency: bo
 
 
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+_PNG_IEND = b"\x00\x00\x00\x00IEND\xaeB\x60\x82"
 _PNG_COLOR_TYPES = {0: "xám", 2: "RGB", 3: "bảng màu", 4: "xám + alpha", 6: "RGBA"}
 
 
@@ -209,8 +210,13 @@ def _load_image_bytes(data: bytes, name: str, *, normalize_high_depth: bool, str
             png_depth = _png_bit_depth(data) if fmt == "PNG" else None
             if fmt == "PNG":
                 # load() có thể giải mã được pixel ngay cả khi CRC IDAT sai hoặc thiếu IEND.
-                with Image.open(io.BytesIO(data), formats=("PNG",)) as checker:
+                stream = io.BytesIO(data)
+                with Image.open(stream, formats=("PNG",)) as checker:
                     checker.verify()
+                    end = stream.tell()
+                    # Pillow dừng ngay sau header IEND. Kiểm tra chiều dài 0 và CRC của chính chunk đó.
+                    if data[end - 8 : end + 4] != _PNG_IEND:
+                        raise OSError("Chunk IEND có chiều dài hoặc CRC không hợp lệ.")
             _scale_low_depth_gray_key(img, png_depth)
             # PNG màu 16 bit: Pillow chỉ giữ byte cao của mỗi kênh, còn khóa tRNS vẫn ở thang
             # 0–65535 nên không thể so khớp đúng pixel trong suốt -> từ chối thay vì đọc sai âm thầm.

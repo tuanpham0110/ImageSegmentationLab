@@ -51,6 +51,17 @@ def test_hand_computed_small_matrix():
     assert res.mean0 == pytest.approx(mu0) and res.mean1 == pytest.approx(mu1)
 
 
+def test_unimodal_low_contrast_histogram_still_has_a_mathematical_optimum():
+    # One histogram peak, no valley between levels. Population variance is 4.
+    gray = np.repeat(np.arange(100, 109, dtype=np.uint8), [1, 2, 3, 4, 5, 4, 3, 2, 1]).reshape(5, 5)
+    result, binary = segment_image_otsu(gray)
+    assert result.valid and result.threshold == 103
+    assert result.tied_thresholds == [103, 104]
+    assert result.max_variance == pytest.approx(8 / 3)
+    assert result.separability == pytest.approx(2 / 3)
+    np.testing.assert_array_equal(binary, np.where(gray > 103, 255, 0))
+
+
 def test_demo_matrix_checks_otsu_moments_and_binary_boundary():
     # Ma trận tính tay trong slide. Mọi t từ 2 đến 7 cho cùng phân hoạch.
     gray = np.array([[0, 0, 2], [8, 10, 10]], dtype=np.uint8)

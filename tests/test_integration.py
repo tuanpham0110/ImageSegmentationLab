@@ -73,6 +73,37 @@ def test_csv_sample_segmented_by_both():
     assert compare_masks(kmeans_outputs(prepared, km, [1]).mask, gt).iou == 1.0
 
 
+def test_hand_computed_gray_matrix_agrees_across_both_algorithms():
+    loaded = load_image_bytes(to_png_bytes(np.array([[0, 0, 2], [8, 10, 10]], dtype=np.uint8)), "hand.png")
+    prepared = prepare_input(loaded, 800)
+    km = run_kmeans(prepared, KMeansParams(k=2, feature="gray", seed=0))
+    otsu = run_otsu(prepared, polarity="bright")
+    np.testing.assert_allclose(km.centers.ravel(), [2 / 3, 28 / 3], rtol=0, atol=1e-12)
+    assert km.core.sse == pytest.approx(16 / 3)
+    assert otsu.threshold_used == 4 and otsu.result.max_variance == pytest.approx(169 / 9)
+    expected = np.array([[0, 0, 0], [255, 255, 255]], dtype=np.uint8)
+    np.testing.assert_array_equal(kmeans_outputs(prepared, km, [1]).mask, expected)
+    np.testing.assert_array_equal(otsu.mask, expected)
+
+
+@pytest.mark.parametrize("shade", [0, 255])
+def test_one_pixel_image_reaches_both_algorithms_and_exports(shade):
+    source = np.array([[shade]], dtype=np.uint8)
+    loaded = load_image_bytes(to_png_bytes(source), "one.png")
+    prepared = prepare_input(loaded, 800)
+    params = KMeansParams(k=2)
+    km = run_kmeans(prepared, params)
+    assert km.core.k_effective == 1 and km.core.counts.tolist() == [1]
+    np.testing.assert_array_equal(km.segmented, source)
+    otsu = run_otsu(prepared)
+    assert not otsu.result.valid and otsu.threshold_used == shade
+    out = kmeans_outputs(prepared, km, default_foreground(km))
+    for files, name in [(kmeans_export_files(prepared, params, km, out), "kmeans_mask.png"),
+                        (otsu_export_files(prepared, otsu), "otsu_mask.png")]:
+        mask = load_mask_bytes(files[name][0], name, strict=True)
+        assert mask.shape == (1, 1) and mask.dtype == np.uint8 and not mask.any()
+
+
 def test_uniform_image_is_handled_without_crash():
     _, prepared, _ = load_sample("uniform_gray")
     otsu = run_otsu(prepared)
@@ -459,6 +490,57 @@ def test_large_encoded_rgb_image_is_resized_and_exported_at_reported_size():
         for name, (data, mime) in files.items():
             if mime == "image/png":
                 assert Image.open(io.BytesIO(data)).size == (800, 600), name
+
+
+def test_bundled_real_jpeg_is_segmented_and_saved_to_a_writable_directory(tmp_path):
+    from matplotlib import get_data_path
+
+    photo = Path(get_data_path()) / "sample_data" / "grace_hopper.jpg"
+    original_bytes = photo.read_bytes()
+    loaded = load_path(photo)
+    assert loaded.file_format == "JPEG" and loaded.array.shape == (600, 512, 3)
+    prepared = prepare_input(loaded, 120)
+    assert prepared.resize.processed_size == (102, 120)
+    params = KMeansParams(k=3, feature="rgb", seed=0)
+    km = run_kmeans(prepared, params)
+    assert km.core.k_effective == 3 and km.labels.shape == (120, 102)
+    assert km.segmented.dtype == np.uint8 and km.segmented.shape == (120, 102, 3)
+    out = kmeans_outputs(prepared, km, default_foreground(km))
+    otsu = run_otsu(prepared, polarity="auto")
+    assert otsu.result.valid
+    exports = tmp_path / "exports"
+    exports.mkdir()
+    for files, name, reference in [(kmeans_export_files(prepared, params, km, out), "kmeans_mask.png", out.mask),
+                                   (otsu_export_files(prepared, otsu), "otsu_mask.png", otsu.mask)]:
+        destination = exports / name
+        destination.write_bytes(files[name][0])
+        reloaded = load_path(destination).array
+        assert reloaded.shape == (120, 102) and reloaded.dtype == np.uint8
+        assert set(np.unique(reloaded)) <= {0, 255}
+        np.testing.assert_array_equal(reloaded, reference)
+    assert photo.read_bytes() == original_bytes
+
+
+def test_equal_luma_object_scores_and_agreement_map_match_ground_truth():
+    from src.ui.page_compare import _agreement_map
+
+    # BT.601 maps red (255, 0, 0) and gray (76, 76, 76) to the same 8-bit level.
+    image = np.full((8, 8, 3), 76, dtype=np.uint8)
+    image[2:6, 2:6] = [255, 0, 0]
+    expected_mask = np.zeros((8, 8), dtype=np.uint8)
+    expected_mask[2:6, 2:6] = 255
+    prepared = prepare_input(load_image_bytes(to_png_bytes(image), "color.png"), 800)
+    km = run_kmeans(prepared, KMeansParams(k=2, feature="rgb", seed=0))
+    out = kmeans_outputs(prepared, km, default_foreground(km))
+    otsu = run_otsu(prepared, polarity="auto")
+    assert not otsu.result.valid and otsu.threshold_used == 76
+    np.testing.assert_array_equal(out.mask, expected_mask)
+    assert not otsu.mask.any()
+    km_scores, otsu_scores = compare_masks(out.mask, expected_mask), compare_masks(otsu.mask, expected_mask)
+    assert (km_scores.iou, km_scores.dice, otsu_scores.iou, otsu_scores.dice) == (1, 1, 0, 0)
+    expected_map = np.zeros((8, 8, 3), dtype=np.uint8)
+    expected_map[2:6, 2:6] = (235, 104, 52)
+    np.testing.assert_array_equal(_agreement_map(out.mask, otsu.mask), expected_map)
 
 
 @pytest.mark.parametrize("sid,max_iter,warning", [("uniform_gray", 100, "không chia được hai lớp"),
@@ -929,6 +1011,43 @@ def _navigate(at, page: str, tab: str | None = None):
     if tab is not None:
         at.session_state[_RESULT_TABS[page]] = tab
     return at.run()
+
+
+def test_alternating_algorithms_preserves_only_results_for_the_current_upload():
+    at = _app("kmeans", "Tải xuống")
+    at.session_state["input_source"] = "Tải tệp lên"
+    at.run()
+    inputs = [
+        ("sample_images/multi_shapes_color.png", "image/png", (320, 240)),
+        ("sample_csv/csv_rectangle_32x32.csv", "text/csv", (32, 32)),
+        ("sample_images/tiny_10x10.png", "image/png", (10, 10)),
+    ]
+    methods = [("kmeans", "Chạy K-means", "km_result", "kmeans"), ("otsu", "Chạy Otsu", "otsu_result", "otsu")]
+    for index, (relative_path, mime, size) in enumerate(inputs):
+        if index == 1:
+            invalid = DATA / "sample_csv/invalid_ragged.csv"
+            at.file_uploader(key="uploader").set_value((invalid.name, invalid.read_bytes(), "text/csv")).run()
+            assert not at.exception and any("Dòng 2" in error.value for error in at.error)
+            assert not at.get("download_button")
+        source = DATA / relative_path
+        at.file_uploader(key="uploader").set_value((source.name, source.read_bytes(), mime)).run()
+        assert not at.exception and not at.error
+        signature = at.session_state["_input_ctx"].signature
+        for page, run_label, key, prefix in methods:
+            _navigate(at, page, "Tải xuống")
+            assert not at.exception and not at.get("download_button")
+            next(button for button in at.button if button.label == run_label).click().run()
+            assert not at.exception and not at.error
+            run = at.session_state[key]
+            assert run["signature"] == signature
+            files = run["_export_cache"]["files"]
+            stats = json.loads(files[f"{prefix}_stats.json"][0])
+            assert stats["anh"] == source.name and stats["kich_thuoc_xu_ly_WxH"] == list(size)
+            with Image.open(io.BytesIO(files[f"{prefix}_mask.png"][0])) as mask:
+                assert mask.size == size and set(np.unique(np.asarray(mask))) <= {0, 255}
+        _navigate(at, "kmeans", "Tải xuống")
+        assert len(at.get("download_button")) == 7
+        assert at.session_state["km_run_id"] == index + 1
 
 
 def _km_export(at) -> dict:
