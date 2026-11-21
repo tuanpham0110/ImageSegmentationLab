@@ -73,7 +73,7 @@ def render_input_sidebar() -> None:
                 "Ảnh PNG/JPG/BMP hoặc ma trận CSV",
                 type=["png", "jpg", "jpeg", "bmp", "csv"],
                 key="uploader",
-                help="Kéo thả hoặc chọn một tệp. Ảnh tối đa 40 triệu pixel, tệp tối đa 30 MB.",
+                help="Kéo thả hoặc chọn một tệp. Tối đa 30 MiB mỗi tệp và 40 triệu pixel với ảnh.",
             )
             injected = st.session_state.get("_test_upload")  # chỉ dùng trong kiểm thử tự động (AppTest)
             if uploaded is not None:
@@ -96,8 +96,9 @@ def render_input_sidebar() -> None:
             status.caption("Kéo thả ảnh hoặc CSV vào ô tải tệp để bắt đầu.")
             return
         try:
-            ctx = build_context(data, name, int(st.session_state["max_side"]), st.session_state["gray_method"],
-                                sample, gt_path=gt_path, median_size=int(st.session_state["median_size"]))
+            with status, st.spinner("Đang chuẩn bị ảnh…", show_time=True):
+                ctx = build_context(data, name, int(st.session_state["max_side"]), st.session_state["gray_method"],
+                                    sample, gt_path=gt_path, median_size=int(st.session_state["median_size"]))
         except MemoryError:
             message = "Không đủ bộ nhớ để đọc ảnh. Hãy thu nhỏ ảnh trước khi tải lên hoặc giải phóng RAM rồi thử lại."
             set_context(None, message)

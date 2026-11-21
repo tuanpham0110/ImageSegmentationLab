@@ -124,7 +124,8 @@ def render() -> None:
         for k in DEFAULTS:
             remember_widget(k)
         st.button("Khôi phục mặc định", on_click=_reset_defaults, key="otsu_reset", type="tertiary", width="stretch")
-        st.caption(f"Ảnh màu được chuyển xám bằng: {GRAY_METHODS[prep.gray_method]} (đổi ở thanh bên).")
+        if prep.is_color:
+            st.caption(f"Chuyển xám: {GRAY_METHODS[prep.gray_method]} (đổi ở thanh bên).")
 
     kind = "multi" if classes == CLASS_MODES[1] else "binary"
     manual = int(manual_t) if mode == MODES[1] and kind == "binary" else None
@@ -164,7 +165,7 @@ def render() -> None:
             return
         pending = run.get("settings") != settings
         if pending:
-            st.warning("Thiết lập đã đổi. Đang xem lần chạy trước. Bấm Chạy Otsu để cập nhật và tải kết quả.")
+            ui.show_pending_settings("Chạy Otsu")
         if run.get("kind") == "multi":
             _render_multi(ctx, run, pending)
         else:
@@ -217,11 +218,8 @@ def _render_result(ctx, run: dict, pending: bool) -> None:
                                            "σ²_B(g)": np.round(r.between_class_variance, 4)}),
                              hide_index=True, width="stretch", height=260)
 
-    if tab_dl.open:
+    if tab_dl.open and not pending:
         with tab_dl:
-            if pending:
-                st.info("Bấm Chạy Otsu để tạo tệp theo thiết lập hiện tại.")
-                return
             export_key = run["settings"]
             files = ui.cached_export_files(run, export_key, lambda: otsu_export_files(prep, out))
             if files is not None:
@@ -266,7 +264,7 @@ def _render_multi(ctx, run: dict, pending: bool) -> None:
                                        key="multiotsu_result_tab", on_change="rerun")
     if tab_res.open:
         with tab_res:
-            caption = "Bản đồ 3 lớp" if r.valid else "Bản đồ lớp (dự phòng)"
+            caption = "Nhãn 3 lớp · màu giả" if r.valid else "Nhãn dự phòng · màu giả"
             _show_segmentation(prep, out.label_color, caption, "multiotsu")
             st.html(f"<div class='isl-palette' aria-label='Chú giải bản đồ ba lớp'>{legend}</div>")
             if not fg:
@@ -288,11 +286,8 @@ def _render_multi(ctx, run: dict, pending: bool) -> None:
                        "Tìm kiếm vét cạn trên mọi cặp t1 < t2 bằng tổng tích luỹ: O(256²), không phụ thuộc kích thước ảnh."
                        + (f" Có {r.n_tied} cặp ngưỡng đồng hạng." if r.n_tied > 1 else ""))
 
-    if tab_dl.open:
+    if tab_dl.open and not pending:
         with tab_dl:
-            if pending:
-                st.info("Bấm Chạy Otsu để tạo tệp theo thiết lập hiện tại.")
-                return
             export_key = (tuple(fg), post)
             files = ui.cached_export_files(run, export_key, lambda: multi_otsu_export_files(prep, out))
             if files is not None:
@@ -312,6 +307,7 @@ def _show_segmentation(prep, image, caption: str, key: str) -> None:
 def _show_mask(ctx, out, post) -> None:
     mask_caption = "Mask đối tượng" if post.operation == "none" else "Mask sau hình thái học"
     st.markdown("**Đối tượng đã tách**")
+    st.caption("Mask: trắng là đối tượng, đen là nền. Lớp phủ cam đánh dấu đối tượng trên ảnh gốc.")
     ui.show_images([(out.mask, mask_caption), (out.cutout_preview, "Ảnh tách nền (nền trắng)"),
                     (out.overlay, "Đối tượng tô màu trên ảnh gốc")], columns=3)
     if post.operation != "none":

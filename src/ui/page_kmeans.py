@@ -30,8 +30,7 @@ from src.utils import visualization as viz
 from src.utils.metrics import compare_masks
 
 RESULT_KEY = "km_result"
-DEFAULTS = {"km_k": 3, "km_feature": "RGB (3 kênh)", "km_init": "K-means++", "km_max_iter": 100,
-            "km_tol": 1e-4, "km_seed": 0}
+DEFAULTS = {"k": 3, "feature": "RGB (3 kênh)", "init": "K-means++", "max_iter": 100, "tol": 1e-4, "seed": 0}
 FEATURE_OPTIONS = {"RGB (3 kênh)": "rgb", "CIE L*a*b* (3 kênh, theo cảm nhận)": "lab", "Mức xám (1 kênh)": "gray"}
 FEATURE_NAMES = {"rgb": "RGB", "lab": "CIE L*a*b*", "gray": "mức xám"}
 UI_MAX_K = 16  # giới hạn thanh trượt cho tiện dùng; thuật toán không giới hạn K
@@ -48,33 +47,41 @@ DOWNLOAD_LABELS = {
 }
 
 
+def reset_kmeans_params(key_prefix: str) -> None:
+    for name, value in DEFAULTS.items():
+        key = f"{key_prefix}_{name}"
+        st.session_state[key] = value
+        remember_widget(key)
+
+
 def _reset_defaults() -> None:
-    for k, v in DEFAULTS.items():
-        st.session_state[k] = v
+    reset_kmeans_params("km")
     ui.reset_morphology("km")
     st.session_state["km_invert_foreground"] = False
     remember_widget("km_invert_foreground")
 
 
-def params_form(is_color: bool, key_prefix: str = "km", *, submit_label: str = "Chạy K-means") -> KMeansParams | None:
-    """Form tham số K-means. Trả về KMeansParams khi người dùng bấm chạy, ngược lại None."""
-    keys = [k.replace("km", key_prefix, 1) for k in DEFAULTS]
-    for key, v in zip(keys, DEFAULTS.values()):
-        restore_widget(key, v)
-    with st.form(f"{key_prefix}_form", border=True):
+def params_controls(is_color: bool, key_prefix: str = "km", *, submit_label: str = "Chạy K-means") -> tuple[KMeansParams, bool]:
+    """Đọc thiết lập hiện tại để phát hiện kết quả cũ. Nút chạy mới kích hoạt thuật toán."""
+    defaults = {f"{key_prefix}_{name}": value for name, value in DEFAULTS.items() if name != "feature" or is_color}
+    for key, value in defaults.items():
+        restore_widget(key, value)
+    with st.container(border=True, key=f"{key_prefix}-params"):
         st.markdown("**Thiết lập K-means**")
         k = st.slider("Số cụm K", 1, UI_MAX_K, key=f"{key_prefix}_k",
                       help="K = 1 tạo một cụm để quan sát tâm trung bình. Muốn tách hai nhóm, hãy chọn K từ 2. "
                            "Bảng màu bản đồ nhãn tự mở rộng theo K.")
-        feature_label = st.radio(
-            "Đặc trưng phân cụm", list(FEATURE_OPTIONS), key=f"{key_prefix}_feature",
-            format_func=lambda label: {"RGB (3 kênh)": "Màu RGB", "CIE L*a*b* (3 kênh, theo cảm nhận)": "Màu Lab (theo cảm nhận)",
-                                       "Mức xám (1 kênh)": "Mức xám"}[label],
-            disabled=not is_color,
-            help="Ảnh xám luôn dùng 1 kênh mức xám." if not is_color else
-            ("RGB: 3 chiều (R,G,B). CIE L*a*b*: khoảng cách Euclid = độ lệch màu ΔE*ab theo cảm nhận thị giác "
-             "(RGB không đồng nhất về cảm nhận). Mức xám: 1 chiều."),
-        )
+        if is_color:
+            feature_label = st.radio(
+                "Đặc trưng phân cụm", list(FEATURE_OPTIONS), key=f"{key_prefix}_feature",
+                format_func=lambda label: {"RGB (3 kênh)": "Màu RGB", "CIE L*a*b* (3 kênh, theo cảm nhận)": "Màu Lab (theo cảm nhận)",
+                                           "Mức xám (1 kênh)": "Mức xám"}[label],
+                help="RGB và Lab dùng ba kênh. Mức xám dùng độ sáng của pixel.",
+            )
+            feature = FEATURE_OPTIONS[feature_label]
+        else:
+            feature = "gray"
+            st.caption("Đặc trưng: mức xám (1 kênh).")
         with st.expander("Thiết lập nâng cao", icon=":material/tune:"):
             init_label = st.selectbox("Khởi tạo tâm", list(INIT_OPTIONS), key=f"{key_prefix}_init")
             max_iter = st.number_input("Vòng lặp tối đa", 1, 1000, step=10, key=f"{key_prefix}_max_iter")
@@ -82,13 +89,12 @@ def params_form(is_color: bool, key_prefix: str = "km", *, submit_label: str = "
             tol = st.number_input("Ngưỡng hội tụ", 0.0, 50.0, step=1e-4, format="%.4f",
                                   key=f"{key_prefix}_tol",
                                   help="Ngưỡng Euclid theo đặc trưng đang dùng (mức xám, RGB hoặc Lab).")
-        submitted = st.form_submit_button(submit_label, type="primary", width="stretch")
-    for key in keys:
+        submitted = st.button(submit_label, type="primary", width="stretch", key=f"{key_prefix}_run")
+    for key in defaults:
         remember_widget(key)
-    if not submitted:
-        return None
-    return KMeansParams(k=int(k), feature=FEATURE_OPTIONS[feature_label] if is_color else "gray",
-                        max_iter=int(max_iter), tol=float(tol), seed=int(seed), init=INIT_OPTIONS[init_label])
+    params = KMeansParams(k=int(k), feature=feature, max_iter=int(max_iter), tol=float(tol), seed=int(seed),
+                          init=INIT_OPTIONS[init_label])
+    return params, submitted
 
 
 def render() -> None:
@@ -101,9 +107,9 @@ def render() -> None:
 
     left, right = ui.workspace("kmeans")
     with left:
-        params = params_form(prep.is_color)
-        st.button("Khôi phục mặc định", on_click=_reset_defaults, type="tertiary", width="stretch")
-    if params is not None:
+        params, submitted = params_controls(prep.is_color)
+        st.button("Khôi phục mặc định", on_click=_reset_defaults, key="km_reset", type="tertiary", width="stretch")
+    if submitted:
         try:
             with right, st.spinner("Đang phân cụm K-means…", show_time=True):
                 result = run_kmeans(prep, params)
@@ -124,10 +130,13 @@ def render() -> None:
         if run is None:
             ui.result_empty(prep, "Chạy K-means", stale=has_stale_result(RESULT_KEY, ctx.signature))
             return
-        _render_result(ctx, run)
+        pending = params != run["params"]
+        if pending:
+            ui.show_pending_settings("Chạy K-means")
+        _render_result(ctx, run, pending)
 
 
-def _render_result(ctx, run: dict) -> None:
+def _render_result(ctx, run: dict, pending: bool) -> None:
     prep, params, result = ctx.prepared, run["params"], run["result"]
     core = result.core
     m = ui.metric_columns(5, "kmeans")
@@ -166,7 +175,7 @@ def _render_result(ctx, run: dict) -> None:
             fg = sorted(set(options) - set(fg))
         post = ui.morphology_controls("km")
     try:
-        out = kmeans_outputs(prep, result, fg, post) if tab_fg.open or tab_dl.open else None
+        out = kmeans_outputs(prep, result, fg, post) if tab_fg.open or (tab_dl.open and not pending) else None
     except (ValueError, MemoryError) as exc:
         run.pop("_export_cache", None)
         run.pop("_original_export_cache", None)
@@ -185,7 +194,7 @@ def _render_result(ctx, run: dict) -> None:
         with tab_stats:
             _show_statistics(result)
 
-    if tab_dl.open:
+    if tab_dl.open and not pending:
         with tab_dl:
             st.caption("Các tệp dùng tham số lần chạy ở trên và cụm đối tượng đã chọn.")
             export_key = (tuple(sorted(fg)), post)
@@ -219,7 +228,7 @@ def _show_segmentation(prep, result) -> None:
             except (ValueError, MemoryError) as exc:
                 st.error("Không tạo ảnh kết quả được. " + str(exc))
                 return
-            ui.show_images([(label_color, "Bản đồ nhãn cụm"), *processed])
+            ui.show_images([(label_color, "Nhãn cụm · màu giả"), *processed])
             legend = "".join(
                 f"<span class='isl-chip'><span class='isl-swatch' aria-hidden='true' style='background:{c}'></span>Cụm {i}</span>"
                 for i, c in enumerate(cluster_palette_hex(result.core.k_effective))
@@ -230,7 +239,8 @@ def _show_segmentation(prep, result) -> None:
 def _show_foreground(ctx, out, fg, post) -> None:
     if not fg:
         st.info("Chưa chọn cụm nào: mask rỗng (toàn nền).")
-    mask_caption = "Mask sau hình thái học" if post.operation != "none" else "Mask nhị phân (trắng = đối tượng)"
+    mask_caption = "Mask sau hình thái học" if post.operation != "none" else "Mask đối tượng"
+    st.caption("Mask: trắng là đối tượng, đen là nền. Lớp phủ cam đánh dấu đối tượng trên ảnh gốc.")
     ui.show_images([(out.mask, mask_caption), (out.cutout_preview, "Ảnh tách nền (nền trắng)"),
                     (out.overlay, "Đối tượng tô màu trên ảnh gốc")], columns=3)
     if post.operation != "none":

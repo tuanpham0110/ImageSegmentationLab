@@ -33,7 +33,8 @@ def render() -> None:
 
 #### 3. K-means
 1. Chọn **K** (1–16), vector đặc trưng (RGB, Lab hoặc mức xám), cách khởi tạo, số vòng lặp tối đa, ngưỡng hội tụ, seed.
-2. Bấm **Chạy K-means**. Thay đổi tham số không tự chạy lại — chỉ chạy khi bấm nút.
+2. Bấm **Chạy K-means**. Khi đổi tham số, ứng dụng ghi rõ ảnh đang xem thuộc lần chạy trước và tạm ẩn tải xuống.
+   Bấm nút chạy để áp dụng. **Khôi phục mặc định** đặt lại các tham số để chuẩn bị lần chạy kế tiếp.
 3. Tab **Tách nền**: chọn cụm làm đối tượng (mặc định là gợi ý theo viền ảnh, không phải kết luận của thuật toán).
 4. Tab **Thống kê**: tâm cụm, số pixel, tỷ lệ, SSE theo vòng lặp.
 

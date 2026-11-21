@@ -7,6 +7,15 @@
 3. Mở [bộ slide](SLIDES.pptx). Chuẩn bị một ảnh chụp thật PNG/JPG và CSV mẫu `data/sample_csv/csv_rectangle_32x32.csv`.
 4. Không cần Internet. Nếu cổng 8501 bận: thêm `--server.port 8502`.
 
+**Luồng rút gọn (3–4 phút)**
+
+1. Chọn **Nhiều hình màu khác nhau (RGB)**. Vào **K-means**, chọn K=5 và bấm **Chạy K-means**. Chỉ vào ảnh gốc, ảnh tô theo tâm cụm và số cụm thực tế.
+2. Vào **Phân ngưỡng Otsu**, chọn **Tự động** và **Đối tượng tối**. Chạy, chỉ ngưỡng trên histogram, rồi giải thích quy ước trắng là đối tượng trên mask.
+3. Vào **So sánh thuật toán**, đặt K=5, bấm chạy và mở **Đối chiếu mask** hoặc **Đánh giá**. Trên máy chiếu hẹp, thu thanh bên sau khi chọn ảnh để mở rộng vùng kết quả.
+4. Tải ZIP trên trang So sánh và mở một PNG kết quả. Nạp `csv_rectangle_32x32.csv` rồi chạy lại để minh họa đầu vào CSV. Nếu còn thời gian, thử `invalid_text.csv` để xem thông báo dòng và cột.
+
+**Luồng đầy đủ**
+
 | Thời gian | Thao tác | Lời thuyết minh |
 |---|---|---|
 | 0:00–0:30 | Trang **Tổng quan** | “Đề tài 3: phân đoạn ảnh, tách nền và đối tượng bằng K-means và Otsu. Hai thuật toán nhóm tự cài đặt bằng NumPy trong `src/algorithms`, không dùng OpenCV hay hàm có sẵn. Ứng dụng chạy cục bộ, nhận ảnh thật và CSV.” |
@@ -20,7 +29,7 @@
 | 4:50–5:20 | Trang K-means → tab **Tải xuống**: bấm *Ảnh tách nền RGBA* và *Ma trận nhãn cụm (CSV)*; mở tệp vừa tải | “Tải được PNG phân đoạn, mask, ảnh nền trong suốt, CSV nhãn, thống kê JSON — đúng kết quả đang hiển thị.” |
 | 5:20–6:00 | Thanh bên chọn **Hình tròn có nhiễu**, chạy Otsu và K-means K = 2 | “Ảnh nhiễu: cả hai IoU 0.84 — vì chỉ dùng giá trị pixel, không dùng lân cận. Đây là hạn chế chung; hướng khắc phục là lọc trung vị trước.” |
 | 6:00–6:30 | Tải `data/sample_csv/invalid_text.csv`, rồi tải `csv_rectangle_32x32.csv` và chạy lại | “Ứng dụng báo dòng và cột sai. Khi tải CSV hợp lệ, hai thuật toán tiếp tục chạy với ảnh mới.” |
-| 6:30–7:00 | Kết luận | “K-means phân cụm theo màu hoặc mức xám. Otsu tìm ngưỡng toàn cục từ histogram. Có 560 test tự động pass. Báo cáo trình bày riêng kết quả 11 mẫu tổng hợp và 24 ảnh test Oxford VGG iSeg.” |
+| 6:30–7:00 | Kết luận | “K-means phân cụm theo màu hoặc mức xám. Otsu tìm ngưỡng toàn cục từ histogram. Bộ Pytest kiểm tra thuật toán, I/O và giao diện. Báo cáo trình bày riêng kết quả 11 mẫu tổng hợp và 24 ảnh test Oxford VGG iSeg.” |
 
 **Phương án dự phòng:** nếu trình duyệt lỗi, mở ảnh kết quả có sẵn trong `docs/figures/` và ảnh chụp giao diện trong
 `docs/screenshots/`; nếu cần chứng minh thuật toán, chạy `python -m pytest tests/test_otsu.py -v`.

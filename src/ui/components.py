@@ -108,6 +108,10 @@ def result_empty(prep: PreparedInput, action: str, *, with_gray: bool = False, s
     show_images(source_panels(prep, with_gray=with_gray))
 
 
+def show_pending_settings(action: str) -> None:
+    st.warning(f"Thiết lập đã đổi. Đang xem kết quả lần chạy trước. Bấm **{action}** để cập nhật và tải kết quả.")
+
+
 def show_figure(fig) -> None:
     try:
         st.pyplot(fig, width="stretch")

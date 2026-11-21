@@ -16,7 +16,7 @@ from src.processing.pipeline import (
     run_otsu,
 )
 from src.ui import components as ui
-from src.ui.page_kmeans import params_form
+from src.ui.page_kmeans import FEATURE_NAMES, params_controls, reset_kmeans_params
 from src.ui.page_otsu import POLARITY_HELP, POLARITY_OPTIONS, polarity_caption, show_threshold_warnings
 from src.ui.state import (
     clear_uploaded_gt,
@@ -35,6 +35,12 @@ from src.utils.image_io import load_mask_bytes
 from src.utils.metrics import compare_masks
 
 RESULT_KEY = "cmp_result"
+
+
+def _reset_defaults() -> None:
+    reset_kmeans_params("cmp")
+    st.session_state["cmp_otsu_polarity"] = "Gợi ý theo viền ảnh"
+    remember_widget("cmp_otsu_polarity")
 
 
 def _on_gt_upload_change(uploader_key: str) -> None:
@@ -131,14 +137,16 @@ def render() -> None:
 
     left, right = ui.workspace("compare")
     with left:
-        params = params_form(prep.is_color, key_prefix="cmp", submit_label="Chạy K-means & Otsu")
-        with st.container(border=True, key="cmp-otsu-controls"):
+        params, submitted = params_controls(prep.is_color, key_prefix="cmp", submit_label="Chạy K-means & Otsu")
+        with st.expander("Đối tượng Otsu", icon=":material/contrast:"):
             restore_widget("cmp_otsu_polarity", "Gợi ý theo viền ảnh")
-            st.radio("Otsu: đối tượng là", list(POLARITY_OPTIONS), key="cmp_otsu_polarity", help=POLARITY_HELP)
+            st.radio("Otsu: đối tượng là", list(POLARITY_OPTIONS), key="cmp_otsu_polarity",
+                     help=POLARITY_HELP + " Đổi lớp sẽ cập nhật kết quả Otsu đang hiển thị.")
             remember_widget("cmp_otsu_polarity")
         with st.expander("Ảnh tham chiếu", icon=":material/fact_check:"):
             uploaded_gt = _ground_truth_uploader(ctx)
-    if params is not None:
+        st.button("Khôi phục mặc định", on_click=_reset_defaults, key="cmp_reset", type="tertiary", width="stretch")
+    if submitted:
         try:
             with right, st.spinner("Đang chạy K-means…", show_time=True):
                 km = run_kmeans(prep, params)
@@ -156,10 +164,13 @@ def render() -> None:
         if run is None:
             ui.result_empty(prep, "Chạy K-means & Otsu", stale=has_stale_result(RESULT_KEY, ctx.signature))
             return
-        _render(ctx, run, uploaded_gt)
+        pending = params != run["params"]
+        if pending:
+            ui.show_pending_settings("Chạy K-means & Otsu")
+        _render(ctx, run, uploaded_gt, pending)
 
 
-def _render(ctx, run, uploaded_gt) -> None:
+def _render(ctx, run, uploaded_gt, pending: bool) -> None:
     prep, km = ctx.prepared, run["km"]
     # Payload đã gắn với chữ ký ảnh. Chỉ tính lại Otsu khi đổi cực tính hoặc chạy mới.
     polarity = POLARITY_OPTIONS[st.session_state.get("cmp_otsu_polarity", "Gợi ý theo viền ảnh")]
@@ -183,12 +194,13 @@ def _render(ctx, run, uploaded_gt) -> None:
     metrics[2].metric("K-means · thời gian", f"{km.core.elapsed_seconds * 1000:.1f} ms", help=TIMING_SCOPE)
     metrics[3].metric("Otsu · thời gian", f"{otsu.result.elapsed_seconds * 1000:.2f} ms", help=TIMING_SCOPE)
     convergence = "hội tụ" if km.core.converged else "chưa hội tụ"
-    st.caption(f"K-means · {km.feature.upper()} · {km.core.n_iter} vòng · {convergence} · seed {run['params'].seed}. "
-               + polarity_caption(otsu))
-    _result_tabs(ctx, run, otsu, uploaded_gt)
+    params = run["params"]
+    st.caption(f"K-means đã áp dụng · K={params.k} · {FEATURE_NAMES[km.feature]} · seed {params.seed} · "
+               f"{km.core.n_iter} vòng · {convergence}. {polarity_caption(otsu)}")
+    _result_tabs(ctx, run, otsu, uploaded_gt, pending)
 
 
-def _result_tabs(ctx, run, otsu, uploaded_gt) -> None:
+def _result_tabs(ctx, run, otsu, uploaded_gt, pending: bool) -> None:
     prep, km = ctx.prepared, run["km"]
     images, masks, scores, downloads = st.tabs(
         ["Kết quả phân đoạn", "Đối chiếu mask", "Đánh giá", "Tải xuống"],
@@ -207,6 +219,8 @@ def _result_tabs(ctx, run, otsu, uploaded_gt) -> None:
     if images.open:
         with images:
             _segmented_images(prep, km, otsu)
+        return
+    if downloads.open and pending:
         return
     try:
         out = kmeans_outputs(prep, km, fg)
@@ -243,10 +257,9 @@ def _result_tabs(ctx, run, otsu, uploaded_gt) -> None:
 
 def _segmented_images(prep, km, otsu) -> None:
     original, *processed = ui.source_panels(prep)
-    threshold = f"t* = {otsu.result.threshold}" if otsu.result.valid else "không có ngưỡng hợp lệ"
-    ui.show_images([original, (km.segmented, f"K-means · {km.core.k_effective} cụm"),
-                    (otsu.binary, f"Otsu · nhị phân ({threshold})")], columns=3)
-    st.caption("Mở **Đối chiếu mask** để so sánh hai vùng đối tượng trên cùng quy ước trắng là đối tượng.")
+    ui.show_images([original, (km.segmented, "Màu tâm K-means"),
+                    (otsu.binary, "Ảnh nhị phân Otsu")], columns=3)
+    st.caption("Ảnh nhị phân Otsu hiển thị lớp sáng bằng màu trắng. Xem **Đối chiếu mask** để so sánh vùng đối tượng.")
     if processed:
         details = st.expander("Ảnh đầu vào sau lọc", key="cmp_input_details", icon=":material/tune:", on_change="rerun")
         if details.open:
@@ -261,6 +274,7 @@ def _mask_comparison(out, otsu) -> None:
     swatches = "".join(f"<span class='isl-chip'><span class='isl-swatch' aria-hidden='true' style='background:{c}'></span>"
                        f"{t}</span>" for c, t in legend)
     st.html(f"<div class='isl-palette' aria-label='Chú giải khác biệt hai mask'>{swatches}</div>")
+    st.caption("Trong hai mask, trắng là đối tượng và đen là nền.")
     agree = compare_masks(out.mask, otsu.mask)
     st.caption(f"Mức trùng khớp giữa hai mask (không phải độ chính xác): IoU = {agree.iou:.4f}, "
                f"tỷ lệ pixel cùng nhãn = {agree.pixel_accuracy:.4f}.")

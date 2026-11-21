@@ -297,6 +297,42 @@ def test_otsu_mode_change_blocks_previous_downloads_until_rerun():
     assert "multiotsu_labels.csv" in at.session_state["otsu_result"]["_export_cache"]["files"]
 
 
+@pytest.mark.parametrize("page,prefix,download_count", [("kmeans", "km", 7), ("compare", "cmp", 5)])
+def test_kmeans_settings_require_rerun_before_download(page, prefix, download_count):
+    at = _app(page, "Tải xuống").run()
+    next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
+    assert len(at.get("download_button")) == download_count
+
+    at.slider(key=f"{prefix}_k").set_value(5).run()
+    at.number_input(key=f"{prefix}_seed").set_value(12).run()
+    assert at.session_state[f"{prefix}_result"]["params"].k == 3
+    assert at.session_state[f"{prefix}_run_id"] == 1
+    assert any("Thiết lập đã đổi" in warning.value for warning in at.warning)
+    assert not at.get("download_button")
+
+    next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
+    params = at.session_state[f"{prefix}_result"]["params"]
+    assert (params.k, params.seed) == (5, 12)
+    assert len(at.get("download_button")) == download_count
+
+    at.button(key=f"{prefix}_reset").click().run()
+    assert at.slider(key=f"{prefix}_k").value == 3
+    assert at.number_input(key=f"{prefix}_seed").value == 0
+    assert at.session_state[f"{prefix}_run_id"] == 2
+    assert not at.exception and not at.get("download_button")
+
+
+@pytest.mark.parametrize("page,prefix", [("kmeans", "km"), ("compare", "cmp")])
+def test_grayscale_kmeans_controls_show_actual_feature(page, prefix):
+    at = _app(page)
+    at.session_state["sample_id"] = "circle_black_on_white"
+    at.run()
+    assert not any(radio.key == f"{prefix}_feature" for radio in at.radio)
+    assert any("mức xám (1 kênh)" in caption.value for caption in at.caption)
+    at.button(key=f"{prefix}_run").click().run()
+    assert not at.exception and at.session_state[f"{prefix}_result"]["params"].feature == "gray"
+
+
 def test_exported_otsu_mask_csv_roundtrips_at_ui_processing_limit():
     from src.ui.state import MAX_SIDE_OPTIONS
 
