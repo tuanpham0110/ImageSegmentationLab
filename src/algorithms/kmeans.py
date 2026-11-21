@@ -241,6 +241,8 @@ def _init_kmeans_pp(data: np.ndarray, weights: np.ndarray, k: int, rng: np.rando
 
 def _weighted_means(x: np.ndarray, labels: np.ndarray, w: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
     """(trung bình có trọng số mỗi cụm (k, D), tổng trọng số mỗi cụm (k,)); cụm rỗng cho NaN."""
+    # Mỗi màu đại diện cho w pixel giống nhau. Mỗi chiều tâm dùng tổng w[i] * x[i, d]
+    # chia tổng w[i] của cụm, tương đương cập nhật tâm trên toàn bộ pixel của ảnh.
     indices = labels.astype(np.intp, copy=False)
     counts = np.bincount(indices, weights=w, minlength=k)
     means = np.empty((k, x.shape[1]), dtype=np.float64)

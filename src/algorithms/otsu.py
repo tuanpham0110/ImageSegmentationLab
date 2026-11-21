@@ -114,6 +114,7 @@ def otsu_from_histogram(hist: np.ndarray) -> OtsuResult:
     p = counts / n  # xác suất từng mức xám
     c0 = np.cumsum(counts)
     c1 = n - c0
+    # Tại ngưỡng t, tổng tích lũy thuộc lớp I <= t và phần còn lại thuộc lớp I > t.
     # Với N < 2**53, tổng i*h(i) < 255*2**53 < 2**61, vẫn vừa int64.
     # Trừ các mômen NGUYÊN trước khi chia để không mất lớp thiểu số do triệt tiêu float.
     moment0 = np.cumsum(levels * counts)

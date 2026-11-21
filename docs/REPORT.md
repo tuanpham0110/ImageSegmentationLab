@@ -350,7 +350,7 @@ giảm mức sáng của ảnh gốc. Cách chia tập, cấu hình và điểm 
   ngưỡng đồng hạng, ảnh một mức xám) bằng NumPy, không dùng OpenCV.
 - Chứng minh và kiểm chứng số liệu: hàm f(g) ở giáo trình mục 3.1.6 là tiêu chí Otsu.
 - Ứng dụng 7 trang hỗ trợ tải ảnh/CSV, hiển thị, tách nền, so sánh và xuất PNG, CSV, JSON hoặc ZIP.
-- 11 mẫu offline. Lần kiểm tra ngày 19/11/2026 có 560 test pass trên Windows với Python 3.11.7.
+- 11 mẫu offline. Bản bàn giao có 618 test tự động, gồm kiểm tra cấu trúc gói nộp. Phạm vi kiểm tra trên trình duyệt có trong [bảng nghiệm thu](ACCEPTANCE.md).
   Kiểm thử trình duyệt bao gồm tải tệp, chạy hai thuật toán, đổi chế độ, mở lại PNG và kiểm tra ZIP.
 
 ### 6.2 Hạn chế

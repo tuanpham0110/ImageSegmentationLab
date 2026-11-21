@@ -9,7 +9,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from src.algorithms.kmeans import image_to_features, segment_image_kmeans
-from src.algorithms.otsu import apply_multi_threshold, multi_otsu_from_histogram, otsu_threshold
+from src.algorithms.otsu import apply_multi_threshold, multi_otsu_from_histogram
 from src.processing.filters import apply_morphology, closing, dilate, erode, median_filter, opening
 from src.processing.pipeline import (
     KMeansParams,

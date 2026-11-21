@@ -6,26 +6,26 @@
 
 ## 1. Cài đặt và chạy
 
-Cần **Python 3.11 64-bit**, `venv`, `pip` và trình duyệt. Cài thư viện đúng phiên bản trong `requirements.txt`. Các thư viện chính gồm NumPy, Pillow, Streamlit, Matplotlib và pandas. `requirements-dev.txt` chứa thêm công cụ kiểm thử.
+Cần **CPython 3.11 64-bit**, `venv`, `pip` và trình duyệt. Cài đúng phiên bản trong `requirements.txt`. NumPy xử lý mảng cho hai thuật toán tự cài đặt. Pillow đọc, ghi và đổi kích thước ảnh. Streamlit dựng giao diện, Matplotlib vẽ biểu đồ và pandas hiển thị bảng. `requirements-dev.txt` chứa thêm công cụ kiểm thử và kiểm tra mã.
 
 Giải nén đầy đủ, rồi mở terminal tại thư mục chứa `app.py`. Thư mục này cũng chứa `data/` và `.streamlit/`. Dùng lệnh phù hợp với hệ điều hành.
 
-### Windows PowerShell
+### Windows x64 · PowerShell
 
-Kiểm tra phiên bản Python của dòng đầu là 3.11.x.
+Kiểm tra dòng đầu hiển thị Python 3.11.x và nền tảng `win-amd64` trước khi chạy các lệnh tiếp theo.
 
 ```powershell
-py -3.11 -V
+py -3.11 -c "import sys, sysconfig; print(sys.version.split()[0], sysconfig.get_platform())"
 py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --only-binary=:all: -r requirements.txt
 .\.venv\Scripts\python.exe -m streamlit run app.py --server.address 127.0.0.1
 ```
 
-Nếu `py` không tìm thấy Python nhưng `python -V` trả về 3.11.x, tạo môi trường bằng `python -m venv .venv`. Nếu cả hai lệnh đều trỏ sai phiên bản, gọi trực tiếp tệp `python.exe` của bản CPython 3.11 64-bit đã cài. Đoạn lệnh dưới dùng vị trí cài mặc định cho người dùng hiện tại. Thay đường dẫn nếu Python nằm ở nơi khác.
+Nếu `py` không tìm thấy Python, kiểm tra `python` bằng cùng lệnh `-c`. Dùng `python -m venv .venv` nếu kết quả là 3.11.x và `win-amd64`. Nếu kết quả là nền tảng khác, chẳng hạn bản Python trong MSYS2, gọi trực tiếp `python.exe` của CPython 3.11 Windows x64. Đoạn lệnh dưới dùng vị trí cài mặc định cho người dùng hiện tại. Thay đường dẫn theo vị trí Python đã cài, rồi tiếp tục các lệnh cài và chạy ở trên.
 
 ```powershell
 $python311 = Join-Path $env:LOCALAPPDATA 'Programs\Python\Python311\python.exe'
-& $python311 -V
+& $python311 -c "import sys, sysconfig; print(sys.version.split()[0], sysconfig.get_platform())"
 & $python311 -m venv .venv
 ```
 
@@ -104,14 +104,14 @@ src/processing/           Tiền xử lý, tạo mask và xuất kết quả
 src/ui/                   Các trang, CSS và tài nguyên giao diện
 src/utils/                Đọc/ghi tệp, chỉ số và biểu đồ
 data/                     Manifest, ảnh mẫu, CSV và mask tham chiếu
-tests/                    Test thuật toán, I/O và tích hợp Streamlit
+tests/                    Test thuật toán, I/O, tích hợp Streamlit và nghiệm thu trên trình duyệt
 scripts/                  Tạo mẫu, chạy thực nghiệm và đóng gói
-docs/                     Tài liệu thuật toán, test case và demo
+docs/                     Báo cáo, slide PowerPoint, test case, kịch bản demo và checklist bàn giao
 ```
 
-Xem thêm [thuật toán](docs/ALGORITHMS.md), [test case](docs/TEST_CASES.md) và [kịch bản demo](docs/DEMO_SCRIPT.md).
+Tài liệu để nộp và trình chiếu gồm [báo cáo](docs/REPORT.md), [slide PowerPoint](docs/SLIDES.pptx) và [kịch bản demo](docs/DEMO_SCRIPT.md). Các bước nghiệm thu nằm trong [test case](docs/TEST_CASES.md), [kết quả kiểm thử tích hợp](docs/ACCEPTANCE.md) và [checklist bàn giao](docs/RELEASE.md).
 
-Khi cần đóng gói lại, chạy `python scripts/package_submission.py --output outputs/PTIT-DeTai3-ImageSegmentation.zip` với Python 3.11. Tệp ZIP giữ mã nguồn, cấu hình, tệp khóa phiên bản thư viện, test, dữ liệu mẫu và tài liệu. Môi trường ảo, cache, thư mục `outputs/` và cache dữ liệu nghiên cứu được bỏ qua khi tạo gói.
+Khi cần đóng gói lại, chạy `python scripts/package_submission.py --output outputs/PTIT-DeTai3-ImageSegmentation.zip` với Python 3.11. Dùng tên đích mới nếu ZIP đã tồn tại. Gói nguồn chứa mã, cấu hình, tệp khóa phiên bản, test, dữ liệu demo và tài liệu. Gói wheel Windows là tệp riêng, chỉ cần khi muốn cài ngoại tuyến. Môi trường ảo, cache, thư mục `outputs/` và cache dữ liệu nghiên cứu nằm ngoài gói nguồn.
 
 ## 4. Chạy test
 
@@ -124,7 +124,7 @@ Trên Windows, chạy các lệnh sau khi tạo `.venv`.
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Trên Linux, thay `.\.venv\Scripts\python.exe` bằng `./.venv/bin/python`. Pytest có cả test thuật toán, kiểm tra đọc/ghi tệp và kiểm thử giao diện bằng Streamlit `AppTest`. CI được cấu hình cho Windows và Ubuntu.
+Trên Linux, thay `.\.venv\Scripts\python.exe` bằng `./.venv/bin/python`. Pytest có test thuật toán, đọc/ghi tệp, giao diện qua Streamlit `AppTest` và kiểm tra gói nguồn. CI được cấu hình cho Windows và Ubuntu. Bộ nghiệm thu trình duyệt chạy riêng bằng Node.js, Playwright và Chrome/Chromium. Cách chạy có trong [nghiệm thu tích hợp](docs/ACCEPTANCE.md).
 
 ## 5. Hạn chế và xử lý sự cố
 

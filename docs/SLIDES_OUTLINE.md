@@ -16,7 +16,7 @@
 | 10 | Thực nghiệm ảnh nhiễu và tùy chọn tiền/hậu xử lý |
 | 11 | Kết quả 24 ảnh test Oxford VGG iSeg và giới hạn tự động |
 | 12 | Độ phức tạp, giới hạn ảnh xử lý và thời điểm tạo tệp |
-| 13 | 560 test tự động và các ca kiểm thử trình duyệt |
+| 13 | 618 test tự động và các ca kiểm thử trình duyệt |
 | 14 | Thao tác demo K-means, Otsu, so sánh và lưu |
 | 15 | Điều kiện sử dụng của hai phương pháp và nội dung phản biện |
 
