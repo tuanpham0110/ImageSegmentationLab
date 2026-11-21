@@ -1,0 +1,717 @@
+{
+  "browser": "157.0.8103.79",
+  "viewport": "1440×1000",
+  "cases": {
+    "A": {
+      "status": "PASS",
+      "inputs": [
+        "multi_shapes_color.png\n\nSẵn sàng · PNG · 320 × 240 px"
+      ],
+      "previews": [
+        {
+          "label": "Ảnh gốc",
+          "size": "320×240"
+        },
+        {
+          "label": "Ảnh K-means (màu tâm cụm)",
+          "size": "320×240"
+        },
+        {
+          "label": "Nhãn cụm · màu giả",
+          "size": "320×240"
+        },
+        {
+          "label": "Mask đối tượng",
+          "size": "320×240"
+        },
+        {
+          "label": "Đối tượng tô màu trên ảnh gốc",
+          "size": "320×240"
+        }
+      ],
+      "files": [
+        {
+          "file": "a/kmeans_segmented.png",
+          "bytes": 1782,
+          "sha256": "18064984249e123e58f7c55605055ad8bb61a84253d467f7af8de35937fd61bb",
+          "shape": [
+            240,
+            320,
+            3
+          ]
+        },
+        {
+          "file": "a/kmeans_label_map.png",
+          "bytes": 1801,
+          "sha256": "0c69bb561b61013c7e09a2c59119f1053d0728c66c80f89461ea3c59720b303b",
+          "shape": [
+            240,
+            320,
+            3
+          ]
+        },
+        {
+          "file": "a/kmeans_mask.png",
+          "bytes": 1113,
+          "sha256": "2be6a8325bbfc4676628441f45248e35afa94e4c3f5f73e273c461f92f6dd693",
+          "shape": [
+            240,
+            320
+          ]
+        },
+        {
+          "file": "a/kmeans_cutout.png",
+          "bytes": 1848,
+          "sha256": "c6b2ade2c959f497ddfc1dd262ad24aa0c37af9586bdb92f4e79c95eac8ae8dd",
+          "shape": [
+            240,
+            320,
+            4
+          ]
+        },
+        {
+          "file": "a/kmeans_labels.csv",
+          "bytes": 153600,
+          "sha256": "4ac9d1b3c1c475bad1f2107892ac78404eed1becb5b136e4925673e8c2789f7c"
+        },
+        {
+          "file": "a/kmeans_clusters.csv",
+          "bytes": 212,
+          "sha256": "4e75958fc61773b9dce12d00071a2a5f6db7e030f930c47eeafbc02d81bfe9e8"
+        },
+        {
+          "file": "a/kmeans_stats.json",
+          "bytes": 1875,
+          "sha256": "2746d3386b7adf9b7495ec387f7be79ce8a080fe4ada450f2967652032894007"
+        },
+        {
+          "file": "a_repeat/kmeans_labels.csv",
+          "bytes": 153600,
+          "sha256": "4ac9d1b3c1c475bad1f2107892ac78404eed1becb5b136e4925673e8c2789f7c"
+        },
+        {
+          "file": "a_repeat/kmeans_segmented.png",
+          "bytes": 1782,
+          "sha256": "18064984249e123e58f7c55605055ad8bb61a84253d467f7af8de35937fd61bb",
+          "shape": [
+            240,
+            320,
+            3
+          ]
+        }
+      ],
+      "pageErrors": [],
+      "applied": "Lần chạy đã áp dụng · K=5 · RGB · khởi tạo random · seed 9 · tối đa 8 vòng · tol 0"
+    },
+    "B": {
+      "status": "PASS",
+      "inputs": [
+        "circle_black_on_white.png\n\nSẵn sàng · PNG · 256 × 256 px"
+      ],
+      "previews": [
+        {
+          "label": "Ảnh gốc",
+          "size": "256×256"
+        },
+        {
+          "label": "Ảnh nhị phân (> 127)",
+          "size": "256×256"
+        },
+        {
+          "label": "Mask đối tượng",
+          "size": "256×256"
+        }
+      ],
+      "files": [
+        {
+          "file": "b/otsu_binary.png",
+          "bytes": 817,
+          "sha256": "04db86b7d1147ad8844d6e7bcd8770a788c63a4959460469778c66e185860a6c",
+          "shape": [
+            256,
+            256
+          ]
+        },
+        {
+          "file": "b/otsu_mask.png",
+          "bytes": 650,
+          "sha256": "6b0ca1952ddd6a86ddc06f58ce88f1a2cfd7e9ab41ca293111f3cb826bae355e",
+          "shape": [
+            256,
+            256
+          ]
+        },
+        {
+          "file": "b/otsu_cutout.png",
+          "bytes": 1324,
+          "sha256": "a27e10bfc45b6bf43dacb748e3e6972ce4dad8b864989279613b4ca51cdc4ad1",
+          "shape": [
+            256,
+            256,
+            4
+          ]
+        },
+        {
+          "file": "b/otsu_gray.png",
+          "bytes": 817,
+          "sha256": "04db86b7d1147ad8844d6e7bcd8770a788c63a4959460469778c66e185860a6c",
+          "shape": [
+            256,
+            256
+          ]
+        },
+        {
+          "file": "b/otsu_binary_matrix.csv",
+          "bytes": 131072,
+          "sha256": "8858a351db4e7780eb1b25265e0c2ccf04309658ad6d5ee3fa01e7c189ba560d"
+        },
+        {
+          "file": "b/otsu_histogram.csv",
+          "bytes": 7602,
+          "sha256": "8e1a5c4d93351fd11a9dea598cc0f2151c37e943c3b5bed1b2bcbed5ed275f77"
+        },
+        {
+          "file": "b/otsu_stats.json",
+          "bytes": 3510,
+          "sha256": "d87bffe1f0155ad455d49b1893c0efd7fb457a4619fab714fb05c992be959d8c"
+        }
+      ],
+      "pageErrors": [],
+      "threshold": 127
+    },
+    "C": {
+      "status": "PASS",
+      "inputs": [
+        "textbook_otsu_5x6.csv\n\nSẵn sàng · CSV · 6 × 5 px",
+        "otsu_binary_matrix.csv\n\nSẵn sàng · CSV · 6 × 5 px"
+      ],
+      "previews": [
+        {
+          "label": "Ảnh gốc",
+          "size": "6×5"
+        },
+        {
+          "label": "Ảnh nhị phân (> 1)",
+          "size": "6×5"
+        },
+        {
+          "label": "Ảnh gốc",
+          "size": "6×5"
+        },
+        {
+          "label": "Ảnh K-means (màu tâm cụm)",
+          "size": "6×5"
+        }
+      ],
+      "files": [
+        {
+          "file": "c_otsu/otsu_binary.png",
+          "bytes": 84,
+          "sha256": "e8a2ce0587fa844c0b9c941b593068398925b604a8a89adb9f638acfba80ddfe",
+          "shape": [
+            5,
+            6
+          ]
+        },
+        {
+          "file": "c_otsu/otsu_binary_matrix.csv",
+          "bytes": 60,
+          "sha256": "44868da9f3e7662bdf5957477c0d9a6db81ee3d3029eb0bc775f793963cd8510"
+        },
+        {
+          "file": "c_otsu/otsu_stats.json",
+          "bytes": 1184,
+          "sha256": "63f8f577728dad614bd88d2c4e68106141c8647d4370f7ed90969beb5d3a1dbf"
+        },
+        {
+          "file": "c_kmeans/kmeans_segmented.png",
+          "bytes": 84,
+          "sha256": "1f6a065743c041aaf32753222ec5ab119a3274016476fe06b4d651600954d4a3",
+          "shape": [
+            5,
+            6
+          ]
+        },
+        {
+          "file": "c_kmeans/kmeans_labels.csv",
+          "bytes": 60,
+          "sha256": "44868da9f3e7662bdf5957477c0d9a6db81ee3d3029eb0bc775f793963cd8510"
+        },
+        {
+          "file": "c_kmeans/kmeans_stats.json",
+          "bytes": 1404,
+          "sha256": "831abf57ee1343632ebd93dadcfa7c45d64cd0293ddd50ec7a2cadb2a2e4bce2"
+        }
+      ],
+      "pageErrors": [],
+      "threshold": 1,
+      "reimportThreshold": 0
+    },
+    "D": {
+      "status": "PASS",
+      "inputs": [
+        "circle_black_on_white.png\n\nSẵn sàng · PNG · 256 × 256 px",
+        "bright_rect_on_dark.png\n\nSẵn sàng · PNG · 256 × 192 px"
+      ],
+      "previews": [],
+      "files": [
+        {
+          "file": "d/otsu_binary.png",
+          "bytes": 279,
+          "sha256": "c44c3069f01203430c4c500babbeb4c97bb9d1d85ba2c8a8cacc37603c79b7b1",
+          "shape": [
+            192,
+            256
+          ]
+        },
+        {
+          "file": "d/otsu_stats.json",
+          "bytes": 2959,
+          "sha256": "c877994bfc5ede9f752408ea62e60a234d818de604d7ddae043e8e03d4e203c3"
+        }
+      ],
+      "pageErrors": [],
+      "errors": [
+        "Giá trị không phải số tại dòng 2, cột 2: 'abc'.",
+        "Không đọc được ảnh 'broken.png': tệp hỏng hoặc không phải ảnh hợp lệ (cannot identify image file <_io.BytesIO object at 0x000001B28D955170>).",
+        "Tệp CSV rỗng."
+      ],
+      "recoveredThreshold": 124
+    },
+    "E": {
+      "status": "PASS",
+      "inputs": [
+        "gray_levels_objects.png\n\nSẵn sàng · PNG · 300 × 200 px"
+      ],
+      "previews": [
+        {
+          "label": "Nhãn 3 lớp · màu giả",
+          "size": "300×200"
+        },
+        {
+          "label": "Mask trước hình thái học",
+          "size": "300×200"
+        },
+        {
+          "label": "Mask sau hình thái học",
+          "size": "300×200"
+        }
+      ],
+      "files": [
+        {
+          "file": "e/multiotsu_label_map.png",
+          "bytes": 688,
+          "sha256": "e4f047c43a100e4cd613102b267c14d7857fd700c4c3a16d1b9acb1368075578",
+          "shape": [
+            200,
+            300,
+            3
+          ]
+        },
+        {
+          "file": "e/multiotsu_mask.png",
+          "bytes": 332,
+          "sha256": "ca948d842831e5ddcda08058976635a88c34d06b836f0c5ce8c83c50d61f83bc",
+          "shape": [
+            200,
+            300
+          ]
+        },
+        {
+          "file": "e/multiotsu_cutout.png",
+          "bytes": 794,
+          "sha256": "e1af1e7b7ae8053dc1908f056d194f116d4b56b5dc0136ebad7b4f98442f1b8d",
+          "shape": [
+            200,
+            300,
+            4
+          ]
+        },
+        {
+          "file": "e/multiotsu_labels.csv",
+          "bytes": 120000,
+          "sha256": "d983bbcaf1428084981687cab8e02ff58e8910c19ad03a48fc940dc38ea4e334"
+        },
+        {
+          "file": "e/multiotsu_stats.json",
+          "bytes": 1409,
+          "sha256": "dad5731c760df7c289b1135bc9e3593acc9e676a50e13e7932bf2af0f65b15b3"
+        }
+      ],
+      "pageErrors": [],
+      "thresholds": [
+        "62",
+        "182"
+      ]
+    },
+    "F": {
+      "status": "PASS",
+      "inputs": [
+        "circle_black_on_white.png\n\nSẵn sàng · PNG · 256 × 256 px"
+      ],
+      "previews": [
+        {
+          "label": "Ảnh gốc",
+          "size": "256×256"
+        },
+        {
+          "label": "Màu tâm K-means",
+          "size": "256×256"
+        },
+        {
+          "label": "Ảnh nhị phân Otsu",
+          "size": "256×256"
+        },
+        {
+          "label": "Mask K-means",
+          "size": "256×256"
+        },
+        {
+          "label": "Mask Otsu",
+          "size": "256×256"
+        },
+        {
+          "label": "Khác biệt hai mask",
+          "size": "256×256"
+        }
+      ],
+      "files": [
+        {
+          "file": "f/comparison_results.zip",
+          "bytes": 12127,
+          "sha256": "47807bb8ddf9aa2c7652dbea511df3cbde71511f5bba88fea7ae3896f960874e"
+        },
+        {
+          "file": "f/kmeans_mask.png",
+          "bytes": 650,
+          "sha256": "6b0ca1952ddd6a86ddc06f58ce88f1a2cfd7e9ab41ca293111f3cb826bae355e",
+          "shape": [
+            256,
+            256
+          ]
+        },
+        {
+          "file": "f/otsu_mask.png",
+          "bytes": 650,
+          "sha256": "6b0ca1952ddd6a86ddc06f58ce88f1a2cfd7e9ab41ca293111f3cb826bae355e",
+          "shape": [
+            256,
+            256
+          ]
+        },
+        {
+          "file": "f/kmeans_cutout.png",
+          "bytes": 1324,
+          "sha256": "a27e10bfc45b6bf43dacb748e3e6972ce4dad8b864989279613b4ca51cdc4ad1",
+          "shape": [
+            256,
+            256,
+            4
+          ]
+        },
+        {
+          "file": "f/otsu_cutout.png",
+          "bytes": 1324,
+          "sha256": "a27e10bfc45b6bf43dacb748e3e6972ce4dad8b864989279613b4ca51cdc4ad1",
+          "shape": [
+            256,
+            256,
+            4
+          ]
+        }
+      ],
+      "pageErrors": [],
+      "reference": "Tính trên ground truth tải lên (circle_black_on_white_gt.png)."
+    },
+    "G": {
+      "status": "PASS",
+      "inputs": [],
+      "previews": [],
+      "files": [],
+      "pageErrors": [],
+      "samples": [
+        "circle_black_on_white",
+        "bright_rect_on_dark",
+        "multi_shapes_color",
+        "gray_levels_objects",
+        "noisy_circle",
+        "low_contrast",
+        "uniform_gray",
+        "rgb_regions",
+        "tiny_10x10",
+        "csv_rectangle_32x32",
+        "textbook_otsu_5x6"
+      ],
+      "pages": [
+        "home",
+        "kmeans",
+        "otsu",
+        "compare",
+        "library",
+        "theory",
+        "guide"
+      ]
+    },
+    "H": {
+      "status": "PASS",
+      "inputs": [
+        "grace_hopper.jpg\n\nSẵn sàng · JPEG · 512 × 600 px"
+      ],
+      "previews": [
+        {
+          "label": "Ảnh gốc (đã thu nhỏ)",
+          "size": "109×128"
+        },
+        {
+          "label": "Ảnh K-means (màu tâm cụm)",
+          "size": "109×128"
+        },
+        {
+          "label": "Sau lọc trung vị 3×3 (đầu vào thuật toán)",
+          "size": "3×3"
+        },
+        {
+          "label": "Mask sau hình thái học",
+          "size": "109×128"
+        }
+      ],
+      "files": [
+        {
+          "file": "h_kmeans/kmeans_segmented.png",
+          "bytes": 1511,
+          "sha256": "85193be9f6c907c6ac1b0bf9d7b3a71b48d4f0e0a3368454aa3dbca4fbb0b97d",
+          "shape": [
+            128,
+            109,
+            3
+          ]
+        },
+        {
+          "file": "h_kmeans/kmeans_stats.json",
+          "bytes": 2311,
+          "sha256": "74dcb3a9377b575d47dd300a0e58d38f4874cf16d36f7365e462874e20c8ad62"
+        },
+        {
+          "file": "h_kmeans/kmeans_segmented_original.png",
+          "bytes": 4023,
+          "sha256": "4771471b92d342ad2bcfabb7774a385997c38c61c41df4d6e1f03e382841a913",
+          "shape": [
+            600,
+            512,
+            3
+          ]
+        },
+        {
+          "file": "h_kmeans/kmeans_label_map_original.png",
+          "bytes": 4033,
+          "sha256": "23fc148a7404139a9761aaccd25801332bb46571e1d47196c6b7a3e970ab1b26",
+          "shape": [
+            600,
+            512,
+            3
+          ]
+        },
+        {
+          "file": "h_kmeans/kmeans_mask_original.png",
+          "bytes": 2501,
+          "sha256": "adb4c023029a1c817ac3cf85f008902f14f3166c2ae2dded523020af63228c2e",
+          "shape": [
+            600,
+            512
+          ]
+        },
+        {
+          "file": "h_kmeans/kmeans_cutout_original.png",
+          "bytes": 504624,
+          "sha256": "215f849dc140a20d30270f2c430759bdcf5a29a416163731243f0fa54bdad9f9",
+          "shape": [
+            600,
+            512,
+            4
+          ]
+        },
+        {
+          "file": "h_otsu/otsu_mask.png",
+          "bytes": 915,
+          "sha256": "1e7f0ec1ff3adae0a3526a77a99a82c7f9827f3a7eeeed93ec05901855ad4fb6",
+          "shape": [
+            128,
+            109
+          ]
+        },
+        {
+          "file": "h_otsu/otsu_binary_original.png",
+          "bytes": 2693,
+          "sha256": "2e5b5f56fe44d901a75640f142df0898550e7ec421496586640262798f583376",
+          "shape": [
+            600,
+            512
+          ]
+        },
+        {
+          "file": "h_otsu/otsu_mask_original.png",
+          "bytes": 2693,
+          "sha256": "2e5b5f56fe44d901a75640f142df0898550e7ec421496586640262798f583376",
+          "shape": [
+            600,
+            512
+          ]
+        },
+        {
+          "file": "h_otsu/otsu_cutout_original.png",
+          "bytes": 504457,
+          "sha256": "df47b85043d4623f855a997208f8848ed39c8170e67b3217c26522af1f1b5b17",
+          "shape": [
+            600,
+            512,
+            4
+          ]
+        },
+        {
+          "file": "h_multi/multiotsu_label_map_original.png",
+          "bytes": 4752,
+          "sha256": "9bba5530ee9ad9ca7b672b4ab1500431f737330fb16c841198e20c5bcab4f13c",
+          "shape": [
+            600,
+            512,
+            3
+          ]
+        },
+        {
+          "file": "h_multi/multiotsu_mask_original.png",
+          "bytes": 2699,
+          "sha256": "560f44e2919e5116595a5c1d707afc5b2741f2c66f29f2a4cab9e94ed177a13e",
+          "shape": [
+            600,
+            512
+          ]
+        },
+        {
+          "file": "h_multi/multiotsu_cutout_original.png",
+          "bytes": 504470,
+          "sha256": "371e4d622ba935ab8a3b7c7fd5af7d9775f70cf9a44419f253eefe48bb7913f6",
+          "shape": [
+            600,
+            512,
+            4
+          ]
+        }
+      ],
+      "pageErrors": [],
+      "photoSha256": "a8ca6d734765703b09728ab47fe59f473d93ae3967fc24c7c0288c3c7adb7130"
+    }
+  },
+  "sourceHashes": {
+    "sample_images/circle_black_on_white.png": "04db86b7d1147ad8844d6e7bcd8770a788c63a4959460469778c66e185860a6c",
+    "ground_truth/circle_black_on_white_gt.png": "6b0ca1952ddd6a86ddc06f58ce88f1a2cfd7e9ab41ca293111f3cb826bae355e",
+    "sample_images/bright_rect_on_dark.png": "aaff2d93500b5f3c0e115d15dab66c091e5e447c995bb532dbe387d19d033aec",
+    "ground_truth/bright_rect_on_dark_gt.png": "c44c3069f01203430c4c500babbeb4c97bb9d1d85ba2c8a8cacc37603c79b7b1",
+    "sample_images/multi_shapes_color.png": "18064984249e123e58f7c55605055ad8bb61a84253d467f7af8de35937fd61bb",
+    "ground_truth/multi_shapes_color_gt.png": "2be6a8325bbfc4676628441f45248e35afa94e4c3f5f73e273c461f92f6dd693",
+    "sample_images/gray_levels_objects.png": "7e429a420e8fe874a5a17b5d2f13edc4a9ba3fdb3d05aa0474300e179ac45f0f",
+    "ground_truth/gray_levels_objects_gt.png": "ca948d842831e5ddcda08058976635a88c34d06b836f0c5ce8c83c50d61f83bc",
+    "sample_images/noisy_circle.png": "9bd85975dec3c54ba93658b384886c779bc3e486ec09647112b7eaa5b812331a",
+    "ground_truth/noisy_circle_gt.png": "6b0ca1952ddd6a86ddc06f58ce88f1a2cfd7e9ab41ca293111f3cb826bae355e",
+    "sample_images/low_contrast.png": "d38c087e6aa235d4088e324feec9232dd01401ef029c53ef1cd139f7a2f156a6",
+    "ground_truth/low_contrast_gt.png": "ce15e933c34f9c64ff29feab09de12ca033386d70161cdbc2da9a3eeb859d8ba",
+    "sample_images/uniform_gray.png": "5ec3043a8c1b85afe9629c919875d17b330cdcf457c593ee54f9515a6dfc0423",
+    "sample_images/rgb_regions.png": "9c9b5450220c3a28fb55dd6eae3f4745710f33c14c2458bb6e0545616173fc00",
+    "sample_images/tiny_10x10.png": "9024fa80b2b75e0a56968ee93902b8647d968d87f426e45350c5165178d63991",
+    "ground_truth/tiny_10x10_gt.png": "a93fe31c1641c91e33cbf1bd5cb8b0057696f08c6ccea1d44644c3de20fa7102",
+    "sample_csv/csv_rectangle_32x32.csv": "718d127d6f2526fdb1305af7af956b906aeaea61742a8b7fdfd7b522e4e02a61",
+    "ground_truth/csv_rectangle_32x32_gt.png": "a4e6cf8d54918858611aa236b7b01d2222ce93120f1f2f51713bc12f96a1c040",
+    "sample_csv/textbook_otsu_5x6.csv": "6390fd1b25609dd307992e61c47f696f1228c5078c2efd262a0abe821cdb97f8"
+  },
+  "export_checks": {
+    "status": "PASS",
+    "files": 47,
+    "circle_iou_kmeans": 1,
+    "circle_iou_otsu": 1,
+    "repeated_kmeans_files_identical": true
+  },
+  "baseline_commit": "0c84423",
+  "opencv_audit": {
+    "status": "PASS",
+    "python_files": 39,
+    "requirements": [
+      "requirements-dev.in",
+      "requirements-dev.txt",
+      "requirements.in",
+      "requirements.txt"
+    ],
+    "roots": [
+      "matplotlib",
+      "numpy",
+      "pandas",
+      "pillow",
+      "pip-tools",
+      "pytest",
+      "ruff",
+      "streamlit"
+    ],
+    "checked_active_distributions": [
+      "altair",
+      "anyio",
+      "attrs",
+      "build",
+      "certifi",
+      "charset-normalizer",
+      "click",
+      "colorama",
+      "contourpy",
+      "cycler",
+      "fonttools",
+      "h11",
+      "idna",
+      "iniconfig",
+      "itsdangerous",
+      "jinja2",
+      "jsonschema",
+      "jsonschema-specifications",
+      "kiwisolver",
+      "markupsafe",
+      "matplotlib",
+      "narwhals",
+      "numpy",
+      "packaging",
+      "pandas",
+      "pillow",
+      "pip",
+      "pip-tools",
+      "pluggy",
+      "protobuf",
+      "pyarrow",
+      "pydeck",
+      "pygments",
+      "pyparsing",
+      "pyproject-hooks",
+      "pytest",
+      "python-dateutil",
+      "python-multipart",
+      "referencing",
+      "requests",
+      "rpds-py",
+      "ruff",
+      "setuptools",
+      "six",
+      "starlette",
+      "streamlit",
+      "typing-extensions",
+      "tzdata",
+      "urllib3",
+      "uvicorn",
+      "watchdog",
+      "websockets",
+      "wheel"
+    ],
+    "cv2_module_installed": false
+  },
+  "pytest": {
+    "name": "pytest",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0",
+    "tests": "616",
+    "time": "58.400"
+  }
+}

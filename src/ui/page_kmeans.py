@@ -32,7 +32,7 @@ from src.utils.metrics import compare_masks
 RESULT_KEY = "km_result"
 DEFAULTS = {"k": 3, "feature": "RGB (3 kênh)", "init": "K-means++", "max_iter": 100, "tol": 1e-4, "seed": 0}
 FEATURE_OPTIONS = {"RGB (3 kênh)": "rgb", "CIE L*a*b* (3 kênh, theo cảm nhận)": "lab", "Mức xám (1 kênh)": "gray"}
-FEATURE_NAMES = {"rgb": "RGB", "lab": "CIE L*a*b*", "gray": "mức xám"}
+FEATURE_NAMES = {"rgb": "RGB", "lab": r"CIE L\*a\*b\*", "gray": "mức xám"}
 UI_MAX_K = 16  # giới hạn thanh trượt cho tiện dùng; thuật toán không giới hạn K
 INIT_OPTIONS = {"K-means++": "kmeans++", "Ngẫu nhiên (random)": "random"}
 
