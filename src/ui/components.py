@@ -152,6 +152,8 @@ def input_summary(ctx) -> None:
                 f"Kết quả trên màn hình và tệp xuất mặc định có kích thước {pw}×{ph}.")
     for note in loaded.notes:
         st.caption("ℹ️ " + note)
+    if ctx.ground_truth_warning:
+        st.warning(ctx.ground_truth_warning)
 
 
 def require_input():

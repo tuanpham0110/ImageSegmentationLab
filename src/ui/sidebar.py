@@ -17,6 +17,7 @@ from src.ui.state import (
     load_manifest,
     set_context,
 )
+from src.utils.image_io import read_input_bytes
 
 SOURCES = ["Ảnh mẫu", "Tải tệp lên"]
 
@@ -45,7 +46,7 @@ def render_input_sidebar() -> None:
             st.error(manifest_error)
         source = st.radio("Nguồn dữ liệu", SOURCES, key="input_source", horizontal=True, label_visibility="collapsed")
 
-        data = name = sample = gt_bytes = None
+        data = name = sample = gt_path = None
         if source == "Ảnh mẫu":
             if not samples:
                 message = "Không có ảnh mẫu. Chọn Tải tệp lên để dùng ảnh hoặc CSV trên máy."
@@ -58,14 +59,15 @@ def render_input_sidebar() -> None:
             sample = next(s for s in samples if s["id"] == sid)
             path = DATA_DIR / sample["file"]
             try:
-                data, name = path.read_bytes(), path.name
-                if sample["ground_truth"]:
-                    gt_bytes = (DATA_DIR / sample["ground_truth"]).read_bytes()
-            except OSError as exc:
-                message = f"Không đọc được dữ liệu ảnh mẫu: {exc}. Hãy kiểm tra thư mục data/ hoặc tải tệp lên."
+                data, name = read_input_bytes(path), path.name
+            except (InputError, MemoryError) as exc:
+                reason = str(exc) or "Không đủ bộ nhớ để đọc ảnh."
+                message = f"Không đọc được dữ liệu ảnh mẫu. {reason} Hãy kiểm tra thư mục data/ hoặc tải tệp lên."
                 set_context(None, message)
                 st.error(message)
                 return
+            if sample["ground_truth"]:
+                gt_path = DATA_DIR / sample["ground_truth"]
         else:
             uploaded = st.file_uploader(
                 "Ảnh PNG/JPG/BMP hoặc ma trận CSV",
@@ -95,13 +97,13 @@ def render_input_sidebar() -> None:
             return
         try:
             ctx = build_context(data, name, int(st.session_state["max_side"]), st.session_state["gray_method"],
-                                sample, gt_bytes, median_size=int(st.session_state["median_size"]))
+                                sample, gt_path=gt_path, median_size=int(st.session_state["median_size"]))
         except MemoryError:
             message = "Không đủ bộ nhớ để đọc ảnh. Hãy thu nhỏ ảnh trước khi tải lên hoặc giải phóng RAM rồi thử lại."
             set_context(None, message)
             status.error(message)
             return
-        except (InputError, ValueError) as exc:
+        except ValueError as exc:
             set_context(None, str(exc))
             status.error(str(exc))
             return

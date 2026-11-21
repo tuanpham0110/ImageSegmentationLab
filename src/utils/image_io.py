@@ -57,6 +57,23 @@ MASK_TRANSPARENCY_ERROR = (
 )
 
 
+def _rgb_is_gray(pixels: np.ndarray) -> bool:
+    return np.array_equal(pixels[..., 0], pixels[..., 1]) and np.array_equal(pixels[..., 1], pixels[..., 2])
+
+
+def _binary_reference_mask(pixels: np.ndarray, white: int = 255) -> np.ndarray:
+    """Xác nhận một cách mã hóa nhị phân và đưa nhãn về uint8 0/255."""
+    message = f"Mask tham chiếu phải là mask nhị phân 0/1 hoặc 0/{white}; 0 là nền."
+    if pixels.ndim == 3:
+        if not _rgb_is_gray(pixels):
+            raise InputError(message)
+        pixels = pixels[..., 0]
+    foreground = pixels.max()
+    if foreground not in (0, 1, white) or np.any((pixels != 0) & (pixels != foreground)):
+        raise InputError(message)
+    return (pixels != 0).astype(np.uint8) * np.uint8(255)
+
+
 def _composite_alpha(img: Image.Image, notes: list[str], reject_transparency: bool = False) -> Image.Image:
     """Ghép ảnh có kênh alpha lên nền trắng (pixel trong suốt trở thành trắng).
 
@@ -113,14 +130,14 @@ def _png16_low_bytes(data: bytes) -> np.ndarray | None:
         return None
 
 
-def _png16_logical_mask(img: Image.Image, data: bytes, color_type: int) -> np.ndarray | None:
+def _png16_logical_mask(img: Image.Image, data: bytes, color_type: int, *, strict: bool = False) -> np.ndarray | None:
     """Giữ nhãn 0/1 ở độ sâu gốc và kiểm tra mask đục trước khi đọc độ sáng."""
     high = np.asarray(img)
     has_alpha = color_type in (4, 6)
     if has_alpha and np.any(high[..., 3] != 255):
         raise InputError(MASK_TRANSPARENCY_ERROR)
     has_high_color = np.any(high[..., :3])
-    if has_high_color and not has_alpha:
+    if has_high_color and not has_alpha and not strict:
         return None  # Ảnh không thể là mask 0/1 và không cần kiểm tra alpha.
     low = _png16_low_bytes(data)
     if low is None:
@@ -131,6 +148,11 @@ def _png16_logical_mask(img: Image.Image, data: bytes, color_type: int) -> np.nd
     if has_alpha and np.any(low[..., 3] != 255):
         raise InputError(MASK_TRANSPARENCY_ERROR)
     color = low[..., 1:2] if color_type == 4 else low[..., :3]
+    if strict:
+        if color_type != 4 and (not _rgb_is_gray(high) or not _rgb_is_gray(color)):
+            raise InputError("Mask tham chiếu phải là mask nhị phân với ba kênh màu bằng nhau.")
+        gray = (high[..., 0].astype(np.uint16) << 8) | color[..., 0]
+        return _binary_reference_mask(gray, white=65535)
     if not has_high_color and np.all(color <= 1) and np.all(color == color[..., :1]):
         return color[..., 0] * np.uint8(255)
     return None
@@ -162,7 +184,7 @@ def load_image_bytes(data: bytes, name: str = "image") -> LoadedImage:
     return _load_image_bytes(data, name, normalize_high_depth=True)
 
 
-def _load_image_bytes(data: bytes, name: str, *, normalize_high_depth: bool) -> LoadedImage:
+def _load_image_bytes(data: bytes, name: str, *, normalize_high_depth: bool, strict_mask: bool = False) -> LoadedImage:
     """Dùng chung kiểm tra/giải mã; mask giữ thang sáng tuyệt đối thay vì giãn tương phản."""
     ext = Path(name).suffix.lower()
     if ext and ext not in SUPPORTED_IMAGE_EXTS:
@@ -175,6 +197,8 @@ def _load_image_bytes(data: bytes, name: str, *, normalize_high_depth: bool) -> 
     try:
         with Image.open(io.BytesIO(data)) as img:
             fmt = img.format or ext.lstrip(".").upper()
+            if strict_mask and fmt not in ("PNG", "BMP"):
+                raise InputError(f"Nội dung tệp mask là định dạng {fmt}; chỉ nhận ảnh mask PNG/BMP.")
             if fmt not in ("PNG", "JPEG", "BMP", "MPO"):
                 raise InputError(f"Nội dung tệp là định dạng {fmt}, không phải PNG/JPG/BMP.")
             w, h = img.size
@@ -183,6 +207,10 @@ def _load_image_bytes(data: bytes, name: str, *, normalize_high_depth: bool) -> 
                     f"Ảnh quá lớn ({w} x {h} = {w * h / 1e6:.1f} triệu pixel). Giới hạn {MAX_DECODE_PIXELS / 1e6:.0f} triệu pixel."
                 )
             png_depth = _png_bit_depth(data) if fmt == "PNG" else None
+            if fmt == "PNG":
+                # load() có thể giải mã được pixel ngay cả khi CRC IDAT sai hoặc thiếu IEND.
+                with Image.open(io.BytesIO(data), formats=("PNG",)) as checker:
+                    checker.verify()
             _scale_low_depth_gray_key(img, png_depth)
             # PNG màu 16 bit: Pillow chỉ giữ byte cao của mỗi kênh, còn khóa tRNS vẫn ở thang
             # 0–65535 nên không thể so khớp đúng pixel trong suốt -> từ chối thay vì đọc sai âm thầm.
@@ -201,7 +229,8 @@ def _load_image_bytes(data: bytes, name: str, *, normalize_high_depth: bool) -> 
             mask16 = (png_depth[1] if not normalize_high_depth and png_depth is not None
                       and png_depth[0] == 16 and png_depth[1] in (2, 4, 6) else None)
             arr, mode = _decoded_array(img, notes, normalize_high_depth,
-                                       png16_mask=(data, mask16) if mask16 is not None else None)
+                                       png16_mask=(data, mask16) if mask16 is not None else None,
+                                       strict_mask=strict_mask)
     except InputError:
         raise
     except (UnidentifiedImageError, OSError, SyntaxError, ValueError, Image.DecompressionBombError) as exc:
@@ -218,7 +247,7 @@ def _load_image_bytes(data: bytes, name: str, *, normalize_high_depth: bool) -> 
 
 
 def _decoded_array(img: Image.Image, notes: list[str], normalize_high_depth: bool,
-                   png16_mask: tuple[bytes, int] | None = None) -> tuple[np.ndarray, str]:
+                   png16_mask: tuple[bytes, int] | None = None, *, strict_mask: bool = False) -> tuple[np.ndarray, str]:
     orientation = img.getexif().get(0x0112, 1)  # thẻ EXIF Orientation
     if orientation not in (1, None):
         img = ImageOps.exif_transpose(img)
@@ -226,7 +255,7 @@ def _decoded_array(img: Image.Image, notes: list[str], normalize_high_depth: boo
     mode = img.mode
 
     if png16_mask is not None:
-        logical = _png16_logical_mask(img, *png16_mask)
+        logical = _png16_logical_mask(img, *png16_mask, strict=strict_mask)
         if logical is not None:
             return logical, mode
 
@@ -241,6 +270,8 @@ def _decoded_array(img: Image.Image, notes: list[str], normalize_high_depth: boo
         has_transparency = hidden is not None and hidden.any()
         if has_transparency and not normalize_high_depth:
             raise InputError(MASK_TRANSPARENCY_ERROR)
+        if strict_mask:
+            return _binary_reference_mask(raw, white=65535), mode
         if normalize_high_depth:
             if has_transparency:
                 visible = ~hidden
@@ -276,7 +307,10 @@ def _decoded_array(img: Image.Image, notes: list[str], normalize_high_depth: boo
         if mode not in ("RGB",):
             notes.append(f"Ảnh chế độ {mode} được chuyển sang RGB.")
 
-    if arr.ndim == 3 and np.array_equal(arr[..., 0], arr[..., 1]) and np.array_equal(arr[..., 1], arr[..., 2]):
+    if strict_mask:
+        return _binary_reference_mask(arr), mode
+
+    if arr.ndim == 3 and _rgb_is_gray(arr):
         arr = arr[..., 0].copy()
         notes.append("Ảnh có R = G = B tại mọi pixel nên được xử lý như ảnh xám 1 kênh.")
 
@@ -408,12 +442,29 @@ def load_any(data: bytes, name: str) -> LoadedImage:
     return load_image_bytes(data, name)
 
 
+def read_input_bytes(path: str | Path) -> bytes:
+    """Đọc tệp đầu vào cục bộ với cùng giới hạn dung lượng như tệp tải lên."""
+    p = Path(path)
+    try:
+        with p.open("rb") as stream:
+            data = stream.read(MAX_FILE_BYTES + 1)
+    except FileNotFoundError as exc:
+        raise InputError(f"Không tìm thấy tệp '{p.name}'.") from exc
+    except PermissionError as exc:
+        raise InputError(f"Không có quyền đọc tệp '{p.name}'.") from exc
+    except (OSError, ValueError) as exc:
+        raise InputError(f"Không đọc được tệp '{p.name}': {exc}.") from exc
+    if len(data) > MAX_FILE_BYTES:
+        raise InputError(f"Tệp '{p.name}' quá lớn. Giới hạn {MAX_FILE_BYTES:,} byte.")
+    return data
+
+
 def load_path(path: str | Path) -> LoadedImage:
     p = Path(path)
-    return load_any(p.read_bytes(), p.name)
+    return load_any(read_input_bytes(p), p.name)
 
 
-def load_mask_bytes(data: bytes, name: str = "mask.png") -> np.ndarray:
+def load_mask_bytes(data: bytes, name: str = "mask.png", *, strict: bool = False) -> np.ndarray:
     """Đọc mask PNG/BMP/CSV, trả uint8 0/255.
 
     Mask chỉ chứa 0/1 được hiểu là nhãn nhị phân (1 = đối tượng), kể cả toàn 1.
@@ -422,9 +473,13 @@ def load_mask_bytes(data: bytes, name: str = "mask.png") -> np.ndarray:
     Không giãn tương phản mask: ảnh trắng 16 bit giữ nguyên toàn đối tượng.
     Mask có pixel trong suốt (alpha < 255 hoặc khớp khóa tRNS) bị từ chối; mask RGBA/LA
     đục hoàn toàn vẫn được nhận.
+    strict=True dùng cho đánh giá: PNG/BMP phải có nhãn 0/1 hoặc đen/trắng ở độ sâu gốc.
     """
-    loaded = (load_csv_bytes(data, name) if Path(name).suffix.lower() == ".csv"
-              else _load_image_bytes(data, name, normalize_high_depth=False))
+    if Path(name).suffix.lower() == ".csv":
+        return _binary_reference_mask(load_csv_bytes(data, name).array)
+    loaded = _load_image_bytes(data, name, normalize_high_depth=False, strict_mask=strict)
+    if strict:
+        return loaded.array
     arr = loaded.array if loaded.array.ndim == 2 else loaded.array.mean(axis=2)
     png_depth = _png_bit_depth(data)
     high_depth = (loaded.original_mode in ("I;16", "I;16B", "I;16L", "I", "F")
@@ -432,9 +487,6 @@ def load_mask_bytes(data: bytes, name: str = "mask.png") -> np.ndarray:
     # Không nhận nhầm ảnh 16 bit gần đen (ví dụ 256 -> 1 sau giảm bit) là
     # nhãn 0/1. Nhãn xám 16 bit thật đã được nhận diện ở thang gốc phía trên.
     logical = not high_depth and np.all((arr == 0) | (arr == 1))
-    if loaded.file_format == "CSV" and not logical and not np.all((arr == 0) | (arr == 255)):
-        raise InputError("CSV ground truth phải là mask nhị phân 0/1 hoặc 0/255. "
-                         "Không dùng ma trận nhãn nhiều cụm hoặc bảng thống kê làm ground truth.")
     return np.where(arr > (0 if logical else 127), 255, 0).astype(np.uint8)
 
 
@@ -457,7 +509,10 @@ def to_png_bytes(array: np.ndarray) -> bytes:
 
 
 def matrix_to_csv_bytes(matrix: np.ndarray) -> bytes:
-    """Ghi ma trận 2 chiều số nguyên thành CSV (không tiêu đề), đọc lại được bằng parse_csv_matrix."""
+    """Ghi ma trận số nguyên thành CSV không tiêu đề.
+
+    Ma trận thuộc miền 0..255 và trong giới hạn số ô đọc lại được bằng parse_csv_matrix.
+    """
     m = np.asarray(matrix)
     if m.ndim != 2 or m.size == 0:
         raise ValueError("Chỉ ghi được ma trận 2 chiều không rỗng ra CSV.")

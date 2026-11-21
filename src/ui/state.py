@@ -17,7 +17,7 @@ import streamlit as st
 from PIL import Image
 
 from src.processing.pipeline import PreparedInput, fit_ground_truth, prepare_input
-from src.utils.image_io import InputError, LoadedImage, load_any, load_mask_bytes
+from src.utils.image_io import InputError, LoadedImage, load_any, load_mask_bytes, load_path, read_input_bytes
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT / "data"
@@ -39,6 +39,7 @@ class InputContext:
     signature: str
     sample: dict | None  # mục trong samples.json nếu là ảnh mẫu
     ground_truth: np.ndarray | None  # mask GT ở kích thước xử lý (nếu có)
+    ground_truth_warning: str | None = None
 
 
 @st.cache_data(show_spinner=False)
@@ -87,7 +88,7 @@ def _prepare(data: bytes, name: str, max_side: int, gray_method: str, median_siz
 
 @st.cache_data(show_spinner=False, max_entries=32)
 def thumbnail(path: str, size: int = 220) -> np.ndarray:
-    loaded = load_any(Path(path).read_bytes(), Path(path).name)
+    loaded = load_path(path)
     img = Image.fromarray(loaded.array)
     resample = Image.Resampling.NEAREST if max(img.size) < size else Image.Resampling.BOX
     scale = size / max(img.size)
@@ -95,8 +96,8 @@ def thumbnail(path: str, size: int = 220) -> np.ndarray:
 
 
 def build_context(data: bytes, name: str, max_side: int, gray_method: str, sample: dict | None,
-                  gt_bytes: bytes | None = None, median_size: int = 1) -> InputContext:
-    """Đọc + chuẩn bị đầu vào. Ném InputError nếu dữ liệu không hợp lệ."""
+                  *, gt_path: Path | None = None, median_size: int = 1) -> InputContext:
+    """Chuẩn bị ảnh nguồn và thử nạp mask tham chiếu tùy chọn."""
     digest = hashlib.sha1(data).hexdigest()[:16]
     current = get_context()
     if current is not None and current.signature.split("|", 1)[0] == digest and current.loaded.source_name == name:
@@ -105,10 +106,16 @@ def build_context(data: bytes, name: str, max_side: int, gray_method: str, sampl
         loaded = _load(data, name)
     prepared = _prepare(data, name, max_side, gray_method, median_size, _loaded=loaded)
     signature = f"{digest}|{max_side}|{gray_method}|m{median_size}|{name}"
-    gt = None
-    if gt_bytes is not None:
-        gt = fit_ground_truth(load_mask_bytes(gt_bytes, "gt.png"), prepared)
-    return InputContext(loaded=loaded, prepared=prepared, signature=signature, sample=sample, ground_truth=gt)
+    gt, warning = None, None
+    if gt_path is not None:
+        try:
+            mask = load_mask_bytes(read_input_bytes(gt_path), gt_path.name, strict=True)
+            gt = fit_ground_truth(mask, prepared)
+        except (ValueError, MemoryError) as exc:
+            reason = str(exc) or "Không đủ bộ nhớ để xử lý mask."
+            warning = f"Không dùng được mask tham chiếu của ảnh mẫu. {reason} Vẫn có thể phân đoạn và tải kết quả."
+    return InputContext(loaded=loaded, prepared=prepared, signature=signature, sample=sample,
+                        ground_truth=gt, ground_truth_warning=warning)
 
 
 def set_context(ctx: InputContext | None, error: str | None = None) -> None:

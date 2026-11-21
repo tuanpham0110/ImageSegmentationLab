@@ -31,7 +31,7 @@ from src.ui.state import (
     store_uploaded_gt,
     store_uploaded_gt_error,
 )
-from src.utils.image_io import InputError, load_mask_bytes
+from src.utils.image_io import load_mask_bytes
 from src.utils.metrics import compare_masks
 
 RESULT_KEY = "cmp_result"
@@ -55,7 +55,8 @@ def _ground_truth_uploader(ctx) -> tuple[np.ndarray | None, str | None, bool]:
     key = f"cmp_gt_upload_{ctx.signature}"
     gt_file = st.file_uploader("Ground-truth mask (tuỳ chọn, PNG/BMP/CSV)", type=["png", "bmp", "csv"],
                                key=key, on_change=_on_gt_upload_change, args=(key,),
-                               help="Nhận mask 0/1 (1 = đối tượng) hoặc 0/255 (trắng = đối tượng). "
+                               help="Nhận mask nhị phân 0/1 hoặc đen/trắng (0/255, PNG 16 bit dùng 0/65535). "
+                                    "0 là nền, giá trị dương là đối tượng. "
                                     "CSV là ma trận không có tiêu đề, không phải ma trận nhãn nhiều cụm. "
                                     "Mask gắn với ảnh đầu vào hiện tại. Khi đổi ảnh hoặc tiền xử lý, hãy tải lại mask. "
                                     "Mask phải đục (không có vùng trong suốt).")
@@ -63,8 +64,8 @@ def _ground_truth_uploader(ctx) -> tuple[np.ndarray | None, str | None, bool]:
     if gt_file is not None and (stored is None or stored["file_id"] != gt_file.file_id):
         clear_uploaded_gt()
         try:
-            mask = fit_ground_truth(load_mask_bytes(gt_file.getvalue(), gt_file.name), ctx.prepared)
-        except (InputError, ValueError, MemoryError) as exc:
+            mask = fit_ground_truth(load_mask_bytes(gt_file.getvalue(), gt_file.name, strict=True), ctx.prepared)
+        except (ValueError, MemoryError) as exc:
             # Lưu cả trạng thái lỗi: quay lại trang không được lặng lẽ dùng GT mẫu.
             reason = str(exc) or ("không đủ bộ nhớ để xử lý mask" if isinstance(exc, MemoryError)
                                   else type(exc).__name__)

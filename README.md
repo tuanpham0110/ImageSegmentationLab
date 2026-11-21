@@ -71,11 +71,11 @@ Chọn dữ liệu ở thanh bên.
 2. Xem ảnh nhị phân, mask và **Histogram & phương sai**. Ca hình tròn có ngưỡng 127 theo quy tắc chọn ngưỡng đồng hạng. Ở chế độ **Thủ công**, chọn T trong **Ngưỡng thủ công & hậu xử lý**. **Multi-Otsu · 3 lớp** tự tìm hai ngưỡng.
 3. Sau khi đổi thiết lập Otsu, bấm **Chạy Otsu** để cập nhật kết quả tải xuống.
 
-Trang **So sánh thuật toán** chạy cả hai phương pháp trên cùng đầu vào. Mục **Đánh giá** tính IoU/Dice với ảnh mẫu có mask tham chiếu hoặc khi người dùng tải mask nhị phân PNG, BMP hoặc CSV. Mask tải lên cần khớp kích thước ảnh gốc hoặc kích thước xử lý. CSV tham chiếu dùng cặp giá trị 0/1 hoặc 0/255, trong đó giá trị dương là đối tượng.
+Trang **So sánh thuật toán** chạy cả hai phương pháp trên cùng đầu vào. Mục **Đánh giá** tính IoU/Dice với mask tham chiếu hợp lệ của ảnh mẫu hoặc mask PNG, BMP hoặc CSV tải lên. Mask cần khớp kích thước ảnh gốc sau khi áp dụng EXIF hoặc kích thước xử lý. Dùng một cặp giá trị `0/1` hoặc `0/255`. Riêng PNG 16 bit dùng `0/1` hoặc `0/65535` ở độ sâu gốc. Số `0` là nền và giá trị dương là đối tượng. Mask ảnh phải đục, có ba kênh bằng nhau nếu lưu dạng RGB. Khi mask mẫu thiếu hoặc lỗi, vẫn có thể phân đoạn, tải kết quả và dùng mask hợp lệ khác để đánh giá.
 
 ### Định dạng CSV
 
-Dùng ma trận mức xám hai chiều, mã hóa UTF-8 có hoặc không BOM. Mỗi hàng có cùng số cột, không có tiêu đề và mỗi ô là giá trị nguyên từ 0 đến 255. Có thể phân cách bằng dấu phẩy, dấu chấm phẩy, tab hoặc khoảng trắng. Giới hạn 4.194.304 ô.
+Dùng ma trận mức xám hai chiều, mã hóa UTF-8 có hoặc không BOM, tối đa 4.194.304 ô. Mỗi dòng dữ liệu là một hàng ảnh, mỗi cột là một pixel. Các hàng có cùng số cột và mỗi ô chứa một giá trị nguyên từ 0 đến 255. Bỏ qua dòng trống. Dùng một kiểu dấu phân cách cho cả tệp, chọn dấu phẩy, dấu chấm phẩy, tab hoặc khoảng trắng. Tệp ma trận không có hàng tiêu đề.
 
 ```csv
 0,0,255,255
@@ -87,9 +87,11 @@ Dùng ma trận mức xám hai chiều, mã hóa UTF-8 có hoặc không BOM. M�
 
 ### Lưu kết quả
 
-Vào tab **Tải xuống** sau khi chạy. Các trang thuật toán xuất PNG ảnh phân đoạn, mask 0/255 hoặc ảnh RGBA nền trong suốt, cùng CSV và JSON thống kê. Trang **So sánh thuật toán** có gói ZIP chứa kết quả của cả hai phương pháp. Trình duyệt quản lý vị trí lưu.
+Vào tab **Tải xuống** sau khi chạy. Các trang thuật toán xuất PNG ảnh phân đoạn, mask 0/255 hoặc ảnh RGBA nền trong suốt, cùng CSV và JSON thống kê. Trang **So sánh thuật toán** có gói ZIP chứa kết quả của cả hai phương pháp. Ứng dụng tạo tệp trong bộ nhớ với tên cố định theo loại kết quả. Trình duyệt chọn đường dẫn lưu, kiểm tra quyền ghi và xử lý trùng tên. Nếu trình duyệt báo lỗi lưu, chọn thư mục có quyền ghi. Tệp nguồn được giữ nguyên.
 
-Nếu ảnh đã thu nhỏ, chọn **Thêm PNG kích thước gốc** ở từng trang thuật toán để ánh xạ mask và nhãn về độ phân giải nguồn. CSV và ZIP so sánh dùng kích thước xử lý. Khi đổi ảnh đầu vào, chạy lại để có kết quả tương ứng.
+`kmeans_labels.csv`, `multiotsu_labels.csv` và `otsu_binary_matrix.csv` là ma trận có thể đọc lại. Hai tệp nhãn giữ chỉ số lớp và `otsu_binary_matrix.csv` giữ mask foreground 0/1 sau khi chọn lớp. Các CSV thống kê cụm hoặc histogram có tiêu đề và dùng để đọc dưới dạng bảng.
+
+Ảnh nguồn sau giải mã là ma trận `uint8` mức xám hoặc RGB. Ảnh gốc xem cạnh kết quả dùng cùng kích thước xử lý, có ghi rõ nếu đã thu nhỏ. PNG mask giữ một kênh, ảnh màu dùng RGB và cutout trong suốt dùng RGBA. Nếu muốn ánh xạ nhãn và mask về độ phân giải nguồn, chọn **Thêm PNG kích thước gốc** ở từng trang thuật toán. CSV và ZIP so sánh dùng kích thước xử lý. Khi đổi ảnh đầu vào, chạy lại để có kết quả tương ứng.
 
 ## 3. Cấu trúc dự án
 

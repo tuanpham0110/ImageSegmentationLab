@@ -85,7 +85,8 @@ def test_comparison_accepts_logical_ground_truth_and_reports_real_scores(suffix)
     np.testing.assert_array_equal(app.session_state["cmp_uploaded_gt"]["mask"], gt)
 
 
-def test_comparison_rejects_multiclass_csv_without_using_sample_ground_truth():
+@pytest.mark.parametrize("suffix", ["csv", "png"])
+def test_comparison_rejects_multilevel_mask_without_using_sample_ground_truth(suffix):
     app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=60)
     app.session_state["_test_page"] = "compare"
     app.session_state["cmp_result_tab"] = "Đánh giá"
@@ -93,7 +94,11 @@ def test_comparison_rejects_multiclass_csv_without_using_sample_ground_truth():
     app.run()
     next(b for b in app.button if b.label.startswith("Chạy K-means")).click().run()
     assert any("IoU" in df.value.columns for df in app.dataframe)
-    app.file_uploader[0].set_value(("cluster_labels.csv", b"0,1,2\n2,1,0", "text/csv")).run()
+    pixels = np.zeros((256, 256), dtype=np.uint8)
+    pixels[0, :3] = (0, 128, 255)
+    content = to_png_bytes(pixels) if suffix == "png" else matrix_to_csv_bytes(pixels)
+    mime = "image/png" if suffix == "png" else "text/csv"
+    app.file_uploader[0].set_value((f"multilevel.{suffix}", content, mime)).run()
     assert not app.exception
     assert any("mask nhị phân" in error.value for error in app.error)
     assert not any("IoU" in df.value.columns for df in app.dataframe)

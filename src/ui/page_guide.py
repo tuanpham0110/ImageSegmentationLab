@@ -12,7 +12,7 @@ def render() -> None:
     st.markdown("""
 #### 1. Chọn dữ liệu đầu vào (thanh bên trái)
 - **Ảnh mẫu**: chọn trong danh sách, hoặc vào trang *Thư viện ảnh mẫu* và bấm **Dùng ảnh này**.
-- **Tải tệp lên**: PNG, JPG/JPEG, BMP hoặc CSV, tối đa 30 MB và 40 triệu pixel.
+- **Tải tệp lên**: PNG, JPG/JPEG, BMP hoặc CSV. Tối đa 30 MiB mỗi tệp và 40 triệu pixel với ảnh.
   - Ảnh có kênh trong suốt (alpha) được ghép lên nền trắng; ảnh có thẻ EXIF hướng chụp được xoay đúng chiều.
   - Ảnh RGB có R = G = B ở mọi pixel được xử lý như ảnh xám.
 - **Giới hạn cạnh dài khi xử lý**: ảnh lớn hơn được thu nhỏ (giữ tỉ lệ) để chạy nhanh; kích thước thật được ghi rõ trên mỗi trang.
@@ -21,7 +21,8 @@ def render() -> None:
 #### 2. Định dạng CSV
 - Ma trận **2 chiều** mức xám: mỗi dòng là một hàng ảnh, mỗi giá trị là **số nguyên 0–255**.
 - Phân cách bằng dấu phẩy `,` (cũng nhận `;`, tab hoặc khoảng trắng); **không có dòng tiêu đề**; mọi dòng cùng số cột.
-- Tối đa 4.194.304 ô. Có thể có một dấu phân cách thừa ở cuối dòng. Ô rỗng có dấu nháy hoặc chứa khoảng trắng bị báo lỗi.
+- Mã hóa UTF-8, có thể có BOM. Bỏ qua dòng trống và dùng cùng một kiểu dấu phân cách cho cả ma trận.
+- Tối đa 4.194.304 ô. Với dấu phẩy, chấm phẩy hoặc tab, có thể có một dấu phân cách thừa cuối dòng. Ô rỗng bên trong ma trận bị báo lỗi.
 - Ví dụ 3×4:
 ```
 0,0,255,255
@@ -46,8 +47,10 @@ def render() -> None:
 
 #### 5. So sánh
 - Chạy K-means và Otsu trên cùng ảnh; so sánh ảnh kết quả và **mask nhị phân**.
-- IoU/Dice chỉ được tính khi có **ground truth** (ảnh mẫu có sẵn, hoặc tải mask PNG/BMP/CSV, cùng kích thước ảnh gốc
-  hoặc kích thước xử lý). Mask nhị phân **0/1**: 1 = đối tượng; mask **0/255**: trắng = đối tượng.
+- IoU/Dice chỉ được tính với **ground truth** hợp lệ từ ảnh mẫu hoặc mask PNG/BMP/CSV tải lên. Mask phải khớp kích thước
+  ảnh gốc sau áp dụng EXIF hoặc kích thước xử lý. Dùng cặp **0/1** hoặc **0/255**. PNG 16 bit dùng **0/1** hoặc **0/65535**.
+  Giá trị 0 là nền, giá trị dương là đối tượng. Mask ảnh phải đục và có các kênh màu bằng nhau nếu lưu dạng RGB.
+- Khi mask mẫu thiếu hoặc lỗi, vẫn có thể phân đoạn và tải kết quả. Có thể tải mask hợp lệ trong trang So sánh để chấm điểm.
 - Có thể tải lại `otsu_binary_matrix.csv` làm mask tham chiếu để kiểm tra dữ liệu xuất. Mask dự đoán của thuật toán
   không phải ground truth độc lập, nên độ trùng khớp khi so lại chính mask đó không đánh giá chất lượng phân đoạn.
 - Mask tải lên gắn với đầu vào hiện tại. Khi đổi ảnh hoặc tiền xử lý, hãy tải lại mask để tránh dùng nhầm ground truth.
@@ -66,8 +69,8 @@ def render() -> None:
 | `otsu_histogram.csv` | h(g) và σ²_B(g) cho 256 mức |
 | `*_stats.json` | Tham số và toàn bộ thống kê của lần chạy |
 
-Trình duyệt xử lý nơi lưu và xác nhận ghi đè. Bấm tải không chạy lại thuật toán hoặc thay đổi kết quả.
-Kiểm tra tệp trong mục tải xuống của trình duyệt. Nếu tạo tệp thất bại, trang hiển thị lỗi.
+Trình duyệt xử lý nơi lưu và xác nhận ghi đè. Ứng dụng tạo dữ liệu tải xuống với tên tệp cố định và giữ nguyên tệp nguồn.
+Nếu ứng dụng báo lỗi tạo tệp, có thể thử lại tab tải xuống sau khi xử lý lỗi. Nếu trình duyệt báo lỗi lưu, chọn thư mục có quyền ghi.
 Với ảnh đã thu nhỏ, tab Tải xuống của từng thuật toán có **Thêm PNG kích thước gốc**.
 Nhãn và mask được ánh xạ bằng láng giềng gần nhất. Ảnh tách nền lấy màu gốc theo mask đã ánh xạ.
 Các tệp CSV và ZIP so sánh dùng kích thước xử lý.

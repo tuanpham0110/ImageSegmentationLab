@@ -14,6 +14,7 @@ from src.utils.image_io import (
     load_csv_bytes,
     load_image_bytes,
     load_mask_bytes,
+    load_path,
     matrix_to_csv_bytes,
     parse_csv_matrix,
     to_png_bytes,
@@ -90,6 +91,48 @@ def test_invalid_file_rejected():
         load_image_bytes(b"", "empty.png")
     with pytest.raises(InputError):
         load_any(b"GIF89a", "anim.gif")
+
+
+@pytest.mark.parametrize("damage", ["idat_crc", "no_iend"])
+def test_png_with_damaged_chunk_structure_is_rejected(damage):
+    data = bytearray(to_png_bytes(np.arange(12, dtype=np.uint8).reshape(3, 4)))
+    if damage == "no_iend":
+        del data[-12:]
+    else:
+        idat = data.index(b"IDAT")
+        payload_size = int.from_bytes(data[idat - 4:idat], "big")
+        data[idat + 4 + payload_size] ^= 1
+    with pytest.raises(InputError, match="tệp hỏng"):
+        load_image_bytes(bytes(data), "broken.png")
+
+
+def test_load_path_reports_missing_and_unreadable_input(tmp_path, monkeypatch):
+    path = tmp_path / "input.png"
+    with pytest.raises(InputError, match="Không tìm thấy tệp 'input.png'"):
+        load_path(path)
+
+    def deny_read(*args, **kwargs):
+        raise PermissionError("read access denied")
+
+    monkeypatch.setattr(type(path), "open", deny_read)
+    with pytest.raises(InputError, match="Không có quyền đọc tệp 'input.png'"):
+        load_path(path)
+
+
+def test_load_path_bounds_local_byte_read_before_decoding(tmp_path, monkeypatch):
+    path = tmp_path / "input.csv"
+    monkeypatch.setattr(image_io, "MAX_FILE_BYTES", 8)
+    reads = []
+
+    class TrackedReader(io.BytesIO):
+        def read(self, size=-1):
+            reads.append(size)
+            return super().read(size)
+
+    monkeypatch.setattr(type(path), "open", lambda self, *args, **kwargs: TrackedReader(b"1,2\n" * 10))
+    with pytest.raises(InputError, match="quá lớn"):
+        load_path(path)
+    assert reads == [9]
 
 
 def test_too_large_image_rejected(monkeypatch):
@@ -290,6 +333,45 @@ def test_dark_16bit_color_mask_does_not_become_logical_foreground(color_type, pi
 def test_16bit_color_ground_truth_preserves_native_logical_labels(color_type, pixels):
     data = _png16(np.array(pixels, np.uint16), color_type)
     np.testing.assert_array_equal(load_mask_bytes(data), [[0, 255]])
+
+
+@pytest.mark.parametrize("color_type,channels", [(0, ()), (2, (0, 0)), (4, (65535,)), (6, (0, 0, 65535))])
+@pytest.mark.parametrize("foreground", [1, 65535, 256, 65280])
+def test_strict_16bit_ground_truth_checks_native_pixel_values(color_type, channels, foreground):
+    def pixel(value):
+        return (value,) + tuple(value if extra == 0 else extra for extra in channels)
+
+    pixels = np.array([[pixel(0), pixel(foreground)]], dtype=np.uint16)
+    data = _png16(pixels, color_type)
+    if foreground in (1, 65535):
+        np.testing.assert_array_equal(load_mask_bytes(data, strict=True), [[0, 255]])
+    else:
+        with pytest.raises(InputError, match="mask nhị phân"):
+            load_mask_bytes(data, strict=True)
+
+
+def test_strict_16bit_rgb_ground_truth_checks_low_bytes_of_each_channel():
+    data = _png16(np.array([[[65535, 65534, 65535]]], dtype=np.uint16), 2)
+    with pytest.raises(InputError, match="mask nhị phân"):
+        load_mask_bytes(data, strict=True)
+
+
+def test_strict_ground_truth_rejects_lossy_image_content_renamed_to_png():
+    data = encode(Image.fromarray(np.array([[0, 255]], dtype=np.uint8)), "JPEG")
+    with pytest.raises(InputError, match="PNG/BMP"):
+        load_mask_bytes(data, "mask.png", strict=True)
+
+
+@pytest.mark.parametrize("fmt,suffix", [("PNG", "png"), ("BMP", "bmp")])
+def test_strict_ground_truth_accepts_only_one_binary_encoding(fmt, suffix):
+    name = f"mask.{suffix}"
+    for white in (1, 255):
+        data = encode(Image.fromarray(np.array([[0, white, white]], dtype=np.uint8)), fmt)
+        np.testing.assert_array_equal(load_mask_bytes(data, name, strict=True), [[0, 255, 255]])
+    for mixed in ([[0, 1, 255]], [[0, 128, 255]], [[[0, 0, 0], [255, 0, 255]]]):
+        data = encode(Image.fromarray(np.array(mixed, dtype=np.uint8)), fmt)
+        with pytest.raises(InputError, match="mask nhị phân"):
+            load_mask_bytes(data, name, strict=True)
 
 
 @pytest.mark.parametrize("color_type,pixels,expected", [

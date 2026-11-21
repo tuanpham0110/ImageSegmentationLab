@@ -3,6 +3,7 @@
 import io
 import json
 from pathlib import Path
+from zipfile import ZipFile
 
 import numpy as np
 import pytest
@@ -11,6 +12,7 @@ from PIL import Image
 from src.processing.pipeline import (
     TIMING_SCOPE,
     KMeansParams,
+    comparison_export_files,
     default_foreground,
     fit_ground_truth,
     kmeans_export_files,
@@ -166,6 +168,7 @@ def test_export_files_reopen_with_same_content():
     np.testing.assert_array_equal(mask, out.mask)
     cut = Image.open(io.BytesIO(files["kmeans_cutout.png"][0]))
     assert cut.mode == "RGBA" and cut.size == (prepared.image.shape[1], prepared.image.shape[0])
+    np.testing.assert_array_equal(np.asarray(cut)[..., 3], out.mask)
     labels = parse_csv_matrix(files["kmeans_labels.csv"][0].decode())
     np.testing.assert_array_equal(labels, km.labels)
     stats = json.loads(files["kmeans_stats.json"][0])
@@ -179,6 +182,14 @@ def test_export_files_reopen_with_same_content():
     np.testing.assert_array_equal(matrix * 255, otsu.mask)
     assert json.loads(ofiles["otsu_stats.json"][0])["nguong_otsu"] == otsu.result.threshold
     assert json.loads(ofiles["otsu_stats.json"][0])["pham_vi_thoi_gian"] == TIMING_SCOPE
+
+    exported = comparison_export_files(prepared, params, km, out, otsu)
+    with ZipFile(io.BytesIO(exported["comparison_results.zip"][0])) as archive:
+        expected = {**files, **ofiles}
+        assert set(archive.namelist()) == expected.keys()
+        assert archive.testzip() is None
+        for name, (content, _) in expected.items():
+            assert Path(name).name == name and archive.read(name) == content
 
 
 def test_changing_parameters_changes_result():
@@ -567,25 +578,30 @@ def test_otsu_exports_are_reused_until_a_new_run(monkeypatch):
     assert json.loads(files["otsu_stats.json"][0])["nguong_su_dung"] == 50
 
 
-@pytest.mark.parametrize("page,function", [("kmeans", "kmeans_export_files"), ("otsu", "otsu_export_files")])
-def test_export_failure_is_visible_and_does_not_offer_stale_files(monkeypatch, page, function):
+@pytest.mark.parametrize("page,function,download_count", [
+    ("kmeans", "kmeans_export_files", 7),
+    ("otsu", "otsu_export_files", 7),
+    ("compare", "comparison_export_files", 5),
+])
+@pytest.mark.parametrize("failure", [OSError, PermissionError])
+def test_export_failure_is_visible_and_recovers_on_retry(monkeypatch, page, function, download_count, failure):
     import importlib
 
     module = importlib.import_module(f"src.ui.page_{page}")
     original = getattr(module, function)
 
     def fail(*args):
-        raise OSError("Lỗi mã hoá kiểm thử")
+        raise failure("Lỗi tạo tệp kiểm thử")
 
     at = _app(page, "Tải xuống").run()
     monkeypatch.setattr(module, function, fail)
     label = "Chạy Otsu" if page == "otsu" else "Chạy K-means"
     next(b for b in at.button if b.label.startswith(label)).click().run()
-    assert not at.exception and any("Không tạo được tệp" in e.value for e in at.error)
+    assert not at.exception and any("Lỗi tạo tệp kiểm thử" in e.value for e in at.error)
     assert len(at.get("download_button")) == 0
     monkeypatch.setattr(module, function, original)
     at.run()
-    assert not at.exception and len(at.get("download_button")) == 7
+    assert not at.exception and len(at.get("download_button")) == download_count
 
 
 def test_decode_memory_failure_clears_input_and_existing_downloads(monkeypatch):
@@ -672,6 +688,43 @@ def test_missing_sample_file_is_reported_and_upload_still_works(monkeypatch, tmp
     at.session_state["_test_upload"] = ("valid.png", to_png_bytes(np.zeros((3, 4), np.uint8)))
     at.radio(key="input_source").set_value("Tải tệp lên").run()
     assert not at.exception and at.session_state["_input_ctx"] is not None
+
+
+@pytest.mark.parametrize("damage", ["missing", "corrupt", "wrong_size"])
+def test_bad_sample_reference_only_blocks_scoring(monkeypatch, tmp_path, damage):
+    from src.ui import sidebar
+
+    entry = next(s for s in MANIFEST if s["id"] == "circle_black_on_white")
+    source = tmp_path / entry["file"]
+    reference = tmp_path / entry["ground_truth"]
+    source.parent.mkdir()
+    reference.parent.mkdir()
+    original = (DATA / entry["file"]).read_bytes()
+    source.write_bytes(original)
+    if damage == "corrupt":
+        reference.write_bytes(b"not a PNG")
+    elif damage == "wrong_size":
+        reference.write_bytes(to_png_bytes(np.zeros((1, 2), dtype=np.uint8)))
+    monkeypatch.setattr(sidebar, "DATA_DIR", tmp_path)
+
+    at = _app("compare", "Đánh giá")
+    at.session_state["sample_id"] = entry["id"]
+    at.run()
+    next(b for b in at.button if b.label.startswith("Chạy K-means")).click().run()
+    assert not at.exception and not at.error
+    assert any("mask tham chiếu" in w.value.lower() for w in at.warning)
+    assert at.session_state["_input_ctx"].ground_truth is None
+    assert not any("IoU" in df.value.columns for df in at.dataframe)
+    at.session_state["cmp_result_tab"] = "Tải xuống"
+    at.run()
+    assert at.get("download_button")
+    assert source.read_bytes() == original
+
+    reference.write_bytes((DATA / entry["ground_truth"]).read_bytes())
+    at.session_state["cmp_result_tab"] = "Đánh giá"
+    at.run()
+    assert not any("mask tham chiếu" in w.value.lower() for w in at.warning)
+    assert any("IoU" in df.value.columns for df in at.dataframe)
 
 
 @pytest.mark.parametrize("gt", [np.array(1), np.empty((0, 2)), np.zeros((2, 2, 3))])
@@ -814,9 +867,9 @@ def test_uploaded_ground_truth_is_decoded_once_until_the_file_changes(monkeypatc
 
     calls, original = [], page_compare.load_mask_bytes
 
-    def tracked(data, name):
+    def tracked(data, name, **kwargs):
         calls.append(name)
-        return original(data, name)
+        return original(data, name, **kwargs)
 
     monkeypatch.setattr(page_compare, "load_mask_bytes", tracked)
     at = _app("compare")
