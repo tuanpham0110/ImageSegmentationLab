@@ -277,9 +277,11 @@ def suggest_dark_foreground(binary: np.ndarray) -> bool:
 
     Cùng quy tắc với gợi ý cụm của K-means (suggest_foreground_clusters): lớp xuất hiện ở viền ảnh
     nhiều hơn ở vùng trung tâm là nền. Nếu lớp sáng là nền thì đối tượng là lớp tối.
+    Nếu ảnh nhị phân chỉ có một lớp, coi lớp duy nhất đó là nền.
     """
     labels = np.asarray(binary) > 0
-    return suggest_foreground_clusters(labels, 2) == [0]
+    foreground = suggest_foreground_clusters(labels, 2)
+    return foreground == [0] if foreground else bool(labels.flat[0])
 
 
 @dataclass
@@ -312,8 +314,6 @@ def run_otsu(prepared: PreparedInput, polarity: str = "bright", manual_threshold
         raise ValueError(f"polarity phải là một trong {POLARITIES}.")
     res, binary = segment_image_otsu(prepared.gray, manual_threshold)
     t = res.threshold if manual_threshold is None else int(manual_threshold)
-    invert = polarity == "dark" or (polarity == "auto" and suggest_dark_foreground(binary))
-    mask = invert_mask(binary) if invert else binary
     warnings = list(res.warnings) if manual_threshold is None else []
     if manual_threshold is None and not res.valid:
         # Không suy diễn đối tượng từ một ảnh chỉ có một mức xám. Lựa chọn
@@ -322,6 +322,9 @@ def run_otsu(prepared: PreparedInput, polarity: str = "bright", manual_threshold
         mask = np.zeros_like(binary)
         warnings.append("Otsu không chia được hai lớp: mask tự động được để trống (toàn nền), "
                         "không áp dụng lựa chọn lớp sáng/tối. Có thể dùng ngưỡng thủ công để đối chiếu.")
+    else:
+        invert = polarity == "dark" or (polarity == "auto" and suggest_dark_foreground(binary))
+        mask = invert_mask(binary) if invert else binary
     raw_mask = mask
     mask = postprocess.apply(raw_mask)
     return OtsuOutputs(

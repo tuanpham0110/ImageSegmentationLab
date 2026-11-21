@@ -13,7 +13,9 @@ Nội dung không có trong giáo trình được đánh dấu **[bổ sung]** k
   - Trung bình cộng `Gray = (R + G + B) / 3` — giáo trình mục 4.2.1 (trang 48).
   - Độ chói `Gray = 0.299 R + 0.587 G + 0.114 B` — chuẩn ITU-R BT.601 **[bổ sung]**, mặc định vì gần cảm nhận độ
     sáng của mắt hơn.
-  Kết quả làm tròn và giới hạn về [0, 255] (`src/processing/preprocessing.py::to_grayscale`).
+  Với BT.601, `to_grayscale` tính `(299R + 587G + 114B) / 1000` từ tổng nguyên. Kết quả được làm tròn đến mức
+  xám gần nhất và chọn số chẵn khi nằm đúng giữa hai mức. Ví dụ `(38, 174, 0)` cho `113.5 → 114`.
+  Mảng đầu ra có dạng `(H, W)`, kiểu `uint8`, giá trị trong [0, 255].
 
 ## 2. Phân đoạn ảnh
 
@@ -71,7 +73,7 @@ Kiểm thử `test_sse_is_non_increasing` xác nhận SSE không tăng.
 | Khoảng cách | Tính trực tiếp Σ_d(x_d − c_d)² theo từng tâm, mặc định mỗi khối tối đa **65 536 điểm**. Dùng lại vùng đệm giữa các tâm và khối. Phép trừ trực tiếp tránh triệt tiêu số khi dữ liệu có độ lệch lớn. Bộ nhớ đệm là O(B·D); tổng RAM còn gồm ảnh, nhãn, dữ liệu phân biệt và các mảng tạm khác |
 | Khởi tạo K-means++ **[bổ sung]** | Arthur & Vassilvitskii (2007), *k-means++: The Advantages of Careful Seeding*, SODA. Tâm đầu ngẫu nhiên; tâm tiếp theo chọn với xác suất ∝ w(x)·D(x)², D(x) = khoảng cách tới tâm gần nhất đã chọn |
 | Khởi tạo ngẫu nhiên | Chọn K giá trị **phân biệt** (tránh hai tâm trùng nhau ngay từ đầu) |
-| Giới hạn K | Thuật toán nhận mọi K ≥ 1 (không có chặn trên). Bản đồ nhãn dùng 8 màu cố định, từ cụm thứ 9 sinh màu bằng bước góc pha tỉ lệ vàng trong HSV (`cluster_palette_hex`). Giao diện đặt thanh trượt 2–16 cho tiện thao tác |
+| Giới hạn K | Thuật toán nhận mọi số nguyên K ≥ 1. Bản đồ nhãn dùng 8 màu cố định, từ cụm thứ 9 sinh màu bằng bước góc pha tỉ lệ vàng trong HSV (`cluster_palette_hex`). Giao diện cho chọn K từ 1 đến 16 |
 | K > số giá trị phân biệt | Giảm K về số giá trị phân biệt, ghi cảnh báo (ví dụ ảnh một màu ⇒ K = 1) |
 | Không gian CIE L\*a\*b\* **[bổ sung — CIE 15:2004; IEC 61966-2-1]** | `feature="lab"`: sRGB → tuyến tính (gamma) → XYZ (D65) → L\*a\*b\* (`src/utils/color_space.py`). Khoảng cách Euclid trong Lab là ΔE\*ab (CIE76), gần với khác biệt màu cảm nhận hơn RGB. Gom màu RGB phân biệt trước (song ánh RGB ↔ Lab) rồi đổi U màu sang Lab, nên vẫn là K-means có trọng số chính xác. Cụm được đánh số theo L\*; tâm đổi ngược về sRGB để tô ảnh phân đoạn |
 | Cụm rỗng | Đặt lại tâm tại điểm xa tâm hiện tại của nó nhất, không trùng tâm khác; không được tính là hội tụ ở vòng đó. Nếu dừng sớm rồi gán nhãn cuối sinh cụm rỗng: báo chưa hội tụ và cảnh báo, không vượt max_iter |
@@ -82,10 +84,10 @@ Kiểm thử `test_sse_is_non_increasing` xác nhận SSE không tăng.
 
 ### 3.4 Chọn đối tượng
 
-K-means **không biết** cụm nào là đối tượng. Người dùng chọn một hoặc nhiều cụm làm foreground. Lựa chọn mặc định
-là **gợi ý heuristic**: một cụm là **nền** nếu tỷ lệ của nó trên viền ảnh lớn hơn tỷ lệ của nó trong vùng trung tâm
-(nửa giữa theo mỗi chiều). Vì tổng tỷ lệ ở viền và ở trung tâm đều bằng 1 nên luôn có ít nhất một cụm nền và một cụm
-đối tượng; nếu mọi cụm có hai tỷ lệ bằng nhau thì quay về quy tắc "cụm chiếm viền nhiều nhất là nền".
+Nhãn K-means mô tả cụm theo giá trị pixel. Người dùng chọn một hoặc nhiều cụm làm foreground. Gợi ý mặc định xem
+một cụm là nền khi tỷ lệ của nó trên viền ảnh lớn hơn tỷ lệ trong vùng trung tâm (nửa giữa theo mỗi chiều).
+Khi các tỷ lệ bằng nhau, cụm chiếm viền nhiều nhất được xem là nền. Trong các cụm còn lại, gợi ý chỉ giữ cụm có pixel.
+Vì vậy ảnh chỉ có một cụm thực tế có gợi ý foreground rỗng.
 So với quy tắc cũ (chỉ xét viền), cách so sánh tương đối xử lý đúng ảnh cận cảnh (đối tượng tràn viền nhưng phủ kín
 trung tâm) và nền nhiều màu (trời + cỏ đều trội ở viền ⇒ đều là nền) — xem `test_closeup_object_touching_all_borders_stays_foreground`,
 `test_multi_colored_background_is_all_background`. Vẫn sai khi đối tượng lệch hẳn ra mép, không chạm vùng trung tâm.
@@ -154,9 +156,9 @@ giáo trình ghi 1.66 do làm tròn m(g) trước khi tính.
 | Lớp rỗng (ω₀ = 0 hoặc ω₁ = 0) | t đó không hợp lệ, σ²_B = 0, không chia cho 0. Xác định bằng số pixel tích luỹ **nguyên** (không phụ thuộc sai số float) |
 | Ảnh một mức xám | Không có t hợp lệ ⇒ `valid = False`, cảnh báo, t = mức xám đó; mask tự động luôn rỗng dù chọn lớp sáng/tối. Chế độ thủ công vẫn cho chọn lớp có chủ đích |
 | Nhiều t cùng cực đại | Tập cực đại được xác định **chính xác bằng số hữu tỉ** (σ²_B = (N·m₀ − M·c₀)² / (N²·c₀·c₁) với số nguyên), không so `==` số thực: ví dụ ảnh [0, 1, 1, 2] có t = 0 và t = 1 cùng σ²_B = 1/3. Chọn **phần tử trong tập cực đại gần floor(trung bình) nhất**, hoà chọn phần tử nhỏ hơn. Với một đoạn liên tục, kết quả vẫn là floor(trung bình). Không lấy trung bình bên ngoài tập cực đại |
-| Quy ước nhị phân | pixel > t ⇒ 255 (C₁), ngược lại 0 (giống công thức 3.1.3 với θ = t + 1) |
+| Quy ước nhị phân | Pixel > t nhận 255 (C₁), pixel ≤ t nhận 0 (C₀). Khi đối tượng là lớp tối, lấy phần bù của ảnh nhị phân để mask vẫn dùng 255 cho đối tượng |
 | Lớp nào là đối tượng | Lựa chọn: lớp sáng, lớp tối, hoặc **gợi ý theo viền ảnh** (lớp trội ở viền hơn ở trung tâm là nền) — cùng heuristic với K-means (mục 3.4) |
-| Ngưỡng thủ công | Dùng `apply_threshold` với T người dùng chọn; t* vẫn được tính và vẽ để đối chiếu |
+| Ngưỡng thủ công | Dùng `apply_threshold` với T người dùng chọn. t* vẫn được tính và vẽ để đối chiếu. Nếu T chỉ để lại một lớp và người dùng chọn gợi ý tự động, lớp duy nhất được xem là nền |
 
 Kiểm chứng: so với cài đặt duyệt trực tiếp từng ngưỡng theo định nghĩa ω₀ω₁(μ₀ − μ₁)² trên 5 ảnh ngẫu nhiên
 (`test_random_images_match_brute_force`) và histogram cực đại rời nhau (`test_disconnected_maxima_return_an_actual_optimum`).

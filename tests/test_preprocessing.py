@@ -47,3 +47,13 @@ def test_valid_integer_arrays_are_preserved_and_nearest_resize_keeps_mask_values
     resized = resize_to(mask, (7, 5), "nearest")
     assert resized.shape == (5, 7)
     assert set(np.unique(resized)) == {0, 255}
+
+
+def test_luminance_rounds_exact_half_levels_to_even():
+    image = np.array([[[38, 174, 0], [0, 0, 250], [0, 0, 0], [255, 255, 255]]], dtype=np.uint8)
+    original = image.copy()
+    gray = to_grayscale(image)
+    # BT.601 gives 113.5 and 28.5 for the first two pixels.
+    np.testing.assert_array_equal(gray, [[114, 28, 0, 255]])
+    assert gray.shape == image.shape[:2] and gray.dtype == np.uint8
+    np.testing.assert_array_equal(image, original)

@@ -134,8 +134,14 @@ def test_multi_colored_background_is_all_background():
 
 
 def test_suggestion_falls_back_when_border_equals_center():
-    labels = np.zeros((8, 8), np.int64)
+    labels = np.indices((8, 8)).sum(axis=0) % 2
     assert suggest_foreground_clusters(labels, 2) == [1]
+
+
+def test_foreground_suggestion_excludes_empty_clusters_and_keeps_off_center_pixels():
+    labels = np.zeros((12, 12), np.uint8)
+    labels[1, 1] = 2  # outside both the border and the central window
+    assert suggest_foreground_clusters(labels, 3) == [2]
 
 
 # ------------------------------- Multi-Otsu -------------------------------
@@ -338,6 +344,27 @@ def test_otsu_page_multi_otsu_mode():
     at.session_state["multiotsu_result_tab"] = "Tải xuống"
     at.run()
     assert len(at.get("download_button")) == 5
+
+
+@pytest.mark.parametrize("sample,expected_options,expected_foreground", [
+    ("uniform_gray", ["Lớp 0"], []),
+    ("circle_black_on_white", ["Lớp 0", "Lớp 2"], [0]),
+])
+def test_multi_otsu_fallback_only_offers_populated_classes(sample, expected_options, expected_foreground):
+    prepared = prepare_input(load_path(DATA / "sample_images" / (sample + ".png")), 800)
+    result, labels = run_multi_otsu(prepared)
+    assert not result.valid and result.thresholds[0] == result.thresholds[1]
+    assert default_multi_otsu_foreground(labels) == expected_foreground
+
+    at = _app("otsu")
+    at.session_state["sample_id"] = sample
+    at.run()
+    at.radio(key="otsu_classes").set_value("3 lớp — Multi-Otsu (2 ngưỡng)")
+    next(b for b in at.button if b.label.startswith("Chạy Otsu")).click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    selector = at.multiselect[0]
+    assert selector.options == expected_options
+    assert selector.value == expected_foreground
 
 
 def test_kmeans_page_lab_and_large_k_with_morphology():

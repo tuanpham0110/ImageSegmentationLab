@@ -175,7 +175,7 @@ def suggest_foreground_clusters(labels: np.ndarray, n_clusters: int) -> list[int
     """GỢI Ý (heuristic, không phải kết luận của K-means) cụm đối tượng. Người dùng có thể chọn lại.
 
     Một cụm được coi là NỀN nếu nó xuất hiện ở viền ảnh nhiều hơn ở vùng trung tâm
-    (border_share > center_share); các cụm còn lại là đối tượng. So với quy tắc cũ
+    (border_share > center_share); các cụm còn lại có pixel là đối tượng. So với quy tắc cũ
     "cụm chiếm viền nhiều nhất là nền", cách so sánh tương đối này xử lý được:
       * ảnh cận cảnh: đối tượng tràn ra viền nhưng gần như phủ kín vùng trung tâm -> vẫn là đối tượng;
       * nền nhiều màu (trời ở trên, cỏ ở dưới): mỗi cụm nền đều trội ở viền -> đều là nền.
@@ -189,6 +189,11 @@ def suggest_foreground_clusters(labels: np.ndarray, n_clusters: int) -> list[int
     center = center_share(labels, n_clusters)
     background = border > center + 1e-12
     if not background.any():
-        background = np.zeros(n_clusters, dtype=bool)
         background[int(np.argmax(border))] = True
-    return [c for c in range(n_clusters) if not background[c]]
+
+    foreground = ~background
+    present = (border > 0) | (center > 0)
+    if np.any(foreground & ~present):
+        # Một cụm có thể chỉ xuất hiện giữa vùng trung tâm và viền.
+        present |= np.bincount(np.asarray(labels).ravel(), minlength=n_clusters) > 0
+    return np.flatnonzero(foreground & present).tolist()

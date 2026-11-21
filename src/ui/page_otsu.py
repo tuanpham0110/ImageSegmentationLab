@@ -232,7 +232,7 @@ def _render_result(ctx, run: dict, pending: bool) -> None:
 def _render_multi(ctx, run: dict, pending: bool) -> None:
     prep, r, labels, post = ctx.prepared, run["result"], run["labels"], run["post"]
     t1, t2 = r.thresholds
-    options = [0, 1, 2]
+    options = [i for i, count in enumerate(r.class_counts) if count > 0]
     fg_key = f"otsu_multi_fg_{run['run_id']}"
     if fg_key not in st.session_state:
         initial = run["foreground"] if "foreground" in run else default_multi_otsu_foreground(labels)
@@ -248,8 +248,9 @@ def _render_multi(ctx, run: dict, pending: bool) -> None:
 
     if not pending and r.valid:
         ui.run_state("Kết quả đã sẵn sàng", detail="Multi-Otsu · ba lớp mức xám")
-    legend = "".join(f"<span class='isl-chip'><span class='isl-swatch' aria-hidden='true' style='background:{c}'></span>Lớp {i}</span>"
-                      for i, c in enumerate(cluster_palette_hex(3)))
+    palette = cluster_palette_hex(len(r.class_counts))
+    legend = "".join(f"<span class='isl-chip'><span class='isl-swatch' aria-hidden='true' style='background:{palette[i]}'></span>Lớp {i}</span>"
+                      for i in options)
     fg = st.multiselect("Lớp làm đối tượng (foreground)", options, format_func=lambda c: f"Lớp {c}", key=fg_key,
                         help="Chọn một hoặc nhiều lớp. Lựa chọn ban đầu là gợi ý theo viền ảnh.")
     save_foreground(run, fg)

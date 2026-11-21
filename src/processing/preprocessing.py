@@ -7,8 +7,8 @@ from dataclasses import dataclass
 import numpy as np
 from PIL import Image
 
-# Trọng số độ chói ITU-R BT.601 (chuẩn phổ biến, kiến thức bổ sung)
-LUMA_WEIGHTS = np.array([0.299, 0.587, 0.114])
+# Tử số của trọng số BT.601 với mẫu số chung 1000.
+_LUMA_NUMERATORS = np.array([299, 587, 114], dtype=np.int32)
 
 GRAY_METHODS = {
     "luminance": "Độ chói BT.601: 0.299R + 0.587G + 0.114B",
@@ -50,12 +50,12 @@ def to_grayscale(image: np.ndarray, method: str = "luminance") -> np.ndarray:
     img = _validate_image(image)
     if img.ndim == 2:
         return img
-    rgb = img.astype(np.float64)
     if method == "luminance":
-        gray = rgb @ LUMA_WEIGHTS
-    elif method == "average":
-        gray = rgb.mean(axis=2)
-    return np.clip(np.round(gray), 0, 255).astype(np.uint8)
+        # Tính tổng nguyên trước khi chia để các giá trị n + 0.5 được biểu diễn chính xác.
+        gray = (img @ _LUMA_NUMERATORS) / 1000
+    else:
+        gray = img.mean(axis=2)
+    return np.rint(gray).astype(np.uint8)
 
 
 @dataclass

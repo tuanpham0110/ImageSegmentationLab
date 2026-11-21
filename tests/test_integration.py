@@ -105,6 +105,35 @@ def test_uniform_manual_threshold_still_allows_explicit_selection():
     np.testing.assert_array_equal(prepared.image, before)
 
 
+@pytest.mark.parametrize("threshold,invert", [(0, True), (255, False)])
+def test_manual_threshold_auto_polarity_treats_a_single_remaining_class_as_background(threshold, invert):
+    # A uniform threshold output can also occur on a nonuniform source at one extreme.
+    _, prepared, _ = load_sample("bright_rect_on_dark")
+    out = run_otsu(prepared, polarity="auto", manual_threshold=threshold)
+    assert out.result.valid and out.invert is invert
+    assert not out.mask.any()
+
+
+def test_equal_quantized_luma_does_not_create_a_false_gray_partition():
+    image = np.array([[[38, 174, 0], [114, 114, 114]]], dtype=np.uint8)
+    loaded = load_image_bytes(to_png_bytes(image), "equal_luma.png")
+    prepared = prepare_input(loaded, 800)
+    km = run_kmeans(prepared, KMeansParams(k=2, feature="gray"))
+    rgb = run_kmeans(prepared, KMeansParams(k=2, feature="rgb"))
+    otsu = run_otsu(prepared, polarity="auto")
+
+    np.testing.assert_array_equal(prepared.gray, [[114, 114]])
+    np.testing.assert_array_equal(km.segmented, prepared.gray)
+    np.testing.assert_array_equal(km.labels, [[0, 0]])
+    assert km.core.k_effective == 1 and km.core.sse == 0
+    assert rgb.core.k_effective == 2 and rgb.core.sse == 0
+    np.testing.assert_array_equal(rgb.segmented, image)
+    assert not otsu.result.valid and otsu.result.threshold == 114
+    assert otsu.result.histogram[114] == 2
+    assert otsu.mask.shape == (1, 2) and otsu.mask.dtype == np.uint8 and not otsu.mask.any()
+    np.testing.assert_array_equal(loaded.array, image)
+
+
 def test_rgb_kmeans_on_multi_shapes():
     _, prepared, gt = load_sample("multi_shapes_color")
     km = run_kmeans(prepared, KMeansParams(k=5, feature="rgb"))
