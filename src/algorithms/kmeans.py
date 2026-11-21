@@ -160,11 +160,13 @@ def _squared_distance(block: np.ndarray, center: np.ndarray, diff: np.ndarray, o
     np.einsum("nd,nd->n", diff, diff, out=out)
 
 
-def _assign_labels(data: np.ndarray, centers: np.ndarray, chunk_size: int) -> tuple[np.ndarray, np.ndarray]:
+def _assign_labels(data: np.ndarray, centers: np.ndarray, chunk_size: int,
+                   out: tuple[np.ndarray, np.ndarray] | None = None) -> tuple[np.ndarray, np.ndarray]:
     """Đường nội bộ cho float64 đã kiểm tra; không lặp lại kiểm tra N×D ở mỗi vòng Lloyd."""
     n = data.shape[0]
-    labels = np.empty(n, dtype=np.int32)
-    min_sq = np.empty(n, dtype=np.float64)
+    if out is None:
+        out = (np.empty(n, dtype=np.int32), np.empty(n, dtype=np.float64))
+    labels, min_sq = out
     size = min(n, chunk_size)
     diff = np.empty_like(data[:size])
     distance = np.empty(size, dtype=np.float64)
@@ -253,13 +255,14 @@ def _weighted_means(x: np.ndarray, labels: np.ndarray, w: np.ndarray, k: int) ->
     return means, counts
 
 
-def _assign_by_brightness(x: np.ndarray, centers: np.ndarray, chunk_size: int, order_weights=None):
+def _assign_by_brightness(x: np.ndarray, centers: np.ndarray, chunk_size: int, order_weights,
+                          out: tuple[np.ndarray, np.ndarray]):
     """Gán nhãn, phá hoà khoảng cách theo thứ tự độ sáng của tâm (quy tắc của kết quả báo cáo).
 
     Trả về (thứ tự tâm, nhãn theo thứ tự độ sáng, khoảng cách bình phương).
     """
     rank = _relabel_by_brightness(centers, order_weights)
-    sorted_labels, min_sq = _assign_labels(x, centers[rank], chunk_size)
+    sorted_labels, min_sq = _assign_labels(x, centers[rank], chunk_size, out)
     return rank, sorted_labels, min_sq
 
 
@@ -373,7 +376,10 @@ def _kmeans(data: np.ndarray, k: int, max_iter: int, tol: float, seed: int | Non
     converged = False
     n_empty_events = 0
 
-    rank, labels, min_sq = _assign_by_brightness(x, centers, chunk_size, order_weights)
+    # Giữ nhãn nội bộ ở intp để bincount dùng trực tiếp, và ghi lại hai vùng đệm
+    # sau khi bước cập nhật tâm đã dùng xong nhãn và khoảng cách của vòng trước.
+    assignment = (np.empty(x.shape[0], dtype=np.intp), np.empty(x.shape[0], dtype=np.float64))
+    rank, labels, min_sq = _assign_by_brightness(x, centers, chunk_size, order_weights, assignment)
     current_sse = initial_sse = _weighted_sse(w, min_sq)
     for n_iter in range(1, max_iter + 1):
         # Gán nhãn theo thứ tự độ sáng. Chỉ đổi thứ tự K tâm và số đếm sau
@@ -410,8 +416,7 @@ def _kmeans(data: np.ndarray, k: int, max_iter: int, tol: float, seed: int | Non
         # Tâm không đổi cho cùng phép gán. Các vòng khác dùng phép gán mới để
         # ghi SSE, kiểm tra hội tụ và làm đầu vào cho vòng kế tiếp.
         if changed:
-            del labels, min_sq
-            rank, labels, min_sq = _assign_by_brightness(x, centers, chunk_size, order_weights)
+            rank, labels, min_sq = _assign_by_brightness(x, centers, chunk_size, order_weights, assignment)
             current_sse = _weighted_sse(w, min_sq)
         sse_history.append(current_sse)
         if shift <= tol and empty.size == 0:
@@ -445,7 +450,7 @@ def _kmeans(data: np.ndarray, k: int, max_iter: int, tol: float, seed: int | Non
                         "chưa hội tụ. Hãy tăng max_iter hoặc giảm tol.")
 
     return KMeansResult(
-        labels=labels,
+        labels=labels.astype(np.int32, copy=False),
         centers=centers,
         counts=counts,
         sse=current_sse,
@@ -530,12 +535,15 @@ def unique_pixels(features: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndar
         packed *= 256
         np.add(packed, features[:, c], out=packed, casting="unsafe")
     uniq, inverse, counts = np.unique(packed, return_inverse=True, return_counts=True)
+    # Chỉ số màu phân biệt nằm trong 24 bit, kể cả khi ảnh có nhiều pixel lặp.
+    inverse = inverse.ravel().astype(np.int32, copy=False)
     values = np.empty((uniq.size, features.shape[1]), dtype=np.float64)
-    rest = uniq.copy()
-    for c in range(features.shape[1] - 1, -1, -1):
-        values[:, c] = rest % 256
-        rest //= 256
-    return values, inverse.ravel(), counts
+    channel = np.empty_like(uniq)
+    for c in range(features.shape[1]):
+        np.right_shift(uniq, 8 * (features.shape[1] - c - 1), out=channel)
+        np.bitwise_and(channel, 255, out=channel)
+        values[:, c] = channel
+    return values, inverse, counts
 
 
 

@@ -606,11 +606,13 @@ def test_rerender_reuses_current_decoded_image(monkeypatch):
 
     monkeypatch.setattr(state, "_load", tracked)
     at = _app("kmeans").run()
-    loaded = at.session_state["_input_ctx"].loaded
+    first = at.session_state["_input_ctx"]
     at.run()
+    assert at.session_state["_input_ctx"].prepared is first.prepared
     at.selectbox(key="gray_method").set_value("average").run()
     assert not at.exception and len(calls) == 1
-    assert at.session_state["_input_ctx"].loaded is loaded
+    assert at.session_state["_input_ctx"].loaded is first.loaded
+    assert at.session_state["_input_ctx"].prepared is not first.prepared
     at.selectbox(key="sample_id").set_value("bright_rect_on_dark").run()
     assert not at.exception and len(calls) == 2
 

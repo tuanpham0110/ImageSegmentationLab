@@ -165,12 +165,18 @@ def otsu_from_histogram(hist: np.ndarray) -> OtsuResult:
     candidates = np.flatnonzero(valid & (sigma_b >= float_max * (1 - 1e-9)))
     cand_c0 = c0[candidates]
     # Mỗi c0 phân biệt ứng với một ngưỡng đại diện (cùng c0 => cùng m0 vì các mức giữa có h = 0).
-    distinct_c0, first = np.unique(cand_c0, return_index=True)
+    # c0 tăng đơn điệu. Nếu hai đầu bằng nhau, mọi ứng viên chia ảnh theo cùng một cách.
+    if cand_c0[0] == cand_c0[-1]:
+        distinct_c0, first = cand_c0[:1], [0]
+    else:
+        distinct_c0, first = np.unique(cand_c0, return_index=True)
     exact = [Fraction((n * int(moment0[t]) - total_moment * int(a)) ** 2, int(a) * (n - int(a)))
              for a, t in zip(distinct_c0, candidates[first])]
     best = max(exact)
-    best_c0 = [a for a, v in zip(distinct_c0, exact) if v == best]
-    tied = candidates[np.isin(cand_c0, best_c0)].astype(np.int64)
+    tied = candidates
+    if distinct_c0.size > 1:
+        best_c0 = [a for a, v in zip(distinct_c0, exact) if v == best]
+        tied = candidates[np.isin(cand_c0, best_c0)]
     max_var = float(best / (n * n))
     midpoint = int(np.floor(tied.mean()))
     # Các cực đại có thể nằm trên nhiều khoảng rời nhau. Trung bình của chúng

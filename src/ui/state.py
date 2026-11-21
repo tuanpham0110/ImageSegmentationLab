@@ -99,13 +99,16 @@ def build_context(data: bytes, name: str, max_side: int, gray_method: str, sampl
                   *, gt_path: Path | None = None, median_size: int = 1) -> InputContext:
     """Chuẩn bị ảnh nguồn và thử nạp mask tham chiếu tùy chọn."""
     digest = hashlib.sha1(data).hexdigest()[:16]
-    current = get_context()
-    if current is not None and current.signature.split("|", 1)[0] == digest and current.loaded.source_name == name:
-        loaded = current.loaded
-    else:
-        loaded = _load(data, name)
-    prepared = _prepare(data, name, max_side, gray_method, median_size, _loaded=loaded)
     signature = f"{digest}|{max_side}|{gray_method}|m{median_size}|{name}"
+    current = get_context()
+    same_source = current is not None and current.signature.split("|", 1)[0] == digest and current.loaded.source_name == name
+    if same_source and current.signature == signature:
+        # Cùng ảnh và tiền xử lý: dùng mảng đã có trong phiên, tránh băm và đọc cache lần nữa.
+        loaded = current.loaded
+        prepared = current.prepared
+    else:
+        loaded = current.loaded if same_source else _load(data, name)
+        prepared = _prepare(data, name, max_side, gray_method, median_size, _loaded=loaded)
     gt, warning = None, None
     if gt_path is not None:
         try:
